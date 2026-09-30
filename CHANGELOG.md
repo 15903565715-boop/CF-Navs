@@ -16,6 +16,12 @@
 - 顺带修正两处既有缺陷：`worker/routes/icon.ts` 的 `/icon/:id` 与 `/category-icon/:id` 异常分支此前无条件返回公开缓存策略（`public, max-age=300`），合法 key 的私密请求异常时会留下可被浏览器 HTTP 缓存复用的兜底图，现改为 `private, no-store`；`src/lib/iconAccessKey.ts` 的 `clearIconAccessKey()` 无法取消在途请求，旧 promise 可能在登出/改密后重新发布过期 key，现用授权代次作废其回调。
 - 验证：`npm run type-check` 318 files 0/0、`npm test` 133 files/984 tests、build 成功；浏览器 L2（隔离实例 1280×800）公开书签匿名 `public, max-age=604800`、私密与私密分类树下书签带 key 且 `private, no-store`，三条卡片均渲染真实图标，Cache Storage 无私密图标条目。反向对照：把逐条判定改回无条件带 key、去掉授权代次判断、去掉异常分支的授权缓存策略，对应用例分别精确失败。独立 `workflow-reviewer` 复核发现的另一项既有问题（图标代理的匿名可见性判定发生在 edge cache 命中之后，可导致私密图标经缓存泄露）不在本 Issue 范围，已登记为 `docs/BACKLOG.md` 的 PROB-38。
 
+### 修复页面底部书签右键菜单被视口裁掉（Issue #30）
+
+- 根因：`BookmarkContextMenu.svelte` 固定从卡片下沿向下展开（`top: calc(100% - 6px)`），页面末尾最后一排卡片下方没有空间，菜单与「编辑」按钮被视口底边裁掉，真实鼠标无法命中。
+- 修复：菜单挂载、更新、滚动或视口 resize 后读取父级卡片与菜单自然高度；有足够下方空间时保持向下，有足够上方空间时改为向上，否则按较大一侧夹紧 `max-height` 并允许内部滚动。保留 `position:absolute`、左右 8px、z-index、sortable filter、右键/长按、外部点击与 Escape 语义；嵌套分类选择器先消费 Escape，外层菜单控件的 Escape 仍可关闭菜单。
+- 验证：type-check 318 files 0/0、npm test 134 files/991 tests、build 成功；新增 7 条几何/移动选择器/Escape 组件测试，去掉 placement 决策后 4 条精确失败。隔离 Chrome 1280×800、96 条书签滚到文档末尾真实右键：菜单 `top=701.13/bottom=745.79`，编辑按钮完全在视口内，真实点击打开编辑弹窗。
+
 ### 修复登录态切回标签页后首页私密书签消失（Issue #29）
 
 - 根因：`src/App.svelte` 把焦点/可见性刷新无条件接到 `refreshPublicData()`；该函数在登录态仍以 `auth=false` 调 `api.public.getData(false)`（`src/lib/api.ts` 的 `publicApi.getData` 默认不带 Authorization），拿到匿名公开数据后经 `applyPublicData()` 覆盖首页绑定的 `publicStore`，而 `adminStore` 保留私密数据——于是首页只剩公开书签、后台却仍显示全部内容。
