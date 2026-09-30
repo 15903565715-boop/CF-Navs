@@ -7,6 +7,8 @@
 
 ## [Unreleased]
 
+## v0.7.2 — 2026-09-30
+
 ### 修复登录态首页私密书签图标停在文字兜底（Issue #28）
 
 - 根因：`/api/icon/:id` 对匿名请求按设计返回 `X-Icon-Fallback: 1` 的文字兜底图。私密书签、以及挂在私密分类（或其后代）下的公开书签都需要短期授权 `key` 才返回真实图标，而首页卡片此前没有接 `withIconAccessKey()`——该方法原先只在 `src/components/admin/*` 使用。于是登录态首页的私密书签永远停在兜底图；打开编辑弹窗会触发 `POST /api/bookmarks/:id/icon-cache/refresh` 写入 `icon_blob`，图标才"恢复"。
