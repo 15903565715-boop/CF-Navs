@@ -32,6 +32,7 @@ function state(overrides: Partial<PublicBookmark> = {}, input: {
   localCachedIconUrl?: string
   localCachePending?: boolean
   shouldWaitForLocalIconCache?: boolean
+  iconAccessKey?: string
 } = {}) {
   return deriveBookmarkCardIconState({
     bookmark: bookmark(overrides),
@@ -42,6 +43,7 @@ function state(overrides: Partial<PublicBookmark> = {}, input: {
     localCachedIconUrl: input.localCachedIconUrl,
     localCachePending: input.localCachePending,
     shouldWaitForLocalIconCache: input.shouldWaitForLocalIconCache,
+    iconAccessKey: input.iconAccessKey,
   })
 }
 
@@ -195,5 +197,33 @@ describe('bookmark card icon state', () => {
 
     expect(base.shouldWaitForLocalIconCache).toBe(true)
     expect(base.shouldReadLocalIconCache).toBe(false)
+  })
+
+  it('appends the access key to a private bookmark proxy URL', () => {
+    const result = state(
+      { icon: 'https://cdn.example.com/icon.png', icon_cached: true, is_private: 1 },
+      { iconAccessKey: 'GRANT123' },
+    )
+
+    expect(result.proxiedHttpIconUrl).toMatch(/^\/api\/icon\/42\?v=[^&]+&key=GRANT123$/)
+    expect(result.iconUrl).toBe(result.proxiedHttpIconUrl)
+  })
+
+  it('leaves the proxy URL anonymous when no access key is supplied', () => {
+    // 公开对象必须拿到匿名 URL（可命中共享缓存）；key 的取舍由调用方按隐私判定决定。
+    const result = state({ icon: 'https://cdn.example.com/icon.png', icon_cached: true, is_private: 0 })
+
+    expect(result.proxiedHttpIconUrl).toMatch(/^\/api\/icon\/42\?v=[^&]+$/)
+    expect(result.proxiedHttpIconUrl).not.toContain('key=')
+  })
+
+  it('changes the icon state key when the access key arrives so the fallback state resets', () => {
+    const input = { icon: 'https://cdn.example.com/icon.png', icon_cached: true, is_private: 1 }
+
+    const anonymous = state(input, { iconInView: true })
+    const granted = state(input, { iconInView: true, iconAccessKey: 'GRANT123' })
+
+    expect(anonymous.nextIconStateKey).not.toBe(granted.nextIconStateKey)
+    expect(granted.nextIconStateKey.endsWith(':GRANT123')).toBe(true)
   })
 })

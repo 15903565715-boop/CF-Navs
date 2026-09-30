@@ -7,6 +7,15 @@
 
 ## [Unreleased]
 
+### 修复登录态首页私密书签图标停在文字兜底（Issue #28）
+
+- 根因：`/api/icon/:id` 对匿名请求按设计返回 `X-Icon-Fallback: 1` 的文字兜底图。私密书签、以及挂在私密分类（或其后代）下的公开书签都需要短期授权 `key` 才返回真实图标，而首页卡片此前没有接 `withIconAccessKey()`——该方法原先只在 `src/components/admin/*` 使用。于是登录态首页的私密书签永远停在兜底图；打开编辑弹窗会触发 `POST /api/bookmarks/:id/icon-cache/refresh` 写入 `icon_blob`，图标才"恢复"。
+- 修复：把授权 key 接进书签图标状态推导链路。`src/lib/bookmarkCardIconState.ts` 的 `deriveBookmarkCardIconBase()`/`deriveBookmarkCardIconState()` 新增 `iconAccessKey`，经 `withIconAccessKey()` 作用于 `proxiedHttpIconUrl`，并让 key 参与 `createBookmarkCardIconStateKey()`——key 到位、续签或清除时重置失败态并重新预取，不被首次匿名兜底锁住。
+- 判定规则收敛为一处：`src/lib/adminListState.ts` 新增 `getPublicCategoryIds()` 与 `isBookmarkIconAccessRequired()`，与 worker 的 `getPublicCategoryIds`/`isBookmarkIconAnonymouslyVisible` 严格互补（含私密祖先链、循环分类、`0/1` 与布尔混用）。判定用「可见集合」而非「隐藏集合」，使「书签指向已被删除的分类」这类陈旧数据也落到需要授权的一侧，避免永久兜底。
+- 接线范围：`BookmarkCard`、`CategorySection`（逐条判定，覆盖「经常访问」这类混合区块）、`HomeCategoryScope`、`Sidebar`、`SpotlightBookmarkIcon`/`SearchSpotlight`、`Home`。key 由调用方按隐私判定下发，公开对象保持匿名 URL 以保留 edge / Service Worker 缓存；未登录时不下发。
+- 顺带修正两处既有缺陷：`worker/routes/icon.ts` 的 `/icon/:id` 与 `/category-icon/:id` 异常分支此前无条件返回公开缓存策略（`public, max-age=300`），合法 key 的私密请求异常时会留下可被浏览器 HTTP 缓存复用的兜底图，现改为 `private, no-store`；`src/lib/iconAccessKey.ts` 的 `clearIconAccessKey()` 无法取消在途请求，旧 promise 可能在登出/改密后重新发布过期 key，现用授权代次作废其回调。
+- 验证：`npm run type-check` 318 files 0/0、`npm test` 133 files/984 tests、build 成功；浏览器 L2（隔离实例 1280×800）公开书签匿名 `public, max-age=604800`、私密与私密分类树下书签带 key 且 `private, no-store`，三条卡片均渲染真实图标，Cache Storage 无私密图标条目。反向对照：把逐条判定改回无条件带 key、去掉授权代次判断、去掉异常分支的授权缓存策略，对应用例分别精确失败。独立 `workflow-reviewer` 复核发现的另一项既有问题（图标代理的匿名可见性判定发生在 edge cache 命中之后，可导致私密图标经缓存泄露）不在本 Issue 范围，已登记为 `docs/BACKLOG.md` 的 PROB-38。
+
 ### 修复登录态切回标签页后首页私密书签消失（Issue #29）
 
 - 根因：`src/App.svelte` 把焦点/可见性刷新无条件接到 `refreshPublicData()`；该函数在登录态仍以 `auth=false` 调 `api.public.getData(false)`（`src/lib/api.ts` 的 `publicApi.getData` 默认不带 Authorization），拿到匿名公开数据后经 `applyPublicData()` 覆盖首页绑定的 `publicStore`，而 `adminStore` 保留私密数据——于是首页只剩公开书签、后台却仍显示全部内容。

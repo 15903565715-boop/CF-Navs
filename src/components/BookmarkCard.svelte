@@ -47,6 +47,11 @@
   export let onEdit: ((bookmark: PublicBookmark) => AsyncVoid) | undefined = undefined
   export let moveCategories: CategoryTreeOption[] = []
   export let onMoveBookmark: ((bookmark: PublicBookmark, categoryId: number) => AsyncVoid) | undefined = undefined
+  /**
+   * 私密书签（或位于私密分类树下的书签）的短期图标授权 key。公开书签必须传空串：
+   * 带 key 会让 `/api/icon/:id` 返回 `private, no-store`，白丢共享缓存。
+   */
+  export let iconAccessKey = ''
 
   let cachedIconFailed = false
   let fallbackFailed = false
@@ -74,6 +79,7 @@
     bookmark,
     iconInView,
     shouldWaitForLocalIconCache: true,
+    iconAccessKey,
   })
   $: iconText = iconBaseState.iconText
   $: nextIconStateKey = iconBaseState.nextIconStateKey

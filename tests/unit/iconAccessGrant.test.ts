@@ -207,6 +207,32 @@ describe('GET /api/icon/:id', () => {
     expect(response.headers.get('X-Icon-Fallback')).toBe('1')
     expect(leaksIdentity(await response.text())).toBe(false)
   })
+
+  it('keeps the private cache invariant when an authorized request throws', async () => {
+    // 异常分支此前无条件返回默认公开策略（`public, max-age=300`），合法 key 的私密请求
+    // 会因此留下可被浏览器 HTTP 缓存复用的兜底图。授权已解析时必须是 `private, no-store`。
+    const env = createEnv(fixture)
+    const { grant } = await createIconAccessGrant(await getJwtSecret(env.DB))
+    vi.spyOn(env.DB, 'prepare').mockImplementation(() => {
+      throw new Error('D1 unavailable')
+    })
+
+    const response = await iconRequest(env, `/icon/11?key=${encodeURIComponent(grant)}`)
+
+    expect(response.headers.get('Cache-Control')).toBe('private, no-store')
+    expect(cachePuts).toHaveLength(0)
+  })
+
+  it('keeps the anonymous cache policy when an unauthorized request throws', async () => {
+    const env = createEnv(fixture)
+    vi.spyOn(env.DB, 'prepare').mockImplementation(() => {
+      throw new Error('D1 unavailable')
+    })
+
+    const response = await iconRequest(env, '/icon/11')
+
+    expect(response.headers.get('Cache-Control')).toBe('public, max-age=300, s-maxage=300')
+  })
 })
 
 describe('GET /api/category-icon/:id', () => {

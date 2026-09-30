@@ -17,6 +17,8 @@
   const ICON_SIZE = 30
 
   export let bookmark: PublicBookmark
+  /** 私密对象及其私密分类树下的书签需要授权 key；公开对象传空串以保留共享缓存。 */
+  export let iconAccessKey = ''
 
   let cachedIconFailed = false
   let fallbackFailed = false
@@ -30,6 +32,7 @@
     bookmark,
     iconInView: true,
     shouldWaitForLocalIconCache: true,
+    iconAccessKey,
   })
   $: iconText = iconBaseState.iconText
   $: localCacheKey = iconBaseState.localCacheKey

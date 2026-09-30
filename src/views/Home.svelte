@@ -30,6 +30,8 @@
   } from '../lib/homeData'
   import { CARD_SIZE_DEFAULTS, CATEGORY_DISPLAY_DEFAULTS } from '../../shared/settings'
   import { buildCategoryTreeOptions } from '../lib/categorySelect'
+  import { getPublicCategoryIds } from '../lib/adminListState'
+  import { iconAccessKey } from '../lib/iconAccessKey'
   import { getErrorMessage } from '../lib/api'
   import { reorderByIds } from '../lib/reorder'
   import { buildHomeSortCategoryOrders, moveBookmarkToCategory } from '../lib/homeSort'
@@ -117,6 +119,11 @@
   $: visibleCategories = visibleCategoryForest.flatMap((category) => [category, ...category.children])
   $: visibleCategoryBookmarks = groupBookmarksByCategory(visibleBookmarks)
   $: categoryTreeOptions = buildCategoryTreeOptions(sortedCategories)
+  // 登录态下首页会渲染私密书签，其图标必须带授权 key 才拿得到真实图片（Issue #28）。
+  // 用「对匿名可见的分类集合」判定：不在其中的分类（私密树，或已被删除）都需要授权 key；
+  // 公开分类下的公开书签留空以保留共享缓存。
+  $: publicCategoryIds = getPublicCategoryIds(sortedCategories)
+  $: visibleIconAccessKey = isAuthenticated ? $iconAccessKey : ''
   $: mostVisitedBookmarks = hasSearchQuery
     ? []
     : getMostVisitedBookmarks(sortedBookmarks, settings?.most_visited_count ?? 8)
@@ -457,6 +464,8 @@
     onNavigate={handleNavigate}
     onPersistentExpansionChange={(expanded) => (persistentLeftExpanded = expanded)}
     onTopNavHeightChange={(height) => (topNavHeight = height)}
+    {publicCategoryIds}
+    iconAccessKey={visibleIconAccessKey}
   />
 
   <div class="content-layout" bind:this={contentAnchor}>
@@ -477,7 +486,7 @@
                 <header class="search-group-header">
                   <div class="search-group-title">
                     {#if category.icon}
-                      <CategoryIcon category={category} size="var(--category-root-icon-size, 38px)" className="search-category-icon" />
+                      <CategoryIcon category={category} size="var(--category-root-icon-size, 38px)" className="search-category-icon" iconAccessKey={publicCategoryIds.has(Number(category.id)) ? '' : visibleIconAccessKey} />
                     {/if}
                     <h2 id={`search-category-${category.id}`} style={`font-size: var(--category-root-font-size, 1.28rem)`}>{category.title}</h2>
                   </div>
@@ -504,6 +513,8 @@
                       canSort={false}
                       onAddBookmark={onOpenCreateBookmark}
                       onEditBookmark={onEditBookmark}
+                      publicCategoryIds={publicCategoryIds}
+                      iconAccessKey={visibleIconAccessKey}
                     />
                   {/if}
 
@@ -524,6 +535,8 @@
                       canSort={false}
                       onAddBookmark={onOpenCreateBookmark}
                       onEditBookmark={onEditBookmark}
+                      publicCategoryIds={publicCategoryIds}
+                      iconAccessKey={visibleIconAccessKey}
                     />
                   {/each}
                 </div>
@@ -548,6 +561,7 @@
             cardIconShowTitle={settings?.card_icon_show_title ?? true}
             canSort={false}
             onEditBookmark={onEditBookmark}
+            iconAccessKey={visibleIconAccessKey}
           />
         {/if}
         {#if categoryGroups.length > 0}
@@ -583,6 +597,8 @@
                 onAddBookmark={isAuthenticated && !homeSortMode && onOpenCreateBookmark ? () => onOpenCreateBookmark?.(selectedCategory.id) : undefined}
                 onRequestSort={isAuthenticated && !homeSortMode ? startHomeSort : undefined}
                 onSelect={(id) => handleScopeSelect(category.id, id)}
+                {publicCategoryIds}
+                iconAccessKey={visibleIconAccessKey}
               />
 
               <div
@@ -620,6 +636,8 @@
                       onMoveBookmark={handleMoveBookmark}
                       onSortDraft={handleHomeSortDraft}
                       onSortTransfer={handleHomeSortTransfer}
+                      publicCategoryIds={publicCategoryIds}
+                      iconAccessKey={visibleIconAccessKey}
                     />
                   {/each}
                 {:else}
@@ -653,6 +671,8 @@
                     onSaveSortSession={saveHomeSort}
                     onSortDraft={handleHomeSortDraft}
                     onSortTransfer={handleHomeSortTransfer}
+                    publicCategoryIds={publicCategoryIds}
+                    iconAccessKey={visibleIconAccessKey}
                   />
                 {/if}
               </div>

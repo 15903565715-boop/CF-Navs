@@ -152,8 +152,15 @@ iconRoutes.get('/icon/:id', async (c) => {
     return errorIconResponse('invalid id', 400)
   }
 
+  // 授权状态要在 catch 里也能用：带合法 key 的请求即使走进异常分支，响应也必须是
+  // `private, no-store`，绝不能被浏览器 HTTP 缓存当成公开图标留下。
+  let authorized = false
   try {
-    const { authorized, cacheKey, successCache, fallbackCache } = await resolveIconAccess(c)
+    const access = await resolveIconAccess(c)
+    const cacheKey = access.cacheKey
+    const successCache = access.successCache
+    const fallbackCache = access.fallbackCache
+    authorized = access.authorized
     if (cacheKey) {
       const cached = await getCachedResponse(cacheKey)
       if (cached) {
@@ -219,7 +226,8 @@ iconRoutes.get('/icon/:id', async (c) => {
     cacheResponse(c, cacheKey, response)
     return response
   } catch {
-    return fallbackIconResponse('', '')
+    // 已解析为 authorized 的请求（合法 key）即便异常也不能回落到公开缓存策略。
+    return fallbackIconResponse('', '', authorized ? ICON_PRIVATE_CACHE : ICON_FALLBACK_CACHE)
   }
 })
 
@@ -229,8 +237,14 @@ iconRoutes.get('/category-icon/:id', async (c) => {
     return errorIconResponse('invalid id', 400)
   }
 
+  // 同 /icon/:id：授权状态需要在 catch 中可见，保证合法 key 的异常响应也是 no-store。
+  let authorized = false
   try {
-    const { authorized, cacheKey, successCache, fallbackCache } = await resolveIconAccess(c)
+    const access = await resolveIconAccess(c)
+    const cacheKey = access.cacheKey
+    const successCache = access.successCache
+    const fallbackCache = access.fallbackCache
+    authorized = access.authorized
     if (cacheKey) {
       const cached = await getCachedResponse(cacheKey)
       if (cached) {
@@ -293,6 +307,7 @@ iconRoutes.get('/category-icon/:id', async (c) => {
     cacheResponse(c, cacheKey, response)
     return response
   } catch {
-    return transientIconErrorResponse('', '')
+    // 与 /icon/:id 同理：合法 key 的异常响应不能回落到公开缓存策略。
+    return transientIconErrorResponse('', '', authorized ? ICON_PRIVATE_CACHE : ICON_FAILURE_CACHE)
   }
 })
