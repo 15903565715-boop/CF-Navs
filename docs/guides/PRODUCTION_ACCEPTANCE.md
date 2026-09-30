@@ -85,8 +85,10 @@ npm run perf:audit
 | `cache-storage-within-budget` | PROB-23 | Cache Storage 总量 ≤ 5 MiB |
 | `home-images-not-broken` | PROB-23 | 无 `naturalWidth === 0` 的已加载图片 |
 | `anonymous-admin-data-denied` | PROB-20c | 匿名 `/api/admin/data` 得到 401 或 `code=1001` |
-| `anonymous-private-bookmark-icon-denied` | PROB-20c | 匿名取私密分类下书签的图标被拒 |
-| `anonymous-private-category-icon-denied` | PROB-20c | 匿名取私密分类图标被拒 |
+| `prob38-public-to-private-same-url` | PROB-38 | 公开图标匿名预热后改为私密，使用同一 `v` 的匿名请求不得返回旧真实正文，必须为 `no-store` identity-free fallback |
+| `prob38-ancestor-privacy-flip` | PROB-38 | 公开祖先→私密、私密祖先→公开分别验证深层 bookmark/category-icon 的拒绝与恢复 |
+| `prob38-orphan-cycle-fail-closed` | PROB-38 | 缺失父级、孤儿分类和循环分类的 bookmark/category-icon 匿名请求均 `no-store` fallback |
+| `prob38-sw-cache-migration` | PROB-38 | 新 SW 激活后旧 `cf-navs-v*` runtime cache 删除，`/api/category-icon/*` 不进入 Cache Storage |
 | `partial-export-rejects-empty-selection` | PROB-14 | 清空真实分类选择后，导出按钮禁用 |
 | `partial-export-child-with-parent-no-settings` | PROB-14 | 实际下载只含所选非空子分类、必要父分类及该子分类的全部书签，设置为 `null` |
 | `partial-export-child-with-settings` | PROB-14 | 同一子集在设置开关开启后带出完整设置，分类与书签内容不变 |
@@ -96,6 +98,8 @@ npm run perf:audit
 | `viewport-screenshots-captured` | PROB-17 | 430x932 / 768x1024 / 1440x900 三档截图落盘 |
 | `logout-accepted` + `revoked-token-rejected-within-window` | PROB-19v | 登出后旧 token 在窗口内被拒，并记录实际生效毫秒数 |
 | `no-page-exceptions` / `no-console-errors` | PROB-13 | 全程无页面异常与 console error |
+
+> PROB-38 四项是图标隐私专项验收目标：当前 `accept:prod` 通用脚本尚未自动执行它们。当前提交已由本地 L1 smoke、真实隔离 Worker/Chrome 和单测覆盖；推送后应按上述 ID 运行只读专项探针并把结果写入发布记录，不能用通用首页/Cache Storage 通过推断 PROB-38 已通过。
 
 导出验证通过真实鼠标操作备份面板，在应用的下载边界捕获实际 Blob；不由探针自行构造备份。按 ID 和完整字段比对分类、书签及设置，整站备份冒充子集、缺失父分类、混入父级/兄弟书签、丢记录或设置开关失效都会失败。生产备份正文只驻留内存，原生磁盘下载被禁止，报告只保存计数与判定，不保存书签内容。
 

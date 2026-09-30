@@ -125,17 +125,10 @@ type CategoryPrivacyLike = {
 }
 
 /**
- * 分类对匿名访客的可见性，与服务端 `worker/lib/db/aggregates.ts` 的 `getPublicCategoryIds`
- * 口径一致：私密分类本身、以及任何私密分类的后代都不可见。
- * 由 `tests/unit/adminListState.test.ts` 与 `tests/unit/publicVisibility.test.ts` 的交叉断言防止漂移。
- *
- * `is_private` 同时接受布尔与 D1 的 0/1 整数：后台面板经 `toAdminCategories` 拿到的是布尔，
- * 但首页在登录态下消费的是 `adminDataToPublicData` 原样透传的分类行，里面是 0/1。
+ * 分类对匿名访客的可见性，与服务端 worker/lib/db/aggregates.ts 的 getPublicCategoryIds 口径一致。
+ * 私密分类本身、任何私密分类的后代、缺失父级或循环分类都不可见。
  */
-function collectCategoryVisibility(categories: CategoryPrivacyLike[]): {
-  visible: Set<number>
-  hidden: Set<number>
-} {
+function collectCategoryVisibility(categories: CategoryPrivacyLike[]): { visible: Set<number>; hidden: Set<number> } {
   const byId = new Map(categories.map((category) => [Number(category.id), category]))
   const visible = new Set<number>()
   const hidden = new Set<number>()
@@ -144,6 +137,7 @@ function collectCategoryVisibility(categories: CategoryPrivacyLike[]): {
     const visited = new Set<number>()
     let current: CategoryPrivacyLike | undefined = category
     let isHidden = false
+    let reachedRoot = false
 
     while (current) {
       const currentId = Number(current.id)
@@ -156,9 +150,14 @@ function collectCategoryVisibility(categories: CategoryPrivacyLike[]): {
         isHidden = true
         break
       }
-      current = current.parent_id == null ? undefined : byId.get(Number(current.parent_id))
+      if (current.parent_id == null) {
+        reachedRoot = true
+        break
+      }
+      current = byId.get(Number(current.parent_id))
     }
 
+    if (!reachedRoot) isHidden = true
     if (isHidden) hidden.add(Number(category.id))
     else visible.add(Number(category.id))
   }
@@ -166,28 +165,17 @@ function collectCategoryVisibility(categories: CategoryPrivacyLike[]): {
   return { visible, hidden }
 }
 
-/** 后台列表用：对匿名访客隐藏的分类 id（自身或祖先私密）。 */
+/** 后台列表用：对匿名访客隐藏的分类 id。 */
 export function getHiddenCategoryIds(categories: CategoryPrivacyLike[]): Set<number> {
   return collectCategoryVisibility(categories).hidden
 }
 
-/**
- * 前端判定图标授权用：对匿名访客可见的分类 id。
- *
- * 用「可见集合」而不是「隐藏集合」判定，是为了让「分类已被删除 / 书签指向不存在的分类」
- * 这类陈旧数据也落到需要授权的一侧——服务端 `visibleCategoryIds` 不含该 id，会返回兜底图标；
- * 前端若按「不在隐藏集合里就是公开」判断，就会给这种书签发匿名 URL 并永久显示 NAV。
- */
+/** 首页/Spotlight 用：对匿名访客可见的分类 id。 */
 export function getPublicCategoryIds(categories: CategoryPrivacyLike[]): Set<number> {
   return collectCategoryVisibility(categories).visible
 }
 
-/**
- * 书签的图标是否必须经带 `key` 的代理 URL 才能拿到真实图片。
- *
- * 判定口径与服务端 `isBookmarkIconAnonymouslyVisible` 严格互补：书签自身私密，或所属分类
- * 对匿名访客不可见（私密分类树、或分类缺失）。首页、Spotlight 与后台三个面板共用这一条规则。
- */
+/** 书签自身私密，或所属分类对匿名访客不可见时，图标必须使用授权 key。 */
 export function isBookmarkIconAccessRequired(
   bookmark: { is_private?: boolean | number },
   categoryVisibleToAnonymous: boolean,

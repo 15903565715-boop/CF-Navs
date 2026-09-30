@@ -163,8 +163,12 @@ describe('refactored helper modules', () => {
     })
   })
 
-  it('centralizes bookmark icon URL and public-mode error helpers', () => {
+  it('versions first-party icon URLs so old browser HTTP cache entries are bypassed', () => {
+    const cachedRemote = { ...bookmarkA, icon: 'https://example.com/icon.png', icon_cached: 1 }
+
     expect(createIconVersion('same-input')).toBe(createIconVersion('same-input'))
+    expect(getBookmarkIconUrl(cachedRemote)).toContain('/api/icon/10?v=')
+    expect(getBookmarkIconUrl(cachedRemote)).toContain('&cv=3')
     expect(getBookmarkIconUrl(bookmarkB)).toContain('/api/iconify/mdi/book.svg')
     expect(getBookmarkFallbackIcon({ ...bookmarkA, icon: 'https://example.com/icon.png' }, 'bookmark')).toBe('bookmark')
 

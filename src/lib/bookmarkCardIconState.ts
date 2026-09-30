@@ -1,5 +1,5 @@
 import type { PublicBookmark } from '../../shared/types'
-import { createIconVersion } from './bookmarkIconDisplay'
+import { ICON_CACHE_URL_VERSION, createIconVersion } from './bookmarkIconDisplay'
 import { iconifyProxyIcon, isIconifyIconUrl, logoSurfIcon } from './icons'
 import { withIconAccessKey } from './iconAccessKey'
 import { createBookmarkIconCacheKey } from './localBookmarkIconCache'
@@ -110,7 +110,7 @@ export function deriveBookmarkCardIconBase(input: BookmarkCardIconBaseInput): Bo
   // 公开对象 iconAccessKey 为空，URL 保持匿名以便命中 edge / Service Worker 缓存。
   const proxiedHttpIconUrl = shouldUseIconProxy
     ? withIconAccessKey(
-      `/api/icon/${encodeURIComponent(String(bookmark.id))}?v=${createIconVersion(`${bookmark.id}:${rawIcon}:${bookmark.title}:${bookmark.url}`)}`,
+      `/api/icon/${encodeURIComponent(String(bookmark.id))}?v=${createIconVersion(`${bookmark.id}:${rawIcon}:${bookmark.title}:${bookmark.url}`)}&cv=${ICON_CACHE_URL_VERSION}`,
       iconAccessKey,
     )
     : ''

@@ -22,7 +22,7 @@ CF-Navs 支持多种图标来源：
 - `GET /api/category-icon/:id`
 - `GET /api/iconify/:set/:name.svg`
 
-`/api/icon/:id` 主要保留为后台预览、兼容和兜底代理。它会优先读取 Cloudflare edge cache 和 D1 中的 `icon_blob`，cache miss 时再尝试抓取外站图标。首页普通书签卡片不会把 `/api/icon/:id` 按书签数量挂到 `<img>` 上；它根据聚合数据的 `icon_cached` 标志选择本地缓存、已保存的 HTTP(S) 图标 URL 或兼容路径，原始 URL 也加载失败后才显示文字 fallback。分类图标和 Iconify 图标失败时会返回短 TTL 的临时 SVG fallback。
+- `/api/icon/:id` 主要保留为后台预览、兼容和兜底代理。匿名请求先过当前可见性 gate，再优先读取 Cloudflare edge cache；cache miss 时读取书签图标地址、标题与 D1 中的 `icon_blob`，必要时抓取外站图标。分类图标与 Iconify 预览同样区分失败类型：永久缺失可短时使用 edge fallback，超时/网络错误/429/5xx 等瞬时失败返回 `no-store`，避免浏览器、edge 或 Service Worker 把临时文字图标钉住。
 
 图标相关 worker 逻辑按职责拆分：
 
@@ -159,7 +159,7 @@ Worker 和前端共同承担缓存：
 - `/assets/*` 构建产物设置一年 immutable 缓存。
 - HTML 和 `sw.js` 使用 no-cache 重验证。
 - Service Worker 预缓存 `/index.html` 作为离线导航回退。
-Service Worker 对构建资源采用 cache-first；分类图标和可读且不超过 512KB 的跨域 Iconify SVG 可写入 Cache Storage；同源 `/api/icon/*` 与 `/api/iconify/*` 不写入 Cache Storage，跨域 `opaque` 响应也不缓存。
+- Service Worker 只对构建资源采用 cache-first；`/api/category-icon/*` network-only，由 Worker 的可见性闸门与 edge cache 处理；跨域 Iconify SVG 可按现有策略缓存；同源 `/api/icon/*` 与 `/api/iconify/*` 不写入 Cache Storage，跨域 `opaque` 响应也不缓存。
 
 浏览器本地存储只保留必要副本：首页普通书签在本地缓存未命中且 `icon_cached=true` 时，会把一次成功且不超过 512 KiB 的 `/api/icon/:id` 响应写入 `cf-navs-bookmark-icons-v1`，后续浏览器重开先从该持久化缓存读取；后台聚合数据快照会清理旧登录态对应的同源快照；后台书签列表在**完整实体**已有 `icon_blob` 时直接展示并删除同 key 的本地图标副本，不在翻页预览时把 data URI 再复制到 `cf-navs-bookmark-icons-v1`。
 

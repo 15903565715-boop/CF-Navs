@@ -12,7 +12,6 @@
 | ID | 类型 | 优先 | 事项 | 详情 |
 | --- | --- | --- | --- | --- |
 | PROB-37 | 缺陷 | P2 | 会话失效路径未清理首页私密投影。`refreshVisibleData()`（Issue #29 修复）已在 401 时一并 `publicStore.reset()`；但 `src/App.svelte` 的 `initializeApp` 401 分支、`ensureLoggedInDataLoaded` 与 `completeLogoutUseCase` 仍只清 `authStore`/`adminStore` 就调 `refreshPublicData()`。当公开回退也无快照且非 forbidden 失败时（`refreshPublicData` 的错误分支只 `onRootError` 并返回 `null`，不写 store），已登出状态下首页仍保留 `applyLoggedInData` 投影进来的私密书签。建议抽「会话丢失 → 清 auth/admin/public 投影」共享 helper 在这三处复用，与 `refreshVisibleData()` 保持同一不变量 | 由 Issue #29 的第二轮独立复核发现，属既有问题、不在该修复 diff 范围内；证据见 `CHANGELOG.md` 的 Issue #29 段与 `tests/unit/dataService.test.ts` 的 `refreshVisibleData` 用例 |
-| PROB-38 | 缺陷 | P1 | 图标代理的匿名可见性判定发生在共享 edge cache 命中**之后**。`worker/routes/icon.ts` 的 `/icon/:id` 与 `/category-icon/:id` 先用不含身份的 `cacheKey` 返回缓存，再读 D1 判定 `isBookmarkIconAnonymouslyVisible`；缓存键的 `v` 只由 id/icon/title/url 组成，不随隐私变化。本机已实测复现：书签先公开访问一次（写入 7 天 `s-maxage` 真实图标），再改为私密，匿名请求 `GET /api/icon/:id?v=<同值>` 仍返回**真实图标**且带 `public, max-age=604800, s-maxage=518400, immutable`；`/category-icon/:id` 还会被 Service Worker cache-first 命中，绕过 Worker。修复方向：先完成匿名可见性判定再允许共享缓存命中，或在隐私/数据版本变化时使旧缓存失效（含把隐私状态并入缓存键）。注意把判定前移会让每次匿名图标请求多一次 D1 读取，需与现有「归一化缓存键避免放大 D1/外站抓取」的性能约束一并权衡，并递增 `ICON_CACHE_NAMESPACE` 让旧条目不可达 | 由 Issue #28 的第一轮独立复核发现；代码注释 `worker/routes/icon.ts` 中「判定必须发生在 edge cache 命中查询之前」与实现不符。属既有问题、不在 #28 的 diff 范围内（#28 只接前端授权链路）；实测证据见该轮复核记录与 `tests/unit/iconAccessGrant.test.ts` 的既有缓存断言 |
 
 ## 2. 需要裁定
 

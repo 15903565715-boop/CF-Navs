@@ -38,6 +38,17 @@ describe('public category visibility', () => {
     expect([...visible]).toEqual([3])
   })
 
+  it('fails closed when a category points to a missing parent', () => {
+    const tree = [category(1, 999), category(2, null)]
+    const visible = getPublicCategoryIds(tree)
+    const frontendVisible = getFrontendPublicCategoryIds(tree)
+    const hidden = getHiddenCategoryIds(tree)
+
+    expect([...visible]).toEqual([2])
+    expect([...frontendVisible]).toEqual([2])
+    expect([...hidden]).toEqual([1])
+  })
+
   it('keeps the admin-side hidden-category mirror in sync with the worker rule', () => {
     const tree = [
       category(1, null),

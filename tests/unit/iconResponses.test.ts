@@ -7,12 +7,11 @@ import {
 } from '../../worker/lib/iconResponses'
 
 describe('icon response cache policy', () => {
-  it('keeps the edge TTL one day shorter than the browser TTL', () => {
-    expect(ICON_BROWSER_CACHE_SECONDS).toBe(7 * 24 * 60 * 60)
+  it('keeps public browser copies revalidating while retaining edge TTL', () => {
+    expect(ICON_BROWSER_CACHE_SECONDS).toBe(0)
     expect(ICON_EDGE_CACHE_SECONDS).toBe(6 * 24 * 60 * 60)
-    expect(ICON_EDGE_CACHE_SECONDS).toBeLessThan(ICON_BROWSER_CACHE_SECONDS)
     expect(ICON_SUCCESS_CACHE).toBe(
-      'public, max-age=604800, s-maxage=518400, immutable',
+      'public, max-age=0, s-maxage=518400, must-revalidate',
     )
   })
 })
@@ -52,8 +51,8 @@ describe('icon proxy cache key', () => {
   it('namespaces the key so pre-PROB-20 cache entries become unreachable', () => {
     // 旧条目是在没有可见性判定的情况下写入的，而命中查询发生在判定之前；
     // 递增命名空间后旧键不可达，之后写入的条目一定过了可见性判定。
-    expect(key('https://nav.example.com/api/icon/1')).toContain('ns=2')
-    expect(key('https://nav.example.com/api/category-icon/1')).toContain('ns=2')
-    expect(key('https://nav.example.com/api/iconify/mdi/home.svg')).toContain('ns=2')
+    expect(key('https://nav.example.com/api/icon/1')).toContain('ns=3')
+    expect(key('https://nav.example.com/api/category-icon/1')).toContain('ns=3')
+    expect(key('https://nav.example.com/api/iconify/mdi/home.svg')).toContain('ns=3')
   })
 })

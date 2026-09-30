@@ -3,9 +3,9 @@ import type { IconAccessResp } from '../../shared/types'
 import { ErrCode } from '../../shared/types'
 import {
   getBookmarkIconData,
-  getPublicCategoryIds,
-  isBookmarkIconAnonymouslyVisible,
-  listCategories,
+  getCategory,
+  isBookmarkIconAnonymouslyVisibleById,
+  isCategoryIconAnonymouslyVisible,
   setIconBlob,
 } from '../lib/db'
 import {
@@ -161,6 +161,12 @@ iconRoutes.get('/icon/:id', async (c) => {
     const successCache = access.successCache
     const fallbackCache = access.fallbackCache
     authorized = access.authorized
+    if (!authorized && !await isBookmarkIconAnonymouslyVisibleById(c.env.DB, id)) {
+      // 不可见/未知对象的兜底不能写入共享 cache：公开→私密、分类移动和陈旧 orphan
+      // 都必须在下一次请求重新经过权威可见性闸门。
+      return fallbackIconResponse('', '', ICON_FAILURE_CACHE)
+    }
+
     if (cacheKey) {
       const cached = await getCachedResponse(cacheKey)
       if (cached) {
@@ -169,18 +175,8 @@ iconRoutes.get('/icon/:id', async (c) => {
     }
 
     const bookmark = await getBookmarkIconData(c.env.DB, id)
-    // 端点匿名可访问：先判定这条书签对访客是否可见。私密书签、以及挂在私密分类（或其
-    // 后代）下的公开书签，一律返回不含标题与域名的兜底图标，表现与「id 不存在」完全
-    // 一致，不泄露存在性或内容线索（PROB-20 方案 1）。带合法授权时跳过该判定。
     if (!bookmark) {
-      return cachedFallbackIconResponse(c, cacheKey, '', '', fallbackCache)
-    }
-
-    if (!authorized) {
-      const visibleCategoryIds = getPublicCategoryIds(await listCategories(c.env.DB))
-      if (!isBookmarkIconAnonymouslyVisible(bookmark, visibleCategoryIds)) {
-        return cachedFallbackIconResponse(c, cacheKey, '', '', fallbackCache)
-      }
+      return fallbackIconResponse('', '', fallbackCache)
     }
 
     if (bookmark.icon_blob) {
@@ -245,6 +241,11 @@ iconRoutes.get('/category-icon/:id', async (c) => {
     const successCache = access.successCache
     const fallbackCache = access.fallbackCache
     authorized = access.authorized
+    if (!authorized && !await isCategoryIconAnonymouslyVisible(c.env.DB, id)) {
+      // 私密、未知或循环分类的匿名兜底不写共享 cache，避免隐私翻转后复用旧正文。
+      return fallbackIconResponse('', '', ICON_FAILURE_CACHE)
+    }
+
     if (cacheKey) {
       const cached = await getCachedResponse(cacheKey)
       if (cached) {
@@ -252,18 +253,11 @@ iconRoutes.get('/category-icon/:id', async (c) => {
       }
     }
 
-    // 分类图标同样匿名可访问：一次读全部分类，既算出可见集合又拿到目标分类。
-    // 私密分类及其后代一律走不含标题的兜底图标（PROB-20 方案 1）。带合法授权时跳过判定。
-    const categories = await listCategories(c.env.DB)
-    if (!authorized && !getPublicCategoryIds(categories).has(id)) {
-      return cachedFallbackIconResponse(c, cacheKey, '', '', fallbackCache)
-    }
-
-    const category = categories.find((item) => item.id === id)
+    const category = await getCategory(c.env.DB, id)
     if (!category) {
       // 授权路径也不能泄露「id 不存在」与「id 存在但无图标」的区别之外的信息，
       // 因此这里与匿名路径同样传空标题。
-      return cachedFallbackIconResponse(c, cacheKey, '', '', fallbackCache)
+      return fallbackIconResponse('', '', fallbackCache)
     }
     if (!category.icon) {
       return cachedFallbackIconResponse(c, cacheKey, category.title, '', fallbackCache)

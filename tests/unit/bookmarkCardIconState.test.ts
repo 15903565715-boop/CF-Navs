@@ -205,7 +205,7 @@ describe('bookmark card icon state', () => {
       { iconAccessKey: 'GRANT123' },
     )
 
-    expect(result.proxiedHttpIconUrl).toMatch(/^\/api\/icon\/42\?v=[^&]+&key=GRANT123$/)
+    expect(result.proxiedHttpIconUrl).toMatch(/^\/api\/icon\/42\?v=[^&]+&cv=3&key=GRANT123$/)
     expect(result.iconUrl).toBe(result.proxiedHttpIconUrl)
   })
 
@@ -213,7 +213,7 @@ describe('bookmark card icon state', () => {
     // 公开对象必须拿到匿名 URL（可命中共享缓存）；key 的取舍由调用方按隐私判定决定。
     const result = state({ icon: 'https://cdn.example.com/icon.png', icon_cached: true, is_private: 0 })
 
-    expect(result.proxiedHttpIconUrl).toMatch(/^\/api\/icon\/42\?v=[^&]+$/)
+    expect(result.proxiedHttpIconUrl).toMatch(/^\/api\/icon\/42\?v=[^&]+&cv=3$/)
     expect(result.proxiedHttpIconUrl).not.toContain('key=')
   })
 

@@ -7,6 +7,14 @@
 
 ## [Unreleased]
 
+### 修复匿名图标代理的隐私状态缓存泄露（PROB-38）
+
+- 根因：`/api/icon/:id` 与 `/api/category-icon/:id` 先命中不含身份的共享 edge cache，再读取 D1 判断当前对象是否对匿名访客可见；公开图标缓存后改为私密时，同一个 `v` 仍可能返回旧真实图标。分类图标还曾由 Service Worker cache-first 保存。
+- 修复：匿名请求先通过目标书签/分类及祖先链的递归 D1 可见性闸门，再允许命中/写入 edge cache；私密、未知、孤儿分类和循环分类返回 `no-store` 身份无关兜底，不读写共享缓存。合法授权 key 继续 `private, no-store`、不读写 edge cache。
+- 缓存迁移：公开图标改为浏览器 `max-age=0, must-revalidate`、edge `s-maxage` 保留；icon cache namespace 升到 3；Service Worker cache 版本升到 v17，并移除 `/api/category-icon/*` Cache Storage cache-first。旧 runtime cache 在新 SW 激活时删除。
+- 回归：补充公开→私密书签、公开→私密分类、分类祖先/循环/未知对象、旧 edge hit、旧 SW cache 清理、授权/匿名异常缓存策略和 Service Worker network-only 测试；本地独立 Worker/Chrome 验证匿名不再命中旧真实图标、公开 edge hit 仍有效、私密响应为 `private, no-store`。
+- 验证：`npm run type-check` 318 files 0/0、`npm test` 134 files/1002 tests、`npm run build`、`npm run smoke` 94/94、`node --check public/sw.js` 和 `git diff --check` 全部通过；真实隔离 Worker/D1/Chrome 覆盖公开→私密、祖先变化、父级缺失、授权 `private,no-store`、SW v17 激活/旧 v16 清理与无 API Cache Storage。推送 develop 后的正式 `perf:audit`/L3 仍列为发布后门禁。
+
 ## v0.7.2 — 2026-09-30
 
 ### 修复登录态首页私密书签图标停在文字兜底（Issue #28）

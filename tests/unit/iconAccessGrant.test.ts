@@ -18,6 +18,24 @@ function createDb(rows: {
   }>
 }) {
   const settings = new Map<string, string>()
+  const categoriesById = new Map(rows.categories.map((category) => [category.id, category]))
+  const categoryVisible = (categoryId: number): boolean => {
+    const visited = new Set<number>()
+    let current = categoriesById.get(categoryId)
+    let reachedRoot = false
+    while (current) {
+      if (visited.has(current.id)) return false
+      visited.add(current.id)
+      if (current.is_private === 1) return false
+      if (current.parent_id == null) {
+        reachedRoot = true
+        break
+      }
+      current = categoriesById.get(current.parent_id)
+    }
+    return reachedRoot
+  }
+
 
   return {
     prepare(sql: string) {
@@ -36,8 +54,21 @@ function createDb(rows: {
               return { results: [] }
             },
             async first() {
+              if (sql.includes('WITH RECURSIVE') && sql.includes('FROM bookmarks b')) {
+                const id = Number(args[0])
+                const bookmark = rows.bookmarks.find((item) => item.id === id)
+                return {
+                  visible: bookmark && bookmark.is_private !== 1 && categoryVisible(bookmark.category_id) ? 1 : 0,
+                }
+              }
+              if (sql.includes('WITH RECURSIVE') && sql.includes('FROM categories')) {
+                return { visible: categoryVisible(Number(args[0])) ? 1 : 0 }
+              }
               if (sql.includes('FROM bookmarks WHERE id = ?')) {
                 return rows.bookmarks.find((item) => item.id === Number(args[0])) ?? null
+              }
+              if (sql.includes('FROM categories WHERE id = ?')) {
+                return rows.categories.find((item) => item.id === Number(args[0])) ?? null
               }
               return null
             },
@@ -71,21 +102,23 @@ function createEnv(rows: Parameters<typeof createDb>[0]): Env {
   return { DB: createDb(rows) } as unknown as Env
 }
 
-// 图标路由在读取 edge cache 前会碰 `caches.default`，node 环境没有这个全局。
-// 用一个永不命中的假实现：这样每次请求都会真的走判定与 D1 读取。
+// 缓存 fake 要能保留旧正文，才能回归 public→private 的同 URL stale-hit 漏洞。
 const cachePuts: Request[] = []
+const cacheEntries = new Map<string, Response>()
 beforeEach(() => {
   resetJwtSecretCache()
   cachePuts.length = 0
+  cacheEntries.clear()
   Object.defineProperty(globalThis, 'caches', {
     configurable: true,
     value: {
       default: {
-        async match() {
-          return undefined
+        async match(request: Request) {
+          return cacheEntries.get(request.url)?.clone()
         },
-        async put(request: Request) {
+        async put(request: Request, response: Response) {
           cachePuts.push(request)
+          cacheEntries.set(request.url, response.clone())
         },
       },
     },
@@ -231,7 +264,7 @@ describe('GET /api/icon/:id', () => {
 
     const response = await iconRequest(env, '/icon/11')
 
-    expect(response.headers.get('Cache-Control')).toBe('public, max-age=300, s-maxage=300')
+    expect(response.headers.get('Cache-Control')).toBe('public, max-age=0, s-maxage=300, must-revalidate')
   })
 })
 
@@ -283,6 +316,136 @@ describe('GET /api/category-icon/:id', () => {
   })
 })
 
+it('blocks a stale public bookmark edge entry after it becomes private', async () => {
+  const rows = {
+    categories: fixture.categories.map((item) => ({ ...item })),
+    bookmarks: fixture.bookmarks.map((item) => ({ ...item })),
+  }
+  const env = createEnv(rows)
+
+  const publicResponse = await iconRequest(env, '/icon/10?v=privacy-flip')
+  expect(publicResponse.headers.get('X-Icon-Fallback')).toBeNull()
+  expect(cachePuts).toHaveLength(1)
+
+  const bookmark = rows.bookmarks.find((item) => item.id === 10)
+  if (!bookmark) throw new Error('test fixture missing bookmark 10')
+  bookmark.is_private = 1
+
+  const privateResponse = await iconRequest(env, '/icon/10?v=privacy-flip')
+  expect(privateResponse.headers.get('X-Icon-Fallback')).toBe('1')
+  expect(privateResponse.headers.get('Cache-Control')).toBe('no-store')
+  expect(cachePuts).toHaveLength(1)
+})
+
+it('blocks a stale public category edge entry after the category becomes private', async () => {
+  const rows = {
+    categories: fixture.categories.map((item) => ({ ...item })),
+    bookmarks: fixture.bookmarks.map((item) => ({ ...item })),
+  }
+  const publicCategory = rows.categories.find((item) => item.id === 1)
+  if (!publicCategory) throw new Error('test fixture missing category 1')
+  publicCategory.icon = PRIVATE_ICON
+  const env = createEnv(rows)
+
+  const publicResponse = await iconRequest(env, '/category-icon/1?v=privacy-flip')
+  expect(publicResponse.headers.get('X-Icon-Fallback')).toBeNull()
+  expect(cachePuts).toHaveLength(1)
+
+  publicCategory.is_private = 1
+
+  const privateResponse = await iconRequest(env, '/category-icon/1?v=privacy-flip')
+  expect(privateResponse.headers.get('X-Icon-Fallback')).toBe('1')
+  expect(privateResponse.headers.get('Cache-Control')).toBe('no-store')
+  expect(cachePuts).toHaveLength(1)
+})
+
+it('blocks a stale public bookmark entry when an ancestor category becomes private', async () => {
+  // 书签自身保持公开，只有祖先分类变私密；旧实现会继续命中公开 edge 条目。
+  const rows = {
+    categories: [
+      ...fixture.categories.map((item) => ({ ...item })),
+      { id: 4, parent_id: 1, title: '公开子分类', icon: null, is_private: 0 },
+    ],
+    bookmarks: [
+      ...fixture.bookmarks.map((item) => ({ ...item })),
+      {
+        id: 20,
+        category_id: 4,
+        title: '深层公开书签',
+        url: 'https://deep.example.com',
+        icon: PRIVATE_ICON,
+        icon_blob: PRIVATE_ICON,
+        is_private: 0,
+      },
+    ],
+  }
+  const env = createEnv(rows)
+
+  const publicResponse = await iconRequest(env, '/icon/20?v=ancestor-flip')
+  expect(publicResponse.headers.get('X-Icon-Fallback')).toBeNull()
+  expect(cachePuts).toHaveLength(1)
+
+  const root = rows.categories.find((item) => item.id === 1)
+  if (!root) throw new Error('test fixture missing category 1')
+  root.is_private = 1
+
+  const hiddenResponse = await iconRequest(env, '/icon/20?v=ancestor-flip')
+  expect(hiddenResponse.headers.get('X-Icon-Fallback')).toBe('1')
+  expect(hiddenResponse.headers.get('Cache-Control')).toBe('no-store')
+
+  // 祖先改回公开后，同一 URL 必须重新可服务，而不是被之前的 no-store 结论钉住。
+  root.is_private = 0
+  const restored = await iconRequest(env, '/icon/20?v=ancestor-flip')
+  expect(restored.headers.get('X-Icon-Fallback')).toBeNull()
+})
+
+it('serves a private-to-public bookmark without reusing the previous hidden verdict', async () => {
+  const rows = {
+    categories: fixture.categories.map((item) => ({ ...item })),
+    bookmarks: fixture.bookmarks.map((item) => ({ ...item })),
+  }
+  const bookmark = rows.bookmarks.find((item) => item.id === 11)
+  if (!bookmark) throw new Error('test fixture missing bookmark 11')
+  const env = createEnv(rows)
+
+  // 书签 11 初始私密：匿名请求应得到 no-store 兜底且不写共享缓存。
+  const hidden = await iconRequest(env, '/icon/11?v=private-to-public')
+  expect(hidden.headers.get('X-Icon-Fallback')).toBe('1')
+  expect(hidden.headers.get('Cache-Control')).toBe('no-store')
+  expect(cachePuts).toHaveLength(0)
+
+  bookmark.is_private = 0
+
+  const visible = await iconRequest(env, '/icon/11?v=private-to-public')
+  expect(visible.headers.get('X-Icon-Fallback')).toBeNull()
+  expect(cachePuts).toHaveLength(1)
+})
+
+it('fails closed for a bookmark whose category is missing', async () => {
+  const rows = {
+    categories: fixture.categories.map((item) => ({ ...item })),
+    bookmarks: [
+      ...fixture.bookmarks.map((item) => ({ ...item })),
+      {
+        id: 21,
+        category_id: 999,
+        title: '孤儿书签',
+        url: 'https://orphan.example.com',
+        icon: PRIVATE_ICON,
+        icon_blob: PRIVATE_ICON,
+        is_private: 0,
+      },
+    ],
+  }
+  const env = createEnv(rows)
+
+  const response = await iconRequest(env, '/icon/21')
+
+  expect(response.headers.get('X-Icon-Fallback')).toBe('1')
+  expect(response.headers.get('Cache-Control')).toBe('no-store')
+  expect(cachePuts).toHaveLength(0)
+})
+
 describe('anonymous icon caching', () => {
   it('writes anonymous responses to the shared edge cache under the normalized key', async () => {
     // 归一化键是匿名路径的成本闸门：随机 `?v=` 不能各自建条目，否则每个请求都要读 D1
@@ -294,7 +457,7 @@ describe('anonymous icon caching', () => {
     const cached = new URL(cachePuts[0].url)
     expect(cached.searchParams.get('junk')).toBeNull()
     expect(cached.searchParams.get('v')).toBe('abc')
-    expect(cached.searchParams.get('ns')).toBe('2')
+    expect(cached.searchParams.get('ns')).toBe('3')
   })
 
   it('never writes a granted private response to the shared cache', async () => {
@@ -308,11 +471,13 @@ describe('anonymous icon caching', () => {
     expect(cachePuts).toHaveLength(0)
   })
 
-  it('keeps the short fallback TTL so a later-added icon is not pinned for a week', async () => {
-    // 兜底图标按成功策略缓存 7 天的话，后来补上的真实图标一周内都不会生效。
+  it('does not cache a private or unknown-object fallback', async () => {
+    // 隐私闸门拒绝的兜底不能进入共享 cache：对象之后变公开时不能被旧 NAV 条目钉住，
+    // 对象不存在时也不需要保留可猜测 ID 的共享条目。
     const response = await iconRequest(createEnv(fixture), '/icon/999')
 
-    expect(response.headers.get('Cache-Control')).toBe('public, max-age=300, s-maxage=300')
+    expect(response.headers.get('Cache-Control')).toBe('no-store')
+    expect(cachePuts).toHaveLength(0)
   })
 
   it('never caches a fallback produced by a transient upstream failure', async () => {
@@ -355,7 +520,7 @@ describe('anonymous icon caching', () => {
     const response = await iconRequest(createEnv(fixture), '/category-icon/3')
 
     expect(response.headers.get('X-Icon-Fallback')).toBe('1')
-    expect(response.headers.get('Cache-Control')).toBe('public, max-age=300, s-maxage=300')
+    expect(response.headers.get('Cache-Control')).toBe('public, max-age=0, s-maxage=300, must-revalidate')
     expect(cachePuts).toHaveLength(1)
   })
 })
