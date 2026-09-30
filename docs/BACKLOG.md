@@ -9,7 +9,9 @@
 
 ## 1. 无阻塞，可直接开工
 
-当前没有可直接开工的条目。
+| ID | 类型 | 优先 | 事项 | 详情 |
+| --- | --- | --- | --- | --- |
+| PROB-37 | 缺陷 | P2 | 会话失效路径未清理首页私密投影。`refreshVisibleData()`（Issue #29 修复）已在 401 时一并 `publicStore.reset()`；但 `src/App.svelte` 的 `initializeApp` 401 分支、`ensureLoggedInDataLoaded` 与 `completeLogoutUseCase` 仍只清 `authStore`/`adminStore` 就调 `refreshPublicData()`。当公开回退也无快照且非 forbidden 失败时（`refreshPublicData` 的错误分支只 `onRootError` 并返回 `null`，不写 store），已登出状态下首页仍保留 `applyLoggedInData` 投影进来的私密书签。建议抽「会话丢失 → 清 auth/admin/public 投影」共享 helper 在这三处复用，与 `refreshVisibleData()` 保持同一不变量 | 由 Issue #29 的第二轮独立复核发现，属既有问题、不在该修复 diff 范围内；证据见 `CHANGELOG.md` 的 Issue #29 段与 `tests/unit/dataService.test.ts` 的 `refreshVisibleData` 用例 |
 
 ## 2. 需要裁定
 

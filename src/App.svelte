@@ -99,6 +99,7 @@
     refreshBookmarkIconCacheInBackground,
     refreshLoggedInData,
     refreshPublicData,
+    refreshVisibleData,
   } from './lib/dataService'
 
   type SettingsSubset = SettingsFormValue
@@ -1117,8 +1118,9 @@
     }
     void initializeApp()
     scheduleBookmarkIconCachePrune()
-    // 切回已打开的标签页时按版本门控刷新公开数据（Issue #25 跨标签页设置同步）。
-    stopPublicDataFocusRefresh = installPublicDataFocusRefresh(() => refreshPublicData())
+    // 切回已打开的标签页时按会话状态刷新（Issue #25 跨标签页设置同步 / Issue #29
+    // 登录态保留私密视图）：登录态走登录态聚合刷新，未登录走公开刷新。
+    stopPublicDataFocusRefresh = installPublicDataFocusRefresh(() => refreshVisibleData())
   })
 
   onDestroy(() => {

@@ -180,6 +180,38 @@ export async function refreshPublicData(progressive = false): Promise<PublicData
   }
 }
 
+// 焦点 / 可见性恢复时按当前会话状态选择刷新路径（Issue #29）：
+// 已登录走 refreshLoggedInData()，保留首页私密视图并沿用版本门控；未登录走
+// refreshPublicData()。会话状态必须在事件触发时读取，不能在安装监听器时固定，
+// 否则登录后触发的焦点刷新仍会用匿名公开数据覆盖首页私密书签。
+export async function refreshVisibleData(): Promise<void> {
+  if (!isLoggedIn()) {
+    await refreshPublicData()
+    return
+  }
+
+  try {
+    await refreshLoggedInData()
+  } catch (error) {
+    if (isUnauthorizedError(error)) {
+      // 会话在后台已失效：先退回登出态并清掉私密数据，再刷新公开数据。
+      // publicStore 必须一起清空——它此时持有 applyLoggedInData() 投影进来的私密书签，
+      // 如果只清 authStore/adminStore，公开回退再失败（无公开快照 + 非 forbidden 错误）
+      // 就会让首页在已登出状态下继续显示私密内容。
+      authStore.setSession(null)
+      adminStore.reset()
+      publicStore.reset()
+      await clearCachedAdminData()
+      await refreshPublicData()
+      return
+    }
+    // 其它错误（网络等）refreshLoggedInData 在有缓存时已降级为本地快照并提示；无缓存时
+    // 它会抛出，这里按 refreshPublicData() 对同类失败的既有契约上报，避免焦点刷新
+    // 静默失败，也避免产生未处理拒绝。
+    hooks.onRootError(getErrorMessage(error), error)
+  }
+}
+
 function updatePublicDataLocally(transform: (data: PublicData) => PublicData): boolean {
   const current = get(publicStore).data
   if (!current) return false

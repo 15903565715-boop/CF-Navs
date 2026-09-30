@@ -73,6 +73,7 @@ import {
   isLoggedIn,
   refreshLoggedInData,
   refreshPublicData,
+  refreshVisibleData,
 } from '../../src/lib/dataService'
 import { adminStore, authStore, configStore, publicStore } from '../../src/lib/stores'
 
@@ -400,5 +401,75 @@ describe('dataService.isLoggedIn', () => {
     expect(isLoggedIn()).toBe(false)
     authStore.setSession(session)
     expect(isLoggedIn()).toBe(true)
+  })
+})
+
+describe('dataService.refreshVisibleData', () => {
+  it('refreshes logged-in data when a session exists, keeping a private bookmark in the public store', async () => {
+    const privateBookmark: Bookmark = { ...bookmark, id: 12, title: 'Secret', is_private: 1 }
+    authStore.setSession(session)
+    api.data.version.mockResolvedValue({ version: 'v2', site_title: 'CF-Navs', public_mode: true })
+    api.admin.getData.mockResolvedValue({ ...makeAdminData('v2'), bookmarks: [bookmark, privateBookmark] })
+
+    await refreshVisibleData()
+
+    expect(api.public.getData).not.toHaveBeenCalled()
+    expect(api.admin.getData).toHaveBeenCalledOnce()
+    expect(get(publicStore).data?.bookmarks.map((item) => item.id)).toEqual([10, 12])
+  })
+
+  it('falls back to the public refresh when logged out', async () => {
+    publicCache.readCachedPublicDataEntry.mockResolvedValue(undefined)
+    api.data.version.mockResolvedValue({ version: 'v1', site_title: 'CF-Navs', public_mode: true })
+    api.public.getData.mockResolvedValue(makePublicData('v1'))
+
+    await refreshVisibleData()
+
+    expect(api.public.getData).toHaveBeenCalledWith(false)
+    expect(api.admin.getData).not.toHaveBeenCalled()
+  })
+
+  it('clears the expired session, private stores and refreshes public data when the logged-in refresh is unauthorized', async () => {
+    authStore.setSession(session)
+    adminStore.replaceData(makeAdminData())
+    publicStore.setData({ ...makePublicData(), bookmarks: [makePublicBookmark({ ...bookmark, is_private: 1 })] })
+    configStore.setData({ site_title: 'CF-Navs', public_mode: true })
+    publicCache.readCachedPublicDataEntry.mockResolvedValue(undefined)
+    api.admin.getData.mockRejectedValue(new ApiError('unauthorized', { status: 401, code: ErrCode.UNAUTHORIZED }))
+    api.public.getData.mockResolvedValue(makePublicData('v1'))
+
+    await refreshVisibleData()
+
+    expect(get(authStore).session).toBeNull()
+    expect(get(adminStore).data.settings).toBeNull()
+    expect(adminCache.clearCachedAdminData).toHaveBeenCalledOnce()
+    expect(api.public.getData).toHaveBeenCalledWith(false)
+  })
+
+  it('drops the private home data before an unauthorized public fallback that itself fails', async () => {
+    authStore.setSession(session)
+    adminStore.replaceData(makeAdminData())
+    publicStore.setData({ ...makePublicData(), bookmarks: [makePublicBookmark({ ...bookmark, is_private: 1 })] })
+    configStore.setData({ site_title: 'CF-Navs', public_mode: true })
+    adminCache.readCachedAdminDataEntry.mockResolvedValue(undefined)
+    publicCache.readCachedPublicDataEntry.mockResolvedValue(undefined)
+    api.admin.getData.mockRejectedValue(new ApiError('unauthorized', { status: 401, code: ErrCode.UNAUTHORIZED }))
+    api.public.getData.mockRejectedValue(new ApiError('backend down', { status: 500, code: ErrCode.SERVER_ERROR }))
+
+    await refreshVisibleData()
+
+    expect(get(authStore).session).toBeNull()
+    expect(get(publicStore).data).toBeNull()
+  })
+
+  it('reports non-auth failures instead of swallowing them', async () => {
+    authStore.setSession(session)
+    adminCache.readCachedAdminDataEntry.mockResolvedValue(undefined)
+    api.admin.getData.mockRejectedValue(new ApiError('backend down', { status: 500, code: ErrCode.SERVER_ERROR }))
+
+    await expect(refreshVisibleData()).resolves.toBeUndefined()
+    expect(api.public.getData).not.toHaveBeenCalled()
+    expect(onRootError).toHaveBeenCalledOnce()
+    expect(onRootError.mock.calls[0][0]).toContain('backend down')
   })
 })

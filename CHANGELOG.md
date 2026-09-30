@@ -7,6 +7,14 @@
 
 ## [Unreleased]
 
+### 修复登录态切回标签页后首页私密书签消失（Issue #29）
+
+- 根因：`src/App.svelte` 把焦点/可见性刷新无条件接到 `refreshPublicData()`；该函数在登录态仍以 `auth=false` 调 `api.public.getData(false)`（`src/lib/api.ts` 的 `publicApi.getData` 默认不带 Authorization），拿到匿名公开数据后经 `applyPublicData()` 覆盖首页绑定的 `publicStore`，而 `adminStore` 保留私密数据——于是首页只剩公开书签、后台却仍显示全部内容。
+- 修复：新增 `src/lib/dataService.ts` 的 `refreshVisibleData()`，在事件触发时（不是在安装监听器时）读取 `isLoggedIn()` 分流：已登录走 `refreshLoggedInData()`（默认 `forceRemote=false`，保留 Issue #25 的数据版本门控），未登录走 `refreshPublicData()`。
+- 401 降级：会话在后台失效时清 `authStore`/`adminStore`/**`publicStore`**/管理员快照后再回退公开刷新；`publicStore` 必须一起清，否则公开回退若也无快照且非 forbidden 失败，首页会在已登出状态下继续显示私密投影。
+- 非鉴权错误按 `refreshPublicData()` 既有契约经 `hooks.onRootError` 上报，不再静默吞掉。
+- 验证：`npm run type-check` 318 files 0/0、`npm test` 131 files/967 tests、build 成功；浏览器 L2（隔离实例 1280×800）四种组合——登录+public_mode 开（私密书签保留、无匿名 `/api/public/data`）、登出+公开模式、登录+public_mode 关、双标签页设置同步（`/api/data/version` 带 Authorization）；401 + 公开回退 500 场景首页正确降级为仅公开书签并清除会话。独立 `workflow-reviewer` 复核 PASS。
+
 ### Spotlight 结果显示真实书签图标
 
 - Spotlight 结果行接入首页书签图标解析、Iconify 代理、本地缓存、缓存图标代理和失败回退链路；有真实图标时显示图片，图标加载失败或无图片时回退到书签自定义文字/标题首字符。
