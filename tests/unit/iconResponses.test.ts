@@ -1,20 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  ICON_BROWSER_CACHE_SECONDS,
-  ICON_EDGE_CACHE_SECONDS,
-  ICON_SUCCESS_CACHE,
-  iconCacheKey,
-} from '../../worker/lib/iconResponses'
-
-describe('icon response cache policy', () => {
-  it('keeps public browser copies revalidating while retaining edge TTL', () => {
-    expect(ICON_BROWSER_CACHE_SECONDS).toBe(0)
-    expect(ICON_EDGE_CACHE_SECONDS).toBe(6 * 24 * 60 * 60)
-    expect(ICON_SUCCESS_CACHE).toBe(
-      'public, max-age=0, s-maxage=518400, must-revalidate',
-    )
-  })
-})
+import { iconCacheKey } from '../../worker/lib/iconResponses'
 
 describe('icon proxy cache key', () => {
   function key(url: string) {
@@ -41,6 +26,9 @@ describe('icon proxy cache key', () => {
     expect(a).not.toBe(b)
     expect(a).toContain('v=abc123')
     expect(a).toBe(key('https://nav.example.com/api/category-icon/3?v=abc123&other=1'))
+    // cv migrates browser URLs only; the same safe edge bytes remain reusable.
+    expect(a).toBe(key('https://nav.example.com/api/category-icon/3?v=abc123&cv=3'))
+    expect(a).toBe(key('https://nav.example.com/api/category-icon/3?v=abc123&cv=4'))
   })
 
   it('keeps different resources on different keys', () => {

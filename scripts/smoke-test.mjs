@@ -188,10 +188,12 @@ async function main() {
     check('PROB-38 创建公开图标书签', r.json?.code === 0)
   }
   if (prob38Bookmark?.id) {
-    const iconPath = `/api/icon/${prob38Bookmark.id}?v=prob38-bookmark`
+    const iconPath = `/api/icon/${prob38Bookmark.id}?v=prob38-bookmark&cv=4`
     const publicIcon = await call(iconPath)
     check('公开图标首次返回真实响应', publicIcon.status === 200 && publicIcon.headers.get('X-Icon-Fallback') === null)
-    check('公开图标使用 edge 缓存策略', publicIcon.headers.get('Cache-Control') === 'public, max-age=0, s-maxage=518400, must-revalidate')
+    check('公开图标不进入浏览器缓存', publicIcon.headers.get('Cache-Control') === 'no-store')
+    const repeatedIcon = await call(iconPath)
+    check('重复读取公开图标正文一致且仍为 no-store', repeatedIcon.status === 200 && repeatedIcon.text === publicIcon.text && repeatedIcon.headers.get('Cache-Control') === 'no-store')
 
     const makePrivate = await call(`/api/bookmarks/${prob38Bookmark.id}`, {
       method: 'PUT',
@@ -218,9 +220,12 @@ async function main() {
       body: { title: '学习资料', icon: PROB38_ICON, is_private: false },
     })
     check('创建公开分类图标成功', categoryIcon.json?.code === 0)
-    const categoryPath = `/api/category-icon/${catB.id}?v=prob38-category`
+    const categoryPath = `/api/category-icon/${catB.id}?v=prob38-category&cv=4`
     const publicCategoryIcon = await call(categoryPath)
     check('公开分类图标首次返回真实响应', publicCategoryIcon.headers.get('X-Icon-Fallback') === null)
+    check('公开分类图标不进入浏览器缓存', publicCategoryIcon.headers.get('Cache-Control') === 'no-store')
+    const repeatedCategoryIcon = await call(categoryPath)
+    check('重复读取分类图标正文一致且仍为 no-store', repeatedCategoryIcon.status === 200 && repeatedCategoryIcon.text === publicCategoryIcon.text && repeatedCategoryIcon.headers.get('Cache-Control') === 'no-store')
 
     const makePrivate = await call(`/api/categories/${catB.id}`, {
       method: 'PUT',

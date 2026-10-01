@@ -15,6 +15,13 @@
 - 回归：补充公开→私密书签、公开→私密分类、分类祖先/循环/未知对象、旧 edge hit、旧 SW cache 清理、授权/匿名异常缓存策略和 Service Worker network-only 测试；本地独立 Worker/Chrome 验证匿名不再命中旧真实图标、公开 edge hit 仍有效、私密响应为 `private, no-store`。
 - 验证：`npm run type-check` 318 files 0/0、`npm test` 134 files/1002 tests、`npm run build`、`npm run smoke` 94/94、`node --check public/sw.js` 和 `git diff --check` 全部通过；真实隔离 Worker/D1/Chrome 覆盖公开→私密、祖先变化、父级缺失、授权 `private,no-store`、SW v17 激活/旧 v16 清理与无 API Cache Storage。推送 develop 后的正式 `perf:audit`/L3 仍列为发布后门禁。
 
+### 分离对象图标的 Edge 与浏览器缓存（PROB-38）
+
+- 生产验收发现共享域名的 Cloudflare Browser Cache TTL 会把公开图标响应的 `max-age=0` 改成 4 小时；公开图标改为私密后，普通浏览器仍可能从磁盘缓存返回旧真实图标。
+- 代码级修复仅作用于 `/api/icon/:id` 与 `/api/category-icon/:id`：公开真实图标和永久缺图兜底继续写入 Worker 的 Edge cache，但所有客户端响应（包括 edge hit）统一 `no-store`；授权、拒绝、未知、孤儿和循环对象保持 `private/no-store` 或 `no-store`。
+- 图标客户端 URL 版本由 `cv=3` 迁移到 `cv=4`，绕过已存在的旧浏览器条目；不修改共享域名的 Cloudflare Zone 配置，不增加初始部署步骤，也不改变 Iconify 和站点元信息缓存。
+- 验证：L0 类型检查 318 files 0/0、单测 134 files/1010 tests、build、diff-check、L1 smoke 97/97；隔离 Worker + 普通 Chrome 验证公开命中、公开→私密、祖先隐私切换、授权、永久缺图和 cv=4 URL，0 破图、0 对象图标 Cache Storage 条目。
+
 ## v0.7.2 — 2026-09-30
 
 ### 修复登录态首页私密书签图标停在文字兜底（Issue #28）

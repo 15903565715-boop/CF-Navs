@@ -18,7 +18,7 @@ export type IconStyleOptions = {
 
 // 公开图标的浏览器 HTTP cache 无法被服务端远程撤回。发布缓存策略变更时递增该值，
 // 让新构建使用新 URL，不复用旧的 max-age 长缓存；edge key 仍由 Worker 的 ns 归一化管理。
-export const ICON_CACHE_URL_VERSION = '3'
+export const ICON_CACHE_URL_VERSION = '4'
 export function createIconVersion(input: string): string {
   let hash = 0
   for (let i = 0; i < input.length; i += 1) {

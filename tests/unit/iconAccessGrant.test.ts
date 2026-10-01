@@ -201,7 +201,7 @@ describe('GET /api/icon/:id', () => {
     const response = await iconRequest(createEnv(fixture), '/icon/10')
 
     expect(response.headers.get('X-Icon-Fallback')).toBeNull()
-    expect(response.headers.get('Cache-Control')).toContain('s-maxage=')
+    expect(response.headers.get('Cache-Control')).toBe('no-store')
   })
 
   it('hides a private bookmark behind an identity-free fallback', async () => {
@@ -256,7 +256,7 @@ describe('GET /api/icon/:id', () => {
     expect(cachePuts).toHaveLength(0)
   })
 
-  it('keeps the anonymous cache policy when an unauthorized request throws', async () => {
+  it('does not cache an anonymous response when D1 throws', async () => {
     const env = createEnv(fixture)
     vi.spyOn(env.DB, 'prepare').mockImplementation(() => {
       throw new Error('D1 unavailable')
@@ -264,7 +264,8 @@ describe('GET /api/icon/:id', () => {
 
     const response = await iconRequest(env, '/icon/11')
 
-    expect(response.headers.get('Cache-Control')).toBe('public, max-age=0, s-maxage=300, must-revalidate')
+    expect(response.headers.get('Cache-Control')).toBe('no-store')
+    expect(cachePuts).toHaveLength(0)
   })
 })
 
@@ -481,9 +482,8 @@ describe('anonymous icon caching', () => {
   })
 
   it('never caches a fallback produced by a transient upstream failure', async () => {
-    // 瞬时失败返回的兜底图是 200 + image/svg+xml，与真实图标在缓存与网络面板里完全一样。
-    // 按 5 分钟写进 edge、Service Worker 或浏览器，用户就会在整个缓存期内看到文字兜底，
-    // 而请求看起来是成功的——这正是「图标明明加载了却回退成文字」的成因。
+    // 瞬时失败返回的兜底图是 200 + image/svg+xml，与真实图标在 edge、浏览器和 Service Worker 面板里都可能看起来相同。
+    // 只能用 no-store 阻止各级缓存污染，避免用户在错误缓存期内一直看到文字图标。
     vi.stubGlobal('fetch', vi.fn(async () => new Response('busy', {
       status: 503,
       headers: { 'content-type': 'text/plain' },
@@ -520,7 +520,99 @@ describe('anonymous icon caching', () => {
     const response = await iconRequest(createEnv(fixture), '/category-icon/3')
 
     expect(response.headers.get('X-Icon-Fallback')).toBe('1')
-    expect(response.headers.get('Cache-Control')).toBe('public, max-age=0, s-maxage=300, must-revalidate')
+    expect(response.headers.get('Cache-Control')).toBe('no-store')
+    expect([...cacheEntries.values()][0].headers.get('Cache-Control')).toBe('public, max-age=0, s-maxage=300, must-revalidate')
     expect(cachePuts).toHaveLength(1)
+  })
+})
+
+describe('object icon edge/client cache separation', () => {
+  it.each(['/icon/10', '/category-icon/1'])('keeps %s cold and edge-hit responses out of browser caches', async (path) => {
+    const rows = {
+      categories: fixture.categories.map((item) => ({ ...item, icon: PRIVATE_ICON })),
+      bookmarks: fixture.bookmarks.map((item) => ({ ...item })),
+    }
+    const env = createEnv(rows)
+    const url = `${path}?v=cache-split&cv=4`
+    const cold = await iconRequest(env, url)
+    const body = await cold.text()
+    expect(cold.status).toBe(200)
+    expect(cold.headers.get('Cache-Control')).toBe('no-store')
+    expect(cold.headers.get('Content-Type')).toContain('image/svg+xml')
+    expect(cold.headers.get('X-Icon-Fallback')).toBeNull()
+    expect(body).toBe(atob(PRIVATE_ICON.split(',')[1]))
+    expect(cachePuts).toHaveLength(1)
+    const stored = cacheEntries.get(cachePuts[0].url)!
+    expect(stored.headers.get('Cache-Control')).toBe('public, max-age=0, s-maxage=518400, must-revalidate')
+    expect(await stored.clone().text()).toBe(body)
+
+    // Reproduce the production Zone Browser Cache TTL rewrite on an edge hit.
+    stored.headers.set('Cache-Control', 'public, max-age=14400, s-maxage=518400, must-revalidate')
+    stored.headers.set('Content-Length', String(new TextEncoder().encode(body).byteLength))
+    const hit = await iconRequest(env, url)
+    expect(hit.status).toBe(200)
+    expect(hit.headers.get('Cache-Control')).toBe('no-store')
+    expect(hit.headers.get('Content-Length')).toBe(stored.headers.get('Content-Length'))
+    expect(hit.headers.get('Content-Type')).toBe(cold.headers.get('Content-Type'))
+    expect(await hit.text()).toBe(body)
+    expect(cachePuts).toHaveLength(1)
+    expect(stored.headers.get('Cache-Control')).toContain('max-age=14400')
+    expect(await stored.clone().text()).toBe(body)
+  })
+
+  it.each(['/icon/10', '/category-icon/1'])('retains a short edge-only fallback for %s', async (path) => {
+    const env = createEnv({
+      categories: fixture.categories.map((item) => ({ ...item, icon: null })),
+      bookmarks: fixture.bookmarks.map((item) => ({ ...item, icon: null, icon_blob: null })),
+    })
+    const cold = await iconRequest(env, path)
+    const body = await cold.text()
+    const hit = await iconRequest(env, path)
+    expect(cold.headers.get('Cache-Control')).toBe('no-store')
+    expect(hit.headers.get('Cache-Control')).toBe('no-store')
+    expect(hit.headers.get('X-Icon-Fallback')).toBe('1')
+    expect(await hit.text()).toBe(body)
+    expect(cachePuts).toHaveLength(1)
+    expect([...cacheEntries.values()][0].headers.get('Cache-Control')).toBe('public, max-age=0, s-maxage=300, must-revalidate')
+  })
+
+  it.each(['/icon/10', '/category-icon/1'])('caches fetched bytes for %s without exposing their edge policy', async (path) => {
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0h8v8H0z"/></svg>'
+    const fetchMock = vi.fn(async () => new Response(svg, { headers: { 'Content-Type': 'image/svg+xml' } }))
+    vi.stubGlobal('fetch', fetchMock)
+    const env = createEnv({
+      categories: fixture.categories.map((item) => ({ ...item, icon: 'https://icons.example.com/a.svg' })),
+      bookmarks: fixture.bookmarks.map((item) => ({ ...item, icon: 'https://icons.example.com/a.svg', icon_blob: null })),
+    })
+    const cold = await iconRequest(env, path)
+    const hit = await iconRequest(env, path)
+    expect(cold.headers.get('Cache-Control')).toBe('no-store')
+    expect(hit.headers.get('Cache-Control')).toBe('no-store')
+    expect(await cold.text()).toBe(svg)
+    expect(await hit.text()).toBe(svg)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect([...cacheEntries.values()][0].headers.get('Cache-Control')).toContain('s-maxage=518400')
+  })
+
+  it.each(['/icon/0', '/category-icon/0'])('preserves the non-cacheable invalid-id error for %s', async (path) => {
+    const response = await iconRequest(createEnv(fixture), path)
+    expect(response.status).toBe(400)
+    expect(response.headers.get('Cache-Control')).toBe('no-store')
+    expect(await response.text()).toBe('invalid id')
+    expect(cachePuts).toHaveLength(0)
+  })
+
+  it('leaves public Iconify proxy caching unchanged on cold and hit responses', async () => {
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg"/>'
+    const fetchMock = vi.fn(async () => new Response(svg, { headers: { 'Content-Type': 'image/svg+xml' } }))
+    vi.stubGlobal('fetch', fetchMock)
+    const env = createEnv(fixture)
+    const cold = await iconRequest(env, '/iconify/mdi/home.svg')
+    const hit = await iconRequest(env, '/iconify/mdi/home.svg')
+    expect(cold.headers.get('Cache-Control')).toBe('public, max-age=0, s-maxage=518400, must-revalidate')
+    expect(hit.headers.get('Cache-Control')).toBe(cold.headers.get('Cache-Control'))
+    expect(await cold.text()).toBe(svg)
+    expect(await hit.text()).toBe(svg)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })

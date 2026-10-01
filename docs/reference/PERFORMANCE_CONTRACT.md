@@ -33,7 +33,7 @@ This document records the current performance-sensitive behavior that should not
 
 - Navigation requests use stale-while-revalidate: the cached `/index.html` is served immediately and refreshed in the background. Do not revert to network-first without measuring the second-visit first paint.
 - The page sends the current document's `/assets/*` list to the Service Worker after `load` so hashed build output actually lands in Cache Storage on the first visit. Do not remove this without replacing it with a build-time manifest.
-- The Service Worker must not write `/api/icon/*` or `/api/iconify/*` bookmark icon proxy responses into Cache Storage.
+- The Service Worker must not write `/api/icon/*` or `/api/iconify/*` bookmark icon proxy responses into Cache Storage. Object-icon responses are also `no-store` to the browser, so the page's local bookmark-icon Cache Storage path must not persist them; public reuse is provided only by the Worker edge cache after the visibility gate.
 - `/api/category-icon/*` is network-only in the Service Worker. Public reuse is provided by the Worker edge cache after the visibility gate; Cache Storage cannot revoke a private/public transition.
 - Cross-origin `opaque` Iconify responses must not be cached.
 - Storage growth should stay bounded during full-page scroll and admin navigation. Cache Storage should not return to the multi-megabyte growth caused by bulk bookmark icon caching.

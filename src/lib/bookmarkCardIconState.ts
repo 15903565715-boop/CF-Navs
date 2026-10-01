@@ -107,7 +107,7 @@ export function deriveBookmarkCardIconBase(input: BookmarkCardIconBaseInput): Bo
     !customTextIcon
   const shouldUseIconProxy = hasCachedRemoteIcon
   // 私密对象的代理响应是 `private, no-store`，必须带 key 才能拿到真实图标；
-  // 公开对象 iconAccessKey 为空，URL 保持匿名以便命中 edge / Service Worker 缓存。
+  // 公开对象 iconAccessKey 为空，URL 保持匿名以便命中 Worker edge cache，Service Worker 不接管对象代理。
   const proxiedHttpIconUrl = shouldUseIconProxy
     ? withIconAccessKey(
       `/api/icon/${encodeURIComponent(String(bookmark.id))}?v=${createIconVersion(`${bookmark.id}:${rawIcon}:${bookmark.title}:${bookmark.url}`)}&cv=${ICON_CACHE_URL_VERSION}`,

@@ -6,8 +6,7 @@
 //   - 临近过期前提前续签，避免整页图标同时退化成兜底图；
 //   - 登出/改密码后立刻丢弃，不把过期 key 继续挂在 URL 上。
 //
-// 只在后台使用：首页公开卡片不带 key，否则公开图标响应会变成 `private, no-store`，
-// 白丢 edge cache 与 Service Worker 缓存。
+// 只在后台使用：首页公开卡片不带 key；对象图标客户端响应统一 no-store，公开正文复用由 Worker edge cache 承担。
 
 import { get, writable } from 'svelte/store'
 import type { IconAccessResp } from '../../shared/types'

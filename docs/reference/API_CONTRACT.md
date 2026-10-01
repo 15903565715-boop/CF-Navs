@@ -176,13 +176,15 @@
 - 带合法授权的响应是 `private, no-store`，且**既不读也不写 edge cache**（`cacheKey` 为 `null`）。`public/sw.js` 不接管 `/api/category-icon/*`；Cache Storage 只缓存不含 `no-store` 的 Iconify 资源，不保存用户对象图标。
 - 前端只在登录态且对象需要授权时带 `key`；公开对象保持匿名 URL，继续使用 edge cache。非法或过期 `key` 一律退回上述匿名口径。
 
-匿名公开图标的浏览器响应使用 `max-age=0, must-revalidate`，共享 edge 仍使用 `s-maxage`；发布时递增 icon cache namespace 与 Service Worker cache 版本，使旧 edge/SW 条目不可达。浏览器已经保存的旧 HTTP cache 无法远程撤回，因此新 URL 版本与重新验证策略是迁移的一部分。
+匿名公开图标的客户端响应统一使用 `Cache-Control: no-store`，避免站点级 Browser Cache TTL（例如共享域名的 4 小时默认值）把可撤回的图标留在访问者浏览器；Worker 内部的 `caches.default` 仍分别保留真实图标 `s-maxage=518400` 与永久缺图 `s-maxage=300`。公开对象命中 edge cache 后也必须重新包装为客户端 `no-store`，不能直接透传缓存副本的公开头。发布时递增 icon cache namespace 与 Service Worker cache 版本，使旧 edge/SW 条目不可达；浏览器已经保存的旧 HTTP cache 无法远程撤回，因此客户端 URL 版本也要递增。
 
-**真实图标与兜底图标的缓存策略是分开的**：公开真实图标可在 edge cache 复用，但浏览器不长期保存；公开对象的永久缺图兜底可使用短 `s-maxage=300` 并要求浏览器重新验证；隐私拒绝/未知对象的兜底不进入共享缓存。这样公开→私密、私密→公开和分类祖先变化不会依赖 mutation purge 才安全。
+**代码级缓存分离。** 只有 `/api/icon/:id` 与 `/api/category-icon/:id` 使用「Edge 可缓存、客户端 no-store」边界；`/api/iconify/*` 和站点元信息继续使用各自的公开缓存策略。合法授权响应继续 `private, no-store`，不读写共享 edge cache。对象代理响应不会持久化到浏览器对象图标缓存；当前 `cf-navs-bookmark-icons-v2` 仅可保存允许本地优化的原始外站图标，`v1` 仅作为旧版本迁移清理目标。这是隐私撤回优先于对象图标本地命中率的有意取舍。
+
+真实图标与兜底图标的缓存策略仍然分开：公开真实图标可在 edge cache 复用，但客户端不保存；公开对象的永久缺图兜底可使用短 `s-maxage=300`，客户端仍为 `no-store`；隐私拒绝/未知对象的兜底不进入共享缓存。
 
 
 **图标抓取失败的两种兜底。**
-- 图标确实不存在（`missing`）时返回的兜底使用 `public, max-age=0, s-maxage=300, must-revalidate`：edge 可以短暂复用，但浏览器每次重新验证。超时、网络错误、`429`/`5xx`、空 body 等瞬时失败一律 `no-store`。隐私拒绝/未知对象也一律 `no-store`，不能写入共享缓存。
+- 图标确实不存在（`missing`）时，Worker 内部 edge cache 使用 `s-maxage=300`；返回浏览器的响应仍为 `no-store`。超时、网络错误、`429`/`5xx`、空 body 等瞬时失败一律 `no-store`。隐私拒绝/未知对象的兜底也一律 `no-store`，不能写入共享缓存。
 
 图标来源包括：
 
@@ -193,9 +195,9 @@
 - `iconify`：使用 Iconify SVG API，保存格式为 `https://api.iconify.design/{set}/{name}.svg`，例如 `mdi:home` 或 `https://icon-sets.iconify.design/mdi/home/` 会转换为 `https://api.iconify.design/mdi/home.svg`；新增/编辑弹窗会展示 Iconify 候选，候选、手动输入预览和 icon-sets 页面链接都通过 `/api/iconify/{set}/{name}.svg` 代理加载。
 - `custom`：手动填写 URL、表情、纯文字或图床地址。非 URL / 非 data URI 的值会在首页按文本图标直接渲染。
 
-创建或更新书签后，前端会对普通 HTTP(S) 图标显式调用刷新接口，尽量缓存到 `bookmarks.icon_blob`；Iconify 图标和 icon-sets 页面链接不写入 `icon_blob`，后台预览由 `/api/iconify/:set/:name.svg` 和 Cloudflare edge cache 复用。更新书签但图标地址或图标来源未改变时不会清空已有 `icon_blob`。**聚合响应不下发 `icon_blob`（该字段为 `null`），而以 `icon_cached` 表示 D1 中是否已有持久化缓存**；首页据此配合浏览器本地图标缓存、`/api/icon/:id` 兼容路径或已保存的普通 HTTP(S) URL 取得图标。普通渲染不把 `/api/icon/:id` 直接挂载到首页 `<img>` 上；本地缓存未命中且 `icon_cached=true` 时，首页先抓取一次该稳定代理 URL 并写入浏览器 Cache Storage，再使用得到的本地对象 URL；只有编辑/保存等显式刷新动作会调用刷新接口。HTTP(S) 分类图片使用 `/api/category-icon/:id?v=...`，data URI、文字和表情分类图标直接渲染；一级标题、二级标签、搜索分组和折叠导航复用相同解析与图片失败回退规则。已保存的 Iconify 书签图标首页可直接使用标准 Iconify SVG URL，并依赖浏览器 HTTP 缓存复用；后台预览仍使用稳定的 `/api/iconify/:set/:name.svg`。
+创建或更新书签后，前端会对普通 HTTP(S) 图标显式调用刷新接口，尽量缓存到 `bookmarks.icon_blob`；Iconify 图标和 icon-sets 页面链接不写入 `icon_blob`，新增/编辑弹窗、后台预览和首页展示都通过 `/api/iconify/:set/:name.svg` 同源代理，由 Cloudflare edge cache 复用。更新书签但图标地址或图标来源未改变时不会清空已有 `icon_blob`。**聚合响应不下发 `icon_blob`（该字段为 `null`），而以 `icon_cached` 表示 D1 中是否已有持久化缓存**；首页据此取得图标：已有 `icon_blob` 时使用内嵌 data URI，普通 HTTP(S) 图标在缺少本地副本时读取 `/api/icon/:id` 当前响应并仅用于当前渲染，不再写入浏览器 Cache Storage；失败时回退到保存的原始 HTTP(S) 图标 URL。HTTP(S) 分类图片使用 `/api/category-icon/:id?v=...`，data URI、文字和表情分类图标直接渲染；一级标题、二级标签、搜索分组和折叠导航复用相同解析与图片失败回退规则。
 
-前端普通渲染普通 HTTP(S) 书签图标时应读取聚合数据中的 `icon_cached` 轻量标志，不应假设聚合响应携带二进制 `icon_blob`；本地缓存缺失时，若 `icon_cached=true` 先把 `/api/icon/:id` 响应写入 `cf-navs-bookmark-icons-v1`；单个自动写入响应不超过 512 KiB；代理响应失败后再使用保存的原始 HTTP(S) 图标 URL 兜底。不要直接把 `/api/icon/:id` 挂载到首页 `<img>`，后台列表仍可把 `/api/icon/:id` 作为兼容预览入口——对私密对象需要附带 `GET /api/icon-access` 签出的 `key` 才能得到真实图标，不带 `key` 时只返回兜底图标。持久化的 Iconify 图标首页可使用标准 `https://api.iconify.design/*.svg`，由浏览器 HTTP 缓存复用，避免每张图标都占用一次同源 Worker 请求。
+前端普通渲染普通 HTTP(S) 书签图标时应读取聚合数据中的 `icon_cached` 轻量标志，不应假设聚合响应携带二进制 `icon_blob`；`/api/icon/:id` 与 `/api/category-icon/:id` 的客户端响应统一 `no-store`，公开复用只发生在 Worker edge cache。旧版 `cf-navs-bookmark-icons-v1` 会在新本地缓存初始化时清理；原始外站图标仍可按大小和响应头写入新的本地优化缓存。后台列表仍可把 `/api/icon/:id` 作为兼容预览入口——对私密对象需要附带 `GET /api/icon-access` 签出的 `key` 才能得到真实图标，不带 `key` 时只返回兜底图标。当前首页的 Iconify 展示通过 `/api/iconify/:set/:name.svg` 同源代理；标准 `https://api.iconify.design/*.svg` 仅作为规范化存储值和兼容外部资源路径保留。
 
 HTTP(S) 图标抓取成功后，代理会直接返回图片字节并写入 Cloudflare edge cache；只有书签图标需要写入 `bookmarks.icon_blob` 时才生成 base64 data URI，避免 Iconify 预览和分类图标在 Worker 内部做不必要的 base64 编解码。
 

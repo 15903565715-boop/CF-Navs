@@ -1,4 +1,4 @@
-import { Hono } from 'hono'
+import { Hono, type MiddlewareHandler } from 'hono'
 import type { IconAccessResp } from '../../shared/types'
 import { ErrCode } from '../../shared/types'
 import {
@@ -111,8 +111,8 @@ iconRoutes.get('/iconify/:prefix/:name', async (c) => {
 //
 // 判定必须发生在 edge cache 命中查询**之前**：命中查询用的键不含身份，先查就会把之前
 // 写给匿名访客的兜底图标返回给管理员；而私密响应也绝不能写回那个共享键。因此授权路径
-// 全程 cacheKey 为 null（不读不写 edge cache）并带 `private, no-store`，同时挡住
-// Service Worker 对 `/api/category-icon/*` 的 cache-first 写入。
+// 全程 cacheKey 为 null（不读不写 edge cache）并带 `private, no-store`；对象代理客户端
+// 统一 no-store，Service Worker 不接管这些同源 API。
 type IconAccessMode = {
   authorized: boolean
   cacheKey: Request | null
@@ -146,7 +146,17 @@ async function resolveIconAccess(
   }
 }
 
-iconRoutes.get('/icon/:id', async (c) => {
+// Only object icons need revocable client caching. Handlers clone the public response into
+// caches.default before this boundary; never return its policy (including a Zone TTL override)
+// to the browser. Hono's header() wraps finalized responses without copying their body.
+const objectIconClientCache: MiddlewareHandler<HonoEnv> = async (c, next) => {
+  await next()
+  c.header('Cache-Control', c.res.headers.get('Cache-Control')?.includes('private')
+    ? ICON_PRIVATE_CACHE
+    : ICON_FAILURE_CACHE)
+}
+
+iconRoutes.get('/icon/:id', objectIconClientCache, async (c) => {
   const id = Number(c.req.param('id'))
   if (!Number.isInteger(id) || id <= 0) {
     return errorIconResponse('invalid id', 400)
@@ -227,7 +237,7 @@ iconRoutes.get('/icon/:id', async (c) => {
   }
 })
 
-iconRoutes.get('/category-icon/:id', async (c) => {
+iconRoutes.get('/category-icon/:id', objectIconClientCache, async (c) => {
   const id = Number(c.req.param('id'))
   if (!Number.isInteger(id) || id <= 0) {
     return errorIconResponse('invalid id', 400)

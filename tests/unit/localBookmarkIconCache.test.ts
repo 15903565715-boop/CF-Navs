@@ -12,7 +12,7 @@ import {
 } from '../../src/lib/localBookmarkIconCache'
 
 const STORAGE_PREFIX = 'cf-navs.bookmark-icon.'
-
+let legacyCacheDeletes: string[] = []
 class MemoryLocalStorage {
   private values = new Map<string, string>()
 
@@ -57,6 +57,7 @@ function setupLocalStorage() {
 }
 
 function setupCacheStorage() {
+  legacyCacheDeletes = []
   const localStorage = setupLocalStorage()
   const entries = new Map<string, Response>()
   const cache = {
@@ -67,7 +68,13 @@ function setupCacheStorage() {
     },
     delete: async (request: Request) => entries.delete(request.url),
   }
-  const caches = { open: vi.fn(async () => cache) }
+  const caches = {
+    open: vi.fn(async () => cache),
+    delete: async (name: string) => {
+      legacyCacheDeletes.push(name)
+      return name === 'cf-navs-bookmark-icons-v1'
+    },
+  }
 
   vi.stubGlobal('caches', caches)
   vi.stubGlobal('window', { localStorage, caches })
@@ -160,14 +167,41 @@ describe('local bookmark icon cache', () => {
     }))
     const cacheKey = createBookmarkIconCacheKey({ id: 4, icon: 'https://example.com/icon.svg', iconSource: 'custom' })
 
-    const firstUrl = await fetchAndCacheBookmarkIconUrl(cacheKey, '/api/icon/4?v=stable')
+    const firstUrl = await fetchAndCacheBookmarkIconUrl(cacheKey, 'https://example.com/icon.svg')
     const reopenedUrl = await readCachedBookmarkIconUrl(cacheKey)
 
     expect(firstUrl).toMatch(/^blob:/)
     expect(reopenedUrl).toMatch(/^blob:/)
     expect(entries.size).toBe(1)
+    expect(legacyCacheDeletes).toContain('cf-navs-bookmark-icons-v1')
     if (firstUrl) revokeLocalIconUrl(firstUrl)
     if (reopenedUrl) revokeLocalIconUrl(reopenedUrl)
+  })
+
+  it('persists an external URL even when its pathname resembles the object proxy', async () => {
+    const entries = setupCacheStorage()
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('<svg/>', {
+      headers: { 'content-type': 'image/svg+xml', 'content-length': '6' },
+    })))
+
+    const iconUrl = await fetchAndCacheBookmarkIconUrl('4-external-api-path', 'https://external.example/api/icon/logo.svg')
+
+    expect(iconUrl).toMatch(/^blob:/)
+    expect(entries.size).toBe(1)
+    if (iconUrl) revokeLocalIconUrl(iconUrl)
+  })
+
+  it('does not persist same-origin object icon proxy responses', async () => {
+    const entries = setupCacheStorage()
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('<svg/>', {
+      headers: { 'content-type': 'image/svg+xml', 'content-length': '6' },
+    })))
+
+    const iconUrl = await fetchAndCacheBookmarkIconUrl('4-proxy', '/api/icon/4?v=stable&cv=4')
+
+    expect(iconUrl).toMatch(/^blob:/)
+    expect(entries.size).toBe(0)
+    if (iconUrl) revokeLocalIconUrl(iconUrl)
   })
 
   it('does not persist fallback, no-store, or oversized icon responses', async () => {

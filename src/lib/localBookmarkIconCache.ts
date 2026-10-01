@@ -1,4 +1,5 @@
-const CACHE_NAME = 'cf-navs-bookmark-icons-v1'
+const CACHE_NAME = 'cf-navs-bookmark-icons-v2'
+const LEGACY_CACHE_NAMES = ['cf-navs-bookmark-icons-v1']
 const MAX_LOCAL_ICON_CACHE_BYTES = 512 * 1024
 const CACHE_ORIGIN = 'https://cf-navs.local'
 const CACHE_PATH_PREFIX = '/bookmark-icon/'
@@ -12,6 +13,30 @@ export type BookmarkIconCacheInput = {
 
 function canUseCacheStorage(): boolean {
   return typeof window !== 'undefined' && 'caches' in window
+}
+
+let legacyCacheCleanup: Promise<void> | null = null
+
+function clearLegacyCacheStorage(): Promise<void> {
+  if (!canUseCacheStorage()) return Promise.resolve()
+  const deleteCache = typeof caches.delete === 'function' ? caches.delete.bind(caches) : null
+  if (!deleteCache) return Promise.resolve()
+  if (!legacyCacheCleanup) {
+    legacyCacheCleanup = Promise.all(
+      LEGACY_CACHE_NAMES.map((name) => deleteCache(name)),
+    ).then(() => undefined).catch(() => undefined)
+  }
+  return legacyCacheCleanup
+}
+
+function isObjectIconProxyUrl(url: string): boolean {
+  if (url.startsWith('/api/icon/')) return true
+  try {
+    const parsed = new URL(url)
+    return typeof location !== 'undefined' && parsed.origin === location.origin && parsed.pathname.startsWith('/api/icon/')
+  } catch {
+    return false
+  }
 }
 
 function canUseLocalStorage(): boolean {
@@ -142,6 +167,7 @@ export function readCachedBookmarkIconDataUri(cacheKey: string): string | null {
 }
 
 export async function readCachedBookmarkIconUrl(cacheKey: string): Promise<string | null> {
+  await clearLegacyCacheStorage()
   const dataUri = readCachedBookmarkIconDataUri(cacheKey)
   if (dataUri) return dataUri
 
@@ -183,6 +209,7 @@ export async function deleteCachedBookmarkIcon(cacheKey: string): Promise<void> 
 }
 
 export async function writeBookmarkIconDataUri(cacheKey: string, dataUri: string): Promise<void> {
+  await clearLegacyCacheStorage()
   if (!isDataImage(dataUri)) return
 
   let storedInLocalStorage = false
@@ -216,6 +243,7 @@ export async function writeBookmarkIconDataUri(cacheKey: string, dataUri: string
 }
 
 export async function pruneBookmarkIconCacheStorageBackedByLocalStorage(): Promise<number> {
+  await clearLegacyCacheStorage()
   if (!canUseCacheStorage() || !canUseLocalStorage()) return 0
 
   try {
@@ -244,6 +272,7 @@ export async function pruneBookmarkIconCacheStorageBackedByLocalStorage(): Promi
 }
 
 export async function fetchAndCacheBookmarkIconUrl(cacheKey: string, url: string): Promise<string | null> {
+  await clearLegacyCacheStorage()
   if (!url) return null
 
   try {
@@ -264,6 +293,7 @@ export async function fetchAndCacheBookmarkIconUrl(cacheKey: string, url: string
       contentLength >= 0 &&
       contentLength <= MAX_LOCAL_ICON_CACHE_BYTES &&
       response.headers.get('X-Icon-Fallback') !== '1' &&
+      !isObjectIconProxyUrl(url) &&
       !/\bno-store\b/.test(cacheControl)
     if (canUseCacheStorage() && canPersist) {
       const cache = await caches.open(CACHE_NAME)

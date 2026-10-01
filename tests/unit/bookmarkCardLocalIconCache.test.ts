@@ -19,7 +19,7 @@ function setupCacheStorage(): CacheEntries {
   const caches = { open: vi.fn(async () => cache) }
   vi.stubGlobal('caches', caches)
   Object.defineProperty(window, 'caches', { value: caches, configurable: true })
-  const testUrl = class extends URL {}
+  const testUrl = class extends URL { }
   Object.assign(testUrl, {
     createObjectURL: vi.fn(() => 'blob:test'),
     revokeObjectURL: vi.fn(),
@@ -53,7 +53,7 @@ afterEach(() => {
 })
 
 describe('homepage bookmark local icon cache', () => {
-  it('fills persistent Cache Storage on a miss and reuses it after remount', async () => {
+  it('does not persist object proxy responses across remounts', async () => {
     const entries = setupCacheStorage()
     let resolveFetch!: (response: Response) => void
     const fetchPromise = new Promise<Response>((resolve) => {
@@ -72,15 +72,15 @@ describe('homepage bookmark local icon cache', () => {
 
     expect(firstImage.getAttribute('src')).toBe('blob:test')
     expect(fetchMock).toHaveBeenCalledTimes(1)
-    expect(fetchMock.mock.calls[0]?.[0]).toMatch(/^\/api\/icon\/42\?v=/)
-    expect(entries.size).toBe(1)
+    expect(fetchMock.mock.calls[0]?.[0]).toMatch(/^\/api\/icon\/42\?v=[^&]+&cv=4$/)
+    expect(entries.size).toBe(0)
 
     cleanup()
     render(BookmarkCard, { props: { bookmark: bookmark() } })
     const secondImage = await screen.findByRole('img', { name: 'Cached icon' })
 
-    expect(secondImage.getAttribute('src')).toBe('blob:test')
-    expect(fetchMock).toHaveBeenCalledTimes(1)
-    expect(entries.size).toBe(1)
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    expect(secondImage.getAttribute('src')).toMatch(/^\/api\/icon\/42\?v=[^&]+&cv=4$/)
+    expect(entries.size).toBe(0)
   })
 })

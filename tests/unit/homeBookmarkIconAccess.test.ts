@@ -4,8 +4,8 @@ import { cleanup, render, waitFor } from '@testing-library/svelte'
 import CategorySection from '../../src/components/CategorySection.svelte'
 import type { PublicBookmark, PublicCategory } from '../../shared/types'
 
-// Issue #28：首页私密书签的图标必须经带 key 的代理 URL 才能拿到真实图标；公开书签必须保持
-// 匿名 URL，否则 `/api/icon/:id` 会退回 `private, no-store`，白丢 edge / Service Worker 缓存。
+// Issue #28：首页私密书签的图标必须经带 key 的代理 URL 才能拿到真实图标；公开书签保持匿名 URL，
+// 对象代理客户端统一 no-store，公开正文复用由 Worker edge cache 承担，Service Worker 不接管对象代理。
 // 「需要授权」= 书签自身私密，或所属分类落在私密分类树（自身/祖先私密）下。
 const GRANT = 'GRANT123'
 

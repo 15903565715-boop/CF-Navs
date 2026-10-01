@@ -1,10 +1,9 @@
 import type { IconFetchFailure } from './iconData'
 
-export const ICON_BROWSER_CACHE_SECONDS = 0
 export const ICON_EDGE_CACHE_SECONDS = 6 * 24 * 60 * 60
 
-// 隐私状态可变化的图标不能留在浏览器本地 7 天；公开正文仍由 edge s-maxage 提供复用。
-// 匿名请求每次先经过当前可见性闸门，再允许命中 shared edge cache。
+// 公开对象图标在 Worker 内部保留 edge TTL；路由返回前独立改写为 no-store。
+// Iconify 代理继续直接使用此公开策略，不受对象图标的客户端策略影响。
 export const ICON_SUCCESS_CACHE =
   `public, max-age=0, s-maxage=${ICON_EDGE_CACHE_SECONDS}, must-revalidate`
 export const ICON_FAILURE_CACHE = 'no-store'
