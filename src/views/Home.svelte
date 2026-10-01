@@ -551,6 +551,7 @@
           <CategorySection
             category={MOST_VISITED_CATEGORY}
             bookmarks={mostVisitedBookmarks}
+            {publicCategoryIds}
             showEmpty={false}
             cardWidth={settings?.card_size?.width ?? CARD_SIZE_DEFAULTS.width}
             cardHeight={settings?.card_size?.height ?? 60}

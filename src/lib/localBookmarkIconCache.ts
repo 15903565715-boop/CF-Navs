@@ -128,16 +128,35 @@ function deleteStaleLocalStorageEntries(cacheKey: string): void {
   }
 }
 
-function responseToObjectUrl(response: Response): Promise<string | null> {
-  if (!response.ok) return Promise.resolve(null)
+async function responseToIconBlob(response: Response): Promise<Blob | null> {
+  if (!response.ok) return null
 
   const contentType = response.headers.get('content-type') ?? ''
-  if (!contentType.toLowerCase().startsWith('image/')) return Promise.resolve(null)
+  if (!contentType.toLowerCase().startsWith('image/')) return null
 
-  return response.blob().then((blob) => {
-    if (blob.size === 0) return null
-    return URL.createObjectURL(blob)
-  })
+  const blob = await response.blob()
+  return blob.size > 0 ? blob : null
+}
+
+function responseToObjectUrl(response: Response): Promise<string | null> {
+  return responseToIconBlob(response).then((blob) => (blob ? URL.createObjectURL(blob) : null))
+}
+
+// 「经常访问」与普通分类会把同一本书签各挂一个 BookmarkCard，同一 tick 内对同一条对象代理
+// URL 发两次 fetch。对象图标是 no-store、不持久化，所以只能合并**在途**请求，不缓存完成结果：
+// 按完整 URL（含 v/cv/key）索引，拿到同一份正文后各自生成独立 object URL，成功或失败都立即移除，
+// 下一次挂载重新经过可见性闸门。
+const pendingObjectIcons = new Map<string, Promise<Blob | null>>()
+
+function fetchObjectIconUrl(url: string): Promise<string | null> {
+  let pending = pendingObjectIcons.get(url)
+  if (!pending) {
+    pending = fetch(url, { credentials: 'same-origin', cache: 'force-cache' })
+      .then(responseToIconBlob)
+      .finally(() => pendingObjectIcons.delete(url))
+    pendingObjectIcons.set(url, pending)
+  }
+  return pending.then((blob) => (blob ? URL.createObjectURL(blob) : null))
 }
 
 
@@ -276,6 +295,7 @@ export async function fetchAndCacheBookmarkIconUrl(cacheKey: string, url: string
   if (!url) return null
 
   try {
+    if (isObjectIconProxyUrl(url)) return await fetchObjectIconUrl(url)
     const response = await fetch(url, {
       credentials: 'same-origin',
       cache: 'force-cache',

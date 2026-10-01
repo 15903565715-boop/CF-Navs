@@ -22,6 +22,13 @@
 - 图标客户端 URL 版本由 `cv=3` 迁移到 `cv=4`，绕过已存在的旧浏览器条目；不修改共享域名的 Cloudflare Zone 配置，不增加初始部署步骤，也不改变 Iconify 和站点元信息缓存。
 - 验证：L0 类型检查 318 files 0/0、单测 134 files/1010 tests、build、diff-check、L1 smoke 97/97；隔离 Worker + 普通 Chrome 验证公开命中、公开→私密、祖先隐私切换、授权、永久缺图和 cv=4 URL，0 破图、0 对象图标 Cache Storage 条目。
 
+### 修复「经常访问」公开图标重复请求（PROB-38）
+
+- 根因：首页「经常访问」与普通分类会把同一本公开书签各渲染一个 `BookmarkCard`，两处本应命中同一条匿名对象代理 URL。但两层问题叠加导致同一图标被请求两次：① `src/views/Home.svelte` 渲染「经常访问」的 `CategorySection` 漏传 `publicCategoryIds`（默认空集合），登录态下 `isBookmarkIconAccessRequired` 把该区公开书签判成需要授权，于是发带 `key` 的 URL、普通分类发匿名 URL——两条不同 URL 各请求一次，带 `key` 的那条还绕过公开 edge cache；② 即便 URL 相同，两个 `BookmarkCard` 实例仍在同一 tick 各自 fetch。
+- 修复：两处协同，都是最小改动。① `src/views/Home.svelte` 把 `publicCategoryIds` 传给「经常访问」的 `CategorySection`，公开书签在两处生成同一匿名 URL；私密书签与落在私密树下的公开书签仍带 `key`。② `src/lib/localBookmarkIconCache.ts` 对同源对象代理 URL 合并**在途**请求：按完整 URL（含 `v`/`cv`/`key`）索引，同一 tick 的重复加载共用一次网络请求，各自生成独立可回收 object URL，成功或失败都立即移除索引；不缓存完成结果，跨视图重挂仍重新经过可见性闸门。
+- 影响：生产 `perf:audit` 的首页与搜索恢复阶段各减少 4 次重复图标请求（共 8 次），图标请求总数由 264 降至预算内；滚动阶段逐图标请求、对象图标 `no-store`、授权 `private, no-store` 和隐私撤回边界均不变。
+- 验证：`npm run type-check` 318 files 0/0、`npm test` 134 files、`npm run build`、`git diff --check` 通过。单测覆盖同 URL 在途合并与独立 object URL、不跨授权/版本合并、各类失败后可重试；新增首页集成回归断言「经常访问」公开图标与普通分类区使用同一匿名 URL、私密与继承私密图标仍带 `key`。本地 build overlay 真实 Chrome 实测首页与搜索阶段图标请求由 17 降到 13；推送部署后以生产 `perf:audit` 复核 ≤260 门槛。
+
 ## v0.7.2 — 2026-09-30
 
 ### 修复登录态首页私密书签图标停在文字兜底（Issue #28）

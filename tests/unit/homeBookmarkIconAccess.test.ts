@@ -2,6 +2,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, waitFor } from '@testing-library/svelte'
 import CategorySection from '../../src/components/CategorySection.svelte'
+import Home from '../../src/views/Home.svelte'
+import { iconAccessKey } from '../../src/lib/iconAccessKey'
 import type { PublicBookmark, PublicCategory } from '../../shared/types'
 
 // Issue #28：首页私密书签的图标必须经带 key 的代理 URL 才能拿到真实图标；公开书签保持匿名 URL，
@@ -62,6 +64,8 @@ function iconSrcByAlt(root: ParentNode): Map<string, string> {
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
+  iconAccessKey.set('')
+  vi.restoreAllMocks()
 })
 
 describe('首页书签图标授权分流', () => {
@@ -144,26 +148,31 @@ describe('首页书签图标授权分流', () => {
     expect(iconSrcByAlt(container).get('Example')).toContain('key=GRANT123')
   })
 
-  it('scopes the key per bookmark inside a mixed section such as 经常访问', async () => {
+  it('keeps public frequent icons anonymous while authorizing private and inherited icons', async () => {
     stubIconEnvironment()
-    const { container } = render(CategorySection, {
+    vi.spyOn(window, 'scrollTo').mockImplementation(() => { })
+    iconAccessKey.set(GRANT)
+    const { container } = render(Home, {
       props: {
-        category: category({ id: -1, title: '经常访问' }),
+        isAuthenticated: true,
+        categories: [category(), category({ id: 2, is_private: true })],
         bookmarks: [
-          bookmark({ id: 42, title: 'Public', category_id: 1, is_private: 0 }),
-          bookmark({ id: 43, title: 'Private', category_id: 1, is_private: 1 }),
-          bookmark({ id: 44, title: 'Under private', category_id: 2, is_private: 0 }),
-          bookmark({ id: 45, title: 'Orphan', category_id: 999, is_private: 0 }),
+          bookmark({ id: 42, title: 'Public', category_id: 1, is_private: 0, click_count: 4 }),
+          bookmark({ id: 43, title: 'Private', category_id: 1, is_private: 1, click_count: 3 }),
+          bookmark({ id: 44, title: 'Under private', category_id: 2, is_private: 0, click_count: 2 }),
+          bookmark({ id: 45, title: 'Orphan', category_id: 999, is_private: 0, click_count: 1 }),
         ],
-        publicCategoryIds: new Set<number>([1]),
-        iconAccessKey: GRANT,
       },
     })
 
-    await waitFor(() => expect(container.querySelectorAll('img')).toHaveLength(4))
-    const byTitle = iconSrcByAlt(container)
+    const frequent = container.querySelector('[id="category--1"]')!
+    await waitFor(() => expect(frequent.querySelectorAll('img')).toHaveLength(3))
+    const byTitle = iconSrcByAlt(frequent)
+    const ordinary = iconSrcByAlt(container.querySelector('[id="category-1"]')!)
+    expect(byTitle.get('Public')).toBe(ordinary.get('Public'))
     expect(byTitle.get('Public')).not.toContain('key=')
-    expect(byTitle.get('Private')).toContain('key=GRANT123')
+    expect(byTitle.has('Private')).toBe(false)
+    expect(ordinary.get('Private')).toContain('key=GRANT123')
     expect(byTitle.get('Under private')).toContain('key=GRANT123')
     expect(byTitle.get('Orphan')).toContain('key=GRANT123')
   })

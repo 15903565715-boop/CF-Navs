@@ -204,6 +204,83 @@ describe('local bookmark icon cache', () => {
     if (iconUrl) revokeLocalIconUrl(iconUrl)
   })
 
+  it('coalesces overlapping object-proxy loads into one request with independent object URLs', async () => {
+    const entries = setupCacheStorage()
+    let releaseBody!: (blob: Blob) => void
+    const body = new Promise<Blob>((resolve) => { releaseBody = resolve })
+    const response = new Response('<svg/>', { headers: { 'content-type': 'image/svg+xml' } })
+    const readBody = vi.spyOn(response, 'blob').mockReturnValue(body)
+    const fetchMock = vi.fn().mockResolvedValueOnce(response).mockResolvedValueOnce(
+      new Response('<svg>denied</svg>', { headers: { 'content-type': 'image/svg+xml', 'cache-control': 'no-store' } }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const blobs = new Map<string, Blob>()
+    vi.mocked(URL.createObjectURL).mockImplementation((blob) => {
+      const url = `blob:card-${blobs.size}`
+      blobs.set(url, blob as Blob)
+      return url
+    })
+    const url = '/api/icon/42?v=same&cv=4'
+    const first = fetchAndCacheBookmarkIconUrl('42-frequent', url)
+    const second = fetchAndCacheBookmarkIconUrl('42-ordinary', url)
+    await vi.waitFor(() => expect(readBody).toHaveBeenCalledTimes(1))
+    releaseBody(new Blob(['<svg>public</svg>'], { type: 'image/svg+xml' }))
+    const [a, b] = await Promise.all([first, second])
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(a).not.toBe(b)
+    expect(await blobs.get(a!)!.text()).toBe('<svg>public</svg>')
+    expect(await blobs.get(b!)!.text()).toBe('<svg>public</svg>')
+    revokeLocalIconUrl(a!)
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith(a)
+    expect(URL.revokeObjectURL).not.toHaveBeenCalledWith(b)
+
+    // A settled request shares nothing: a later read re-hits the visibility gate.
+    const later = await fetchAndCacheBookmarkIconUrl('42-later', url)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(await blobs.get(later!)!.text()).toBe('<svg>denied</svg>')
+    expect(entries.size).toBe(0)
+    revokeLocalIconUrl(b!)
+    revokeLocalIconUrl(later!)
+  })
+
+  it('never coalesces across authorization grants or icon versions', async () => {
+    setupCacheStorage()
+    const releases: Array<(response: Response) => void> = []
+    const fetchMock = vi.fn((_url: string) => new Promise<Response>((resolve) => { releases.push(resolve) }))
+    vi.stubGlobal('fetch', fetchMock)
+    const urls = [
+      '/api/icon/42?v=one&cv=4',
+      '/api/icon/42?v=one&cv=4&key=A',
+      '/api/icon/42?v=one&cv=4&key=B',
+      '/api/icon/42?v=two&cv=4',
+    ]
+    const pending = urls.map((url) => fetchAndCacheBookmarkIconUrl('42-cache-key', url))
+    await vi.waitFor(() => expect(releases).toHaveLength(4))
+    for (const release of releases) release(new Response('<svg/>', { headers: { 'content-type': 'image/svg+xml' } }))
+    for (const url of await Promise.all(pending)) if (url) revokeLocalIconUrl(url)
+    expect(fetchMock.mock.calls.map((call) => call[0])).toEqual(urls)
+  })
+
+  it.each(['network', 'body', 'http', 'type', 'empty'])('evicts a %s failure so a remount can retry', async (failure) => {
+    setupCacheStorage()
+    const response = new Response(failure === 'empty' ? '' : '<svg/>', {
+      status: failure === 'http' ? 503 : 200,
+      headers: { 'content-type': failure === 'type' ? 'text/plain' : 'image/svg+xml' },
+    })
+    if (failure === 'body') vi.spyOn(response, 'blob').mockRejectedValue(new Error('body interrupted'))
+    const fetchMock = vi.fn()
+    if (failure === 'network') fetchMock.mockRejectedValueOnce(new Error('network interrupted'))
+    else fetchMock.mockResolvedValueOnce(response)
+    fetchMock.mockResolvedValueOnce(new Response('<svg/>', { headers: { 'content-type': 'image/svg+xml' } }))
+    vi.stubGlobal('fetch', fetchMock)
+    const url = '/api/icon/42?v=recovery&cv=4'
+    await expect(fetchAndCacheBookmarkIconUrl('42', url)).resolves.toBeNull()
+    const recovered = await fetchAndCacheBookmarkIconUrl('42', url)
+    expect(recovered).toMatch(/^blob:/)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    if (recovered) revokeLocalIconUrl(recovered)
+  })
+
   it('does not persist fallback, no-store, or oversized icon responses', async () => {
     const entries = setupCacheStorage()
     const responses = [
