@@ -160,6 +160,7 @@ Get-ChildItem $env:TEMP -Directory -Filter 'cf-navs-chrome-profile-*' | ForEach-
 | `temp profile not deleted after 18s of retries` | Windows 上 Chrome 退出后 `first_party_sets.db`、`*.bdic` 等文件的句柄释放滞后于进程退出。**这是 warning 不是 error**：进程已归零，没有安全问题，只是磁盘上留了个目录。按 §7 清掉即可 |
 | `verify.local.json is tracked by Git` | 凭据文件进了版本库。`git rm --cached verify.local.json`，然后**轮换管理员密码** |
 | `Missing verification target origin` | `verify.local.json` 缺 `baseUrl`，或 JSON 语法错误 |
+| 预缓存长期为空，或独立 `CacheStorage.open()` / `put()` 报内部错误 | 先用新的短临时 Chrome profile 对照，避免把 profile 根目录放进多层报告输出目录。Windows 上过长的完整 profile 路径可能导致浏览器存储失败；保留 `CHROME_PROFILE_ROOT` 的系统临时目录默认值，报告/截图仍可输出到仓库外的独立目录。若短路径仍失败，再查站点 SW 与网络，不能放宽缓存断言 |
 | 验收结果与代码不符 | 大概率是在旧版本上跑的。回到 §2 第 3 步确认部署已生效 |
 | `profile removal: EBUSY` | Chrome 刚退出，文件句柄未释放。脚本已做退避重试；仍失败时按 §7 手动清 |
 | localhost 目标返回 502 | `HTTP_PROXY` 拦截了本地请求。用 `curl.exe --noproxy '*'` 或给脚本设 `NO_PROXY=127.0.0.1,localhost` |
