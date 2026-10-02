@@ -384,7 +384,7 @@
 
     try {
       await refreshLoggedInData()
-      return true
+      return isLoggedIn() && get(adminStore).loaded
     } catch (error) {
       if (isUnauthorizedError(error)) {
         authStore.setSession(null)
