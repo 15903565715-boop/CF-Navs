@@ -146,17 +146,35 @@ function responseToObjectUrl(response: Response): Promise<string | null> {
 // URL 发两次 fetch。对象图标是 no-store、不持久化，所以只能合并**在途**请求，不缓存完成结果：
 // 按完整 URL（含 v/cv/key）索引，拿到同一份正文后各自生成独立 object URL，成功或失败都立即移除，
 // 下一次挂载重新经过可见性闸门。
-const pendingObjectIcons = new Map<string, Promise<Blob | null>>()
+export type BookmarkIconFetchResult = {
+  url: string | null
+  status: 'ready' | 'retryable' | 'unavailable'
+}
 
-function fetchObjectIconUrl(url: string): Promise<string | null> {
+type IconPayload = { blob: Blob | null; status: BookmarkIconFetchResult['status'] }
+
+async function responseToIconPayload(response: Response): Promise<IconPayload> {
+  if (!response.ok) {
+    return { blob: null, status: response.status === 408 || response.status === 429 || response.status >= 500 ? 'retryable' : 'unavailable' }
+  }
+  const blob = await responseToIconBlob(response)
+  // A 200 fallback is displayable, but must not stop recovery as if it were the
+  // real icon. Object responses are all no-store, so retries must remain bounded.
+  return { blob, status: response.headers.get('X-Icon-Fallback') === '1' || !blob ? 'retryable' : 'ready' }
+}
+
+const pendingObjectIcons = new Map<string, Promise<IconPayload>>()
+
+async function fetchObjectIcon(url: string): Promise<BookmarkIconFetchResult> {
   let pending = pendingObjectIcons.get(url)
   if (!pending) {
     pending = fetch(url, { credentials: 'same-origin', cache: 'force-cache' })
-      .then(responseToIconBlob)
+      .then(responseToIconPayload)
       .finally(() => pendingObjectIcons.delete(url))
     pendingObjectIcons.set(url, pending)
   }
-  return pending.then((blob) => (blob ? URL.createObjectURL(blob) : null))
+  const { blob, status } = await pending
+  return { url: blob ? URL.createObjectURL(blob) : null, status }
 }
 
 
@@ -290,20 +308,20 @@ export async function pruneBookmarkIconCacheStorageBackedByLocalStorage(): Promi
   }
 }
 
-export async function fetchAndCacheBookmarkIconUrl(cacheKey: string, url: string): Promise<string | null> {
+export async function fetchBookmarkIcon(cacheKey: string, url: string): Promise<BookmarkIconFetchResult> {
   await clearLegacyCacheStorage()
-  if (!url) return null
+  if (!url) return { url: null, status: 'unavailable' }
 
   try {
-    if (isObjectIconProxyUrl(url)) return await fetchObjectIconUrl(url)
+    if (isObjectIconProxyUrl(url)) return await fetchObjectIcon(url)
     const response = await fetch(url, {
       credentials: 'same-origin',
       cache: 'force-cache',
     })
-    if (!response.ok) return null
+    if (!response.ok) return { url: null, status: response.status >= 500 || response.status === 429 || response.status === 408 ? 'retryable' : 'unavailable' }
 
     const contentType = response.headers.get('content-type') ?? ''
-    if (!contentType.toLowerCase().startsWith('image/')) return null
+    if (!contentType.toLowerCase().startsWith('image/')) return { url: null, status: 'unavailable' }
 
     const cacheControl = response.headers.get('cache-control')?.toLowerCase() ?? ''
     const contentLengthHeader = response.headers.get('content-length')
@@ -321,9 +339,10 @@ export async function fetchAndCacheBookmarkIconUrl(cacheKey: string, url: string
       await cache.put(cacheRequest(cacheKey), response.clone())
     }
 
-    return await responseToObjectUrl(response)
+    const { blob, status } = await responseToIconPayload(response)
+    return { url: blob ? URL.createObjectURL(blob) : null, status }
   } catch {
-    return null
+    return { url: null, status: 'retryable' }
   }
 }
 

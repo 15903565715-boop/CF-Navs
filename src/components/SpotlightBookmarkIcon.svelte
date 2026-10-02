@@ -5,9 +5,10 @@
     deriveBookmarkCardIconBase,
     deriveBookmarkCardIconUrl,
   } from '../lib/bookmarkCardIconState'
+  import { createIconRetry } from '../lib/iconRetry'
   import { buildIconStyle } from '../lib/bookmarkIconDisplay'
   import {
-    fetchAndCacheBookmarkIconUrl,
+    fetchBookmarkIcon,
     fetchCachedBookmarkIconUrl,
     readCachedBookmarkIconDataUri,
     revokeLocalIconUrl,
@@ -23,6 +24,12 @@
   let cachedIconFailed = false
   let fallbackFailed = false
   let localCachedIconUrl = ''
+  let localIconReady = false
+  const iconRetry = createIconRetry(() => {
+    if (iconBaseState.shouldUseIconProxy) {
+      void loadLocalCachedIcon(iconBaseState.localCacheKey, false, iconBaseState.proxiedHttpIconUrl)
+    }
+  })
   let syncLocalCachedIconUrl = ''
   let localCachePending = false
   let iconStateKey = ''
@@ -54,6 +61,8 @@
     iconStateKey = iconBaseState.nextIconStateKey
     cachedIconFailed = false
     fallbackFailed = false
+    localIconReady = false
+    iconRetry.reset()
     resetLocalCachedIconUrl()
     if (iconBaseState.shouldReadLocalIconCache) {
       void loadLocalCachedIcon(
@@ -80,6 +89,7 @@
     if (result.stale) return
     const requestSequence = localCacheRequest.current
     if (result.url) {
+      localIconReady = true
       resetLocalCachedIconUrl()
       localCachedIconUrl = result.url
       localCachePending = false
@@ -87,17 +97,23 @@
     }
 
     if (remoteUrl) {
-      const cachedRemoteUrl = await fetchAndCacheBookmarkIconUrl(cacheKey, remoteUrl)
+      const remote = await fetchBookmarkIcon(cacheKey, remoteUrl)
       if (requestSequence !== localCacheRequest.current) {
-        if (cachedRemoteUrl) revokeLocalIconUrl(cachedRemoteUrl)
+        if (remote.url) revokeLocalIconUrl(remote.url)
         return
       }
-      if (cachedRemoteUrl) {
+      localIconReady = remote.status === 'ready'
+      if (remote.url) {
         resetLocalCachedIconUrl()
-        localCachedIconUrl = cachedRemoteUrl
-        localCachePending = false
-        return
+        localCachedIconUrl = remote.url
+        cachedIconFailed = false
+        fallbackFailed = false
+      } else if (!localCachedIconUrl) {
+        cachedIconFailed = true
+        fallbackFailed = true
       }
+      if (remote.status === 'retryable') iconRetry.failed()
+      else if (remote.status === 'unavailable') iconRetry.reset()
     }
 
     localCachePending = false
@@ -106,6 +122,12 @@
   function handleIconError(): void {
     if (localCachedIconUrl) {
       resetLocalCachedIconUrl()
+      localIconReady = false
+      if (iconBaseState.shouldUseIconProxy) {
+        cachedIconFailed = true
+        fallbackFailed = true
+        iconRetry.failed()
+      }
       return
     }
 
@@ -118,11 +140,13 @@
   }
 
   function handleIconLoad(): void {
+    if (localIconReady) iconRetry.reset()
     localCachePending = false
     fallbackFailed = false
   }
 
   onDestroy(() => {
+    iconRetry.dispose()
     localCacheRequest.current += 1
     resetLocalCachedIconUrl()
   })

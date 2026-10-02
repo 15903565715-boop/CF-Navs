@@ -59,7 +59,11 @@ describe('homepage bookmark local icon cache', () => {
     const fetchPromise = new Promise<Response>((resolve) => {
       resolveFetch = resolve
     })
-    const fetchMock = vi.fn(() => fetchPromise)
+    // Each network response has a fresh body; reusing a consumed Response would
+    // accidentally test the old raw-img fallback rather than a real remount fetch.
+    const fetchMock = vi.fn().mockReturnValueOnce(fetchPromise).mockImplementation(async () => new Response('<svg/>', {
+      headers: { 'content-type': 'image/svg+xml' },
+    }))
     vi.stubGlobal('fetch', fetchMock)
 
     render(BookmarkCard, { props: { bookmark: bookmark() } })
@@ -80,7 +84,7 @@ describe('homepage bookmark local icon cache', () => {
     const secondImage = await screen.findByRole('img', { name: 'Cached icon' })
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
-    expect(secondImage.getAttribute('src')).toMatch(/^\/api\/icon\/42\?v=[^&]+&cv=4$/)
+    expect(secondImage.getAttribute('src')).toBe('blob:test')
     expect(entries.size).toBe(0)
   })
 })

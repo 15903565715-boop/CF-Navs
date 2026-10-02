@@ -34,8 +34,8 @@ function category(overrides: Partial<PublicCategory> = {}): PublicCategory {
   return { id: 1, parent_id: null, title: 'Tools', icon: null, sort: 0, ...overrides }
 }
 
-// 本地图标缓存未命中时 BookmarkCard 会先预取代理 URL，再回落到同一个 URL 渲染 <img>。
-// 这里让 Cache Storage 恒空、预取恒失败，从而稳定观察最终代理 URL。
+// 使用真实预取成功路径，并把 Blob 映射回其请求 URL；不依赖失败后的原始 img 回退。
+const sourceByBlob = new Map<string, string>()
 function stubIconEnvironment(): void {
   const entries = new Map<string, Response>()
   const cache = {
@@ -50,14 +50,29 @@ function stubIconEnvironment(): void {
   vi.stubGlobal('caches', caches)
   Object.defineProperty(window, 'caches', { value: caches, configurable: true })
   vi.stubGlobal('IntersectionObserver', undefined)
-  // 预取失败 → hasRenderableIcon 回落到代理 URL（带 key 与否正是本测试要断言的分流）。
-  vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 500 })))
+  sourceByBlob.clear()
+  const TestURL = class extends URL {}
+  Object.assign(TestURL, {
+    createObjectURL: vi.fn((blob: Blob & { sourceUrl: string }) => {
+      const url = 'blob:test-' + sourceByBlob.size
+      sourceByBlob.set(url, blob.sourceUrl)
+      return url
+    }),
+    revokeObjectURL: vi.fn(),
+  })
+  vi.stubGlobal('URL', TestURL)
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+    const response = new Response('<svg/>', { headers: { 'content-type': 'image/svg+xml' } })
+    const readBlob = response.blob.bind(response)
+    response.blob = async () => Object.assign(await readBlob(), { sourceUrl: url })
+    return response
+  }))
   window.localStorage.clear()
 }
 
 function iconSrcByAlt(root: ParentNode): Map<string, string> {
   return new Map(
-    Array.from(root.querySelectorAll('img')).map((img) => [img.getAttribute('alt') ?? '', img.getAttribute('src') ?? '']),
+    Array.from(root.querySelectorAll('img')).map((img) => [img.getAttribute('alt') ?? '', sourceByBlob.get(img.getAttribute('src') ?? '') ?? img.getAttribute('src') ?? '']),
   )
 }
 

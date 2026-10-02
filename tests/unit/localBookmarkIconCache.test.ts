@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createBookmarkIconCacheKey,
   deleteCachedBookmarkIcon,
-  fetchAndCacheBookmarkIconUrl,
+  fetchBookmarkIcon,
   fetchCachedBookmarkIconUrl,
   isDataImage,
   readCachedBookmarkIconDataUri,
@@ -10,6 +10,9 @@ import {
   revokeLocalIconUrl,
   writeBookmarkIconDataUri,
 } from '../../src/lib/localBookmarkIconCache'
+// Existing URL/cache assertions also exercise the richer production result API.
+const fetchAndCacheBookmarkIconUrl = async (key: string, url: string) => (await fetchBookmarkIcon(key, url)).url
+
 
 const STORAGE_PREFIX = 'cf-navs.bookmark-icon.'
 let legacyCacheDeletes: string[] = []
@@ -384,3 +387,21 @@ describe('fetchCachedBookmarkIconUrl', () => {
   })
 })
 
+
+describe('remote icon response classification', () => {
+  it.each([
+    [200, '1', 'retryable'],
+    [200, null, 'ready'],
+    [404, null, 'unavailable'],
+    [429, null, 'retryable'],
+    [503, null, 'retryable'],
+  ] as const)('classifies status %s fallback=%s as %s', async (status, fallback, expected) => {
+    setupCacheStorage()
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('<svg/>', { status, headers: {
+      'content-type': 'image/svg+xml', ...(fallback ? { 'X-Icon-Fallback': fallback } : {}),
+    } })))
+    const result = await fetchBookmarkIcon('42', '/api/icon/42?cv=4')
+    expect(result.status).toBe(expected)
+    if (result.url) revokeLocalIconUrl(result.url)
+  })
+})
