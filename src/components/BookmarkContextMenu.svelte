@@ -78,7 +78,11 @@
     // 展开方向决定菜单贴住卡片上沿还是下沿（CSS 里用 100% - 6px 制造 6px 重叠）。
     const downStart = anchorRect.bottom - ANCHOR_OVERLAP_PX
     const upStart = anchorRect.top + ANCHOR_OVERLAP_PX
-    const spaceBelow = window.innerHeight - downStart - VIEWPORT_MARGIN_PX
+    // Home publishes the fixed sorting bar's exclusion area. Other hosts omit
+    // the variable and retain the full viewport as before.
+    const toolbarInset = Math.max(0, Number.parseFloat(getComputedStyle(anchor).getPropertyValue('--home-sort-bottom-inset')) || 0)
+    const viewportBottom = Math.max(0, window.innerHeight - toolbarInset)
+    const spaceBelow = viewportBottom - downStart - VIEWPORT_MARGIN_PX
     const spaceAbove = upStart - VIEWPORT_MARGIN_PX
 
     let nextPlacement: 'down' | 'up' = 'down'

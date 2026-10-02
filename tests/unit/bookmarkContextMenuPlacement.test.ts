@@ -226,4 +226,14 @@ describe('书签右键菜单的视口定位', () => {
     await waitFor(() => expect(document.activeElement).toBe(menu.querySelector('[data-testid="bookmark-context-move"]')))
   })
 
+  it('keeps menu placement above the fixed sorting toolbar exclusion area', async () => {
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 800 })
+    stubMenuGeometry(45)
+    stubAnchorRect(620)
+    const { anchor, menu } = renderMenu()
+    anchor.style.setProperty('--home-sort-bottom-inset', '120px')
+    window.dispatchEvent(new Event('resize'))
+    await waitFor(() => expect(menu.classList.contains('placement-up')).toBe(true))
+  })
+
 })

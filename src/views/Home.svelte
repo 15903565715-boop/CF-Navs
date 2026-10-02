@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount, tick } from 'svelte'
+  import { observeSortToolbar } from '../lib/homeSortToolbar'
   import { observeSearchBoxVisibility } from '../lib/searchBoxVisibility'
   import Sidebar from '../components/Sidebar.svelte'
   import CategorySection from '../components/CategorySection.svelte'
@@ -87,6 +88,8 @@
   let homeSortSaving = false
   let homeSortDraft: PublicBookmark[] = []
   let homeSortError = ''
+  let homeSortBottomInset = 0
+  function setSortToolbarInset(inset: number): void { homeSortBottomInset = inset }
   let lastFocusedCategoryId: number | null = null
 
   $: sortedCategories = homeData.getSortedCategories(categories)
@@ -154,6 +157,7 @@
     `--content-margin-x: ${contentLayout.margin_x}px`,
     `--content-margin-top: ${contentLayout.margin_top}%`,
     `--content-margin-bottom: ${contentLayout.margin_bottom}%`,
+    `--home-sort-bottom-inset: ${homeSortBottomInset}px`,
     `--category-root-font-size-base: ${categoryDisplay.root_font_size}px`,
     `--category-root-icon-size-base: ${categoryDisplay.root_icon_size}px`,
     `--category-child-font-size-base: ${categoryDisplay.child_font_size}px`,
@@ -688,7 +692,7 @@
   </div>
 
   {#if homeSortMode || homeSortError}
-    <div class="home-sort-bar" class:error-state={Boolean(homeSortError)} role="toolbar" aria-label="跨分类排序操作">
+    <div class="home-sort-bar" use:observeSortToolbar={setSortToolbarInset} class:error-state={Boolean(homeSortError)} role="toolbar" aria-label="跨分类排序操作">
       {#if homeSortError}
         <span class="home-sort-message home-sort-error" role="alert">保存排序失败：{homeSortError}</span>
         <button type="button" class="home-sort-cancel" on:click={cancelHomeSort}>关闭</button>
@@ -713,7 +717,7 @@
   .home-shell {
     position: relative;
     min-height: 100dvh;
-    padding: 1.5rem calc(1.5rem + var(--content-margin-x, 0px)) var(--content-margin-bottom, 0%);
+    padding: 1.5rem calc(1.5rem + var(--content-margin-x, 0px)) calc(var(--content-margin-bottom, 0%) + var(--home-sort-bottom-inset, 0px));
     --home-text-color: var(--card-text-color, #0f172a);
     --home-muted-opacity: 0.72;
     --home-stat-bg: rgba(255, 255, 255, 0.5);
@@ -884,6 +888,11 @@
     gap: 1.2rem;
   }
 
+  /* scrollIntoView / keyboard navigation must also stop above the fixed bar. */
+  .home-shell :global(.bookmark-card-shell.sort-mode) {
+    scroll-margin-bottom: var(--home-sort-bottom-inset, 0px);
+  }
+
   .home-sort-bar {
     position: fixed;
     z-index: 20;
@@ -954,7 +963,7 @@
 
   @media (max-width: 799px) {
     .home-shell {
-      padding: 1rem 1rem var(--content-margin-bottom, 0%);
+      padding: 1rem 1rem calc(var(--content-margin-bottom, 0%) + var(--home-sort-bottom-inset, 0px));
     }
 
     .home-shell {
