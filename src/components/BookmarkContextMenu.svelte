@@ -38,6 +38,7 @@
   function closeMovePicker() {
     movePickerOpen = false
     moveCategoryId = currentCategoryId
+    void tick().then(() => menuElement?.querySelector<HTMLButtonElement>('[data-testid="bookmark-context-move"]')?.focus())
   }
 
   function handleMenuKeydown(event: KeyboardEvent): void {
@@ -62,7 +63,15 @@
     const anchor = menuElement.parentElement
     if (!anchor) return
 
-    const naturalHeight = menuElement.scrollHeight
+    // Flex children shrink inside a clamped menu. Measure without the previous
+    // cap, otherwise the shrunken height would repeatedly remove/reapply it.
+    // Keep temporary DOM writes on a local reference: assigning through the
+    // bound variable would invalidate Svelte and recursively trigger afterUpdate.
+    const element = menuElement
+    const previousMaxHeight = element.style.maxHeight
+    element.style.maxHeight = 'none'
+    const naturalHeight = element.scrollHeight
+    element.style.maxHeight = previousMaxHeight
     if (naturalHeight <= 0) return
 
     const anchorRect = anchor.getBoundingClientRect()
@@ -142,10 +151,10 @@
   on:touchstart|stopPropagation
   on:touchmove|stopPropagation
 >
-  {#if onEdit}
+  {#if onEdit && !movePickerOpen}
     <button type="button" data-testid="bookmark-context-edit" on:click={handleEditClick}>编辑</button>
   {/if}
-  {#if canMove && onMoveBookmark && categories.length > 0}
+  {#if canMove && onMoveBookmark && categories.length > 0 && !movePickerOpen}
     <button type="button" data-testid="bookmark-context-move" on:click={openMovePicker}>移动</button>
   {/if}
   {#if movePickerOpen}
@@ -155,6 +164,8 @@
         items={categories}
         ariaLabel="移动到分类"
         compact
+        inlineMenu
+        onLayoutChange={scheduleMeasure}
         testId="bookmark-context-move-select"
       />
       <button type="button" class="move-cancel" on:click={closeMovePicker}>取消</button>
@@ -164,6 +175,8 @@
 
 <style>
   .bookmark-context-menu {
+    display: flex;
+    flex-direction: column;
     position: absolute;
     top: calc(100% - 6px);
     left: 8px;
@@ -191,6 +204,7 @@
   }
 
   .bookmark-context-menu button {
+    flex-shrink: 0;
     width: 100%;
     border: 0;
     border-radius: 8px;
@@ -209,12 +223,13 @@
   }
 
   .move-picker {
-    display: grid;
+    display: flex;
+    flex-direction: column;
+    flex: 0 1 auto;
+    min-height: 0;
     gap: 6px;
     min-width: 0;
-    margin-top: 4px;
-    padding-top: 4px;
-    border-top: 1px solid rgba(148, 163, 184, 0.24);
+    /* The picker replaces the action rows, leaving room in short viewports. */
   }
 
   .move-cancel {

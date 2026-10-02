@@ -189,4 +189,41 @@ describe('书签右键菜单的视口定位', () => {
     expect(windowKeydown).not.toHaveBeenCalled()
     window.removeEventListener('keydown', windowKeydown)
   })
+  it('remeasures when the nested category tree opens and closes, without scrolling', async () => {
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: VIEWPORT_HEIGHT })
+    Object.defineProperty(HTMLElement.prototype, 'scrollHeight', {
+      configurable: true,
+      get() {
+        if (!this.classList.contains('bookmark-context-menu')) return 0
+        return this.querySelector('.category-tree-menu') ? 500 : 123
+      },
+    })
+    stubAnchorRect(400)
+    const { menu } = renderMenu({
+      canMove: true,
+      categories: [{ id: 1, title: 'Root', children: [] }],
+      onMoveBookmark: () => undefined,
+    })
+    await fireEvent.click(menu.querySelector('[data-testid="bookmark-context-move"]')!)
+    await waitFor(() => expect(menu.classList.contains('placement-up')).toBe(false))
+    await fireEvent.click(menu.querySelector('[data-testid="bookmark-context-move-select"]')!)
+    await waitFor(() => expect(menu.classList.contains('placement-up')).toBe(true))
+    expect(menu.classList.contains('clamped')).toBe(true)
+    await fireEvent.keyDown(menu.querySelector('[data-testid="bookmark-context-move-select"]')!, { key: 'Escape' })
+    await waitFor(() => expect(menu.classList.contains('placement-up')).toBe(false))
+    expect(menu.classList.contains('clamped')).toBe(false)
+  })
+
+  it('reserves short-viewport space for the picker and restores actions/focus on cancel', async () => {
+    stubMenuGeometry(200)
+    stubAnchorRect(120)
+    const { menu } = renderMenu({ canMove: true, categories: [{ id: 1, title: 'Root', children: [] }], onMoveBookmark: () => undefined })
+    await fireEvent.click(menu.querySelector('[data-testid="bookmark-context-move"]')!)
+    expect(menu.querySelector('[data-testid="bookmark-context-edit"]')).toBeNull()
+    expect(menu.querySelector('[data-testid="bookmark-context-move"]')).toBeNull()
+    await fireEvent.click(menu.querySelector('.move-cancel')!)
+    expect(menu.querySelector('[data-testid="bookmark-context-edit"]')).not.toBeNull()
+    await waitFor(() => expect(document.activeElement).toBe(menu.querySelector('[data-testid="bookmark-context-move"]')))
+  })
+
 })
