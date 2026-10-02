@@ -54,6 +54,19 @@ function normalizeBuildAssetResponse(request, response) {
   return assetNotFoundResponse()
 }
 
+// Installation may follow /index.html -> /. Chromium rejects that cached
+// redirected Response for navigations whose redirect mode is "manual". Preserve
+// bytes/headers but create a fresh response; clone so background shell comparison
+// can still read the cached response independently.
+function navigationResponse(response) {
+  if (!response || !response.redirected) return response
+  return new Response(response.clone().body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers,
+  })
+}
+
 function matchCurrentCache(request) {
   return caches.open(CACHE).then((cache) => cache.match(request))
 }
@@ -194,7 +207,7 @@ self.addEventListener('fetch', (event) => {
             cacheResponse(request, safeResponse)
             return safeResponse
           }),
-      ),
+      ).then((response) => request.mode === 'navigate' ? navigationResponse(response) : response),
     )
     return
   }
@@ -226,7 +239,7 @@ self.addEventListener('fetch', (event) => {
         // 后台更新不能让请求悬空：respondWith 之后 waitUntil 保活。
         event.waitUntil(network.catch(() => undefined))
         return cached
-      }),
+      }).then(navigationResponse),
     )
   }
 })
