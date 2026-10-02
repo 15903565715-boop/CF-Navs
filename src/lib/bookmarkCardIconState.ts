@@ -67,7 +67,7 @@ export function createBookmarkCardIconStateKey(
 ): string {
   // key 参与状态键：续签、过期或清除时必须重置 cachedIconFailed/fallbackFailed 并重新加载，
   // 否则第一次匿名失败态会一直挡住带 key 的真实图标。
-  return `${bookmark.id}:${bookmark.icon_source ?? ''}:${bookmark.icon ?? ''}:${bookmark.icon_blob ?? ''}:${bookmark.title}:${bookmark.url}:${iconInView}:${iconAccessKey}`
+  return `${bookmark.id}:${bookmark.icon_source ?? ''}:${bookmark.icon ?? ''}:${bookmark.icon_blob ?? ''}:${Boolean(bookmark.icon_cached)}:${bookmark.title}:${bookmark.url}:${iconInView}:${iconAccessKey}`
 }
 
 export function deriveBookmarkCardIconBase(input: BookmarkCardIconBaseInput): BookmarkCardIconBaseState {
@@ -108,7 +108,11 @@ export function deriveBookmarkCardIconBase(input: BookmarkCardIconBaseInput): Bo
   const shouldUseIconProxy = hasCachedRemoteIcon
   // 私密对象的代理响应是 `private, no-store`，必须带 key 才能拿到真实图标；
   // 公开对象 iconAccessKey 为空，URL 保持匿名以便命中 Worker edge cache，Service Worker 不接管对象代理。
-  const proxiedHttpIconUrl = shouldUseIconProxy
+  // Keep the successful uncached path as a direct <img> (no extra request and no
+  // CORS dependency). On a direct-image failure the existing bounded recovery can
+  // fetch through the object proxy, even before D1 has an icon_blob.
+  const canRecoverHttpIcon = canUseRawHttpIconFallback && Number.isInteger(bookmark.id) && bookmark.id > 0
+  const proxiedHttpIconUrl = shouldUseIconProxy || canRecoverHttpIcon
     ? withIconAccessKey(
       `/api/icon/${encodeURIComponent(String(bookmark.id))}?v=${createIconVersion(`${bookmark.id}:${rawIcon}:${bookmark.title}:${bookmark.url}`)}&cv=${ICON_CACHE_URL_VERSION}`,
       iconAccessKey,

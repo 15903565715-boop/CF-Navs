@@ -26,7 +26,7 @@
   let localCachedIconUrl = ''
   let localIconReady = false
   const iconRetry = createIconRetry(() => {
-    if (iconBaseState.shouldUseIconProxy) {
+    if (iconBaseState.proxiedHttpIconUrl) {
       void loadLocalCachedIcon(iconBaseState.localCacheKey, false, iconBaseState.proxiedHttpIconUrl)
     }
   })
@@ -123,11 +123,21 @@
     if (localCachedIconUrl) {
       resetLocalCachedIconUrl()
       localIconReady = false
-      if (iconBaseState.shouldUseIconProxy) {
+      if (iconBaseState.proxiedHttpIconUrl) {
         cachedIconFailed = true
         fallbackFailed = true
         iconRetry.failed()
       }
+      return
+    }
+
+    // An uncached HTTP <img> never went through fetchBookmarkIcon. Its error must
+    // enter the same recovery path; otherwise only opening the editor can fetch
+    // the icon server-side and reset the failed card (Issue #28).
+    if (!iconBaseState.hasEmbeddedIcon && iconBaseState.proxiedHttpIconUrl) {
+      cachedIconFailed = true
+      fallbackFailed = true
+      iconRetry.failed()
       return
     }
 
