@@ -164,9 +164,9 @@ Cloudflare Git 和 Wrangler CLI 全新安装都先访问 `/install`，输入 `SE
 - [ ] 通过右键编辑进入编辑弹窗，删除需二次确认
 - [ ] 部署新版后强制刷新一次页面，确认新版 Service Worker 已激活
 - [ ] 首页搜索框输入关键词时，书签区域直接筛选，不出现本地书签下拉列表
-- [ ] 打开浏览器 Network 面板，刷新首页、上下滚动、搜索筛选、后台切回首页时，已缓存的普通书签图标不重复请求 `/api/icon/*`；分类图标可命中 `/api/category-icon/*`，后台预览和新增/编辑弹窗中的 Iconify 图标走 `/api/iconify/*`
+- [ ] 打开浏览器 Network 面板，刷新首页、上下滚动、搜索筛选、后台切回首页时，普通对象图标响应应为 `Cache-Control: no-store`，不应从浏览器磁盘缓存直接返回；Worker edge 可复用公开正文。分类图标可请求 `/api/category-icon/*`，后台预览和新增/编辑弹窗中的 Iconify 图标走 `/api/iconify/*`
 - [ ] 打开 Application -> Storage，清理站点数据后完整浏览首页并翻页查看后台书签列表，缓存空间应保持在小体量范围内，不应因跨域 Iconify `opaque` 响应或后台 `icon_blob` 预览重复写入而持续增长
-- [ ] 编辑弹窗应立即打开；随后可在后台调用 `/api/bookmarks/:id/icon-cache/refresh` 刷新普通书签图标缓存。保存书签后也会显式刷新；该请求遇到慢速 favicon 服务时不应长时间卡住保存流程；新增/编辑弹窗和后台预览不应直连 `https://api.iconify.design/*` 或 `https://icon-sets.iconify.design/*`，首页已保存的 Iconify 图标可直连 `api.iconify.design`
+- [ ] 编辑弹窗应立即打开；随后可在后台调用 `/api/bookmarks/:id/icon-cache/refresh` 刷新普通书签图标缓存。保存书签后也会显式刷新；该请求遇到慢速 favicon 服务时不应长时间卡住保存流程；新增/编辑弹窗、后台预览和首页已保存的 Iconify 图标均应通过同源 `/api/iconify/*` 代理，公开正文可由 Worker edge cache 复用
 - [ ] 登录后首次进入后台可请求 `/api/admin/data`；之后刷新页面、前后台切换优先读取浏览器本地快照，除新增、后台修改、导入、排序保存失败回滚或认证失败外不重复拉取；直接刷新 `/admin` 时保持加载界面并直接进入后台，不短暂显示首页
 - [ ] Iconify 失败时显示文字 fallback；普通 HTTP(S) 书签图标代理失败时可回退原始 URL，若原始 URL 也失败则显示书签文字 fallback
 

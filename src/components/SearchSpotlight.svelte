@@ -8,9 +8,11 @@
     normalizeSearchQuery,
   } from '../lib/homeData'
   import { setPageScrollLocked } from '../lib/pageScrollLock'
-  import { publicStore } from '../lib/stores'
+  import { isAuthenticated, publicStore } from '../lib/stores'
   import { api } from '../lib/api'
   import SpotlightBookmarkIcon from './SpotlightBookmarkIcon.svelte'
+  import { isBookmarkIconAccessRequired, getPublicCategoryIds } from '../lib/adminListState'
+  import { iconAccessKey } from '../lib/iconAccessKey'
 
   export let open = false
   export let bookmarks: PublicBookmark[] = []
@@ -40,6 +42,10 @@
     ? getMostVisitedBookmarks(bookmarks, MOST_VISITED_LIMIT)
     : matched.slice(0, RESULT_LIMIT)
   $: overflowCount = isEmptyQuery ? 0 : Math.max(0, matched.length - RESULT_LIMIT)
+  // 登录态下结果里可能含私密书签；只有需要授权的行才带 key（Issue #28）。
+  // 与首页一致按登录态门控：登出后即使 store 里还有残留 key 也不下发。
+  $: publicCategoryIds = getPublicCategoryIds(categories)
+  $: visibleIconAccessKey = $isAuthenticated ? $iconAccessKey : ''
   // 结果变化后把高亮夹回有效范围，避免 aria-activedescendant 指向已消失项。
   $: if (activeIndex >= results.length) activeIndex = 0
 
@@ -210,7 +216,10 @@
             on:click={() => openBookmarkFromSearch(bookmark)}
             on:mouseenter={() => (activeIndex = index)}
           >
-            <SpotlightBookmarkIcon {bookmark} />
+            <SpotlightBookmarkIcon
+              {bookmark}
+              iconAccessKey={isBookmarkIconAccessRequired(bookmark, publicCategoryIds.has(Number(bookmark.category_id))) ? visibleIconAccessKey : ''}
+            />
             <span class="spotlight-option-main">
               <span class="spotlight-option-title">{bookmark.title}</span>
               <span class="spotlight-option-sub">{categoryTitle(bookmark.category_id) || bookmark.url}</span>

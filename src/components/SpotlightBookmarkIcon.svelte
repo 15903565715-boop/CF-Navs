@@ -5,9 +5,10 @@
     deriveBookmarkCardIconBase,
     deriveBookmarkCardIconUrl,
   } from '../lib/bookmarkCardIconState'
+  import { createIconRetry } from '../lib/iconRetry'
   import { buildIconStyle } from '../lib/bookmarkIconDisplay'
   import {
-    fetchAndCacheBookmarkIconUrl,
+    fetchBookmarkIcon,
     fetchCachedBookmarkIconUrl,
     readCachedBookmarkIconDataUri,
     revokeLocalIconUrl,
@@ -17,10 +18,18 @@
   const ICON_SIZE = 30
 
   export let bookmark: PublicBookmark
+  /** 私密对象及其私密分类树下的书签需要授权 key；公开对象传空串以保留共享缓存。 */
+  export let iconAccessKey = ''
 
   let cachedIconFailed = false
   let fallbackFailed = false
   let localCachedIconUrl = ''
+  let localIconReady = false
+  const iconRetry = createIconRetry(() => {
+    if (iconBaseState.proxiedHttpIconUrl) {
+      void loadLocalCachedIcon(iconBaseState.localCacheKey, false, iconBaseState.proxiedHttpIconUrl)
+    }
+  })
   let syncLocalCachedIconUrl = ''
   let localCachePending = false
   let iconStateKey = ''
@@ -30,6 +39,7 @@
     bookmark,
     iconInView: true,
     shouldWaitForLocalIconCache: true,
+    iconAccessKey,
   })
   $: iconText = iconBaseState.iconText
   $: localCacheKey = iconBaseState.localCacheKey
@@ -51,6 +61,8 @@
     iconStateKey = iconBaseState.nextIconStateKey
     cachedIconFailed = false
     fallbackFailed = false
+    localIconReady = false
+    iconRetry.reset()
     resetLocalCachedIconUrl()
     if (iconBaseState.shouldReadLocalIconCache) {
       void loadLocalCachedIcon(
@@ -77,6 +89,7 @@
     if (result.stale) return
     const requestSequence = localCacheRequest.current
     if (result.url) {
+      localIconReady = true
       resetLocalCachedIconUrl()
       localCachedIconUrl = result.url
       localCachePending = false
@@ -84,17 +97,23 @@
     }
 
     if (remoteUrl) {
-      const cachedRemoteUrl = await fetchAndCacheBookmarkIconUrl(cacheKey, remoteUrl)
+      const remote = await fetchBookmarkIcon(cacheKey, remoteUrl)
       if (requestSequence !== localCacheRequest.current) {
-        if (cachedRemoteUrl) revokeLocalIconUrl(cachedRemoteUrl)
+        if (remote.url) revokeLocalIconUrl(remote.url)
         return
       }
-      if (cachedRemoteUrl) {
+      localIconReady = remote.status === 'ready'
+      if (remote.url) {
         resetLocalCachedIconUrl()
-        localCachedIconUrl = cachedRemoteUrl
-        localCachePending = false
-        return
+        localCachedIconUrl = remote.url
+        cachedIconFailed = false
+        fallbackFailed = false
+      } else if (!localCachedIconUrl) {
+        cachedIconFailed = true
+        fallbackFailed = true
       }
+      if (remote.status === 'retryable') iconRetry.failed()
+      else if (remote.status === 'unavailable') iconRetry.reset()
     }
 
     localCachePending = false
@@ -103,6 +122,22 @@
   function handleIconError(): void {
     if (localCachedIconUrl) {
       resetLocalCachedIconUrl()
+      localIconReady = false
+      if (iconBaseState.proxiedHttpIconUrl) {
+        cachedIconFailed = true
+        fallbackFailed = true
+        iconRetry.failed()
+      }
+      return
+    }
+
+    // An uncached HTTP <img> never went through fetchBookmarkIcon. Its error must
+    // enter the same recovery path; otherwise only opening the editor can fetch
+    // the icon server-side and reset the failed card (Issue #28).
+    if (!iconBaseState.hasEmbeddedIcon && iconBaseState.proxiedHttpIconUrl) {
+      cachedIconFailed = true
+      fallbackFailed = true
+      iconRetry.failed()
       return
     }
 
@@ -115,11 +150,13 @@
   }
 
   function handleIconLoad(): void {
+    if (localIconReady) iconRetry.reset()
     localCachePending = false
     fallbackFailed = false
   }
 
   onDestroy(() => {
+    iconRetry.dispose()
     localCacheRequest.current += 1
     resetLocalCachedIconUrl()
   })
