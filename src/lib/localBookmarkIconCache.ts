@@ -1,11 +1,17 @@
 import { CURRENT_EXTERNAL_ICON_CACHE_NAME, LEGACY_ICON_LOCAL_STORAGE_PREFIX } from './legacyIconCopyMigration'
+import { createOrdinaryIconScheduler } from './ordinaryIconScheduler'
 
 const CACHE_NAME = CURRENT_EXTERNAL_ICON_CACHE_NAME
 const MAX_LOCAL_ICON_CACHE_BYTES = 512 * 1024
 const CACHE_ORIGIN = 'https://cf-navs.local'
 const CACHE_PATH_PREFIX = '/bookmark-icon/'
 const TRANSIENT_OBJECT_ICON_TTL_MS = 30_000
-const MAX_TRANSIENT_OBJECT_ICONS = 64
+// Short-term public completed-blob reuse window. The cap must exceed the public object-icon set a
+// home can mount (card-count gate is >=300; production ~355) so first-loaded above-the-fold icons
+// are not evicted mid-scroll and then re-fetched on cross-phase remount (search-clear / view
+// switch). Entries are small object-icon blobs bounded by the 30s TTL. Raised from 64 (which held
+// only a fraction of the mounted set, forcing C-5 /api/icon re-fetches) to cover the full page.
+const MAX_TRANSIENT_OBJECT_ICONS = 512
 
 export type BookmarkIconCacheInput = {
   id: string | number
@@ -109,7 +115,26 @@ async function responseToIconPayload(response: Response): Promise<IconPayload> {
   return { blob, status: response.headers.get('X-Icon-Fallback') === '1' || !blob ? 'retryable' : 'ready' }
 }
 
-const pendingObjectIcons = new Map<string, Promise<IconPayload>>()
+// Chosen by the IP-P2 controlled concurrency experiment (local home355 fixture, CDP-throttled
+// 150ms / 1.6Mbps): N=4 gave the lowest cold first-view-ready (p50 1979ms vs 2141/2813 at 6/8) and
+// the least scroll jank, 0 failed / 0 broken, beating the unbounded ~212-concurrent burst on every
+// measured axis. A session may override via globalThis.__CF_NAVS_ICON_CONCURRENCY for experiments.
+const DEFAULT_ORDINARY_ICON_CONCURRENCY = 4
+
+function initialOrdinaryIconConcurrency(): number {
+  const scope: object = globalThis
+  const override: unknown = '__CF_NAVS_ICON_CONCURRENCY' in scope ? scope.__CF_NAVS_ICON_CONCURRENCY : undefined
+  return typeof override === 'number' && Number.isInteger(override) && override >= 1 ? override : DEFAULT_ORDINARY_ICON_CONCURRENCY
+}
+
+// One bounded scheduler owns ordinary same-origin /api/icon/ transmission. It preserves the existing
+// full-URL in-flight coalescing (one run per URL, shared payload, per-caller object URL) and caps
+// simultaneous network fetches so a full scroll no longer fires 200+ concurrent requests. The 10s
+// deadline starts only once a slot begins the run; queue waiting never consumes it.
+const objectIconScheduler = createOrdinaryIconScheduler<IconPayload>({
+  concurrency: initialOrdinaryIconConcurrency(),
+  run: (url, signal) => fetchObjectIconPayload(url, signal),
+})
 const transientObjectIcons = new Map<string, { blob: Blob; expiresAt: number }>()
 const OBJECT_ICON_TIMEOUT_MS = 10000
 
@@ -141,8 +166,13 @@ function writeTransientObjectIcon(url: string, blob: Blob): void {
   }
 }
 
-async function fetchObjectIconPayload(url: string): Promise<IconPayload> {
+async function fetchObjectIconPayload(url: string, externalSignal?: AbortSignal): Promise<IconPayload> {
   const controller = new AbortController()
+  const abortFromExternal = () => controller.abort()
+  if (externalSignal) {
+    if (externalSignal.aborted) controller.abort()
+    else externalSignal.addEventListener('abort', abortFromExternal, { once: true })
+  }
   let timer: ReturnType<typeof setTimeout> | undefined
   const deadline = new Promise<never>((_, reject) => {
     timer = setTimeout(() => {
@@ -152,31 +182,32 @@ async function fetchObjectIconPayload(url: string): Promise<IconPayload> {
     }, OBJECT_ICON_TIMEOUT_MS)
   })
   try {
-    // The deadline includes the response body. A headers-only success must not
-    // retain this URL's shared in-flight entry forever and prevent recovery.
+    // The deadline includes the response body and only starts once the scheduler grants a slot.
+    // A headers-only success must not retain this URL's shared run forever and prevent recovery.
     return await Promise.race([
       fetch(url, { credentials: 'same-origin', cache: 'force-cache', signal: controller.signal }).then(responseToIconPayload),
       deadline,
     ])
-  } finally { clearTimeout(timer) }
+  } finally {
+    clearTimeout(timer)
+    if (externalSignal) externalSignal.removeEventListener('abort', abortFromExternal)
+  }
 }
 
 async function fetchObjectIcon(url: string, reuseCompleted = false): Promise<BookmarkIconFetchResult> {
+  // Public completed blobs are still reused within the short in-memory window; otherwise the bounded
+  // scheduler coalesces the full URL (one run, shared payload) and caps simultaneous network fetches.
   if (reuseCompleted && isPublicObjectIconUrl(url)) {
     const blob = readTransientObjectIcon(url)
     if (blob) return { url: URL.createObjectURL(blob), status: 'ready' }
   }
-  let pending = pendingObjectIcons.get(url)
-  if (!pending) {
-    pending = fetchObjectIconPayload(url)
-      .finally(() => pendingObjectIcons.delete(url))
-    pendingObjectIcons.set(url, pending)
+  try {
+    const { blob, status } = await objectIconScheduler.reserve(url).promise
+    if (reuseCompleted && status === 'ready' && blob && isPublicObjectIconUrl(url)) writeTransientObjectIcon(url, blob)
+    return { url: blob ? URL.createObjectURL(blob) : null, status }
+  } catch {
+    return { url: null, status: 'retryable' }
   }
-  const { blob, status } = await pending
-  if (reuseCompleted && status === 'ready' && blob && isPublicObjectIconUrl(url)) {
-    writeTransientObjectIcon(url, blob)
-  }
-  return { url: blob ? URL.createObjectURL(blob) : null, status }
 }
 
 
