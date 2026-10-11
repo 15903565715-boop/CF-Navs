@@ -57,7 +57,7 @@
    */
   export let iconAccessKey = ''
   export let reuseCompletedObject = false
-  /** REQ-17 聚合区：卡片来源二级分类名，仅详情卡渲染；空串不显示。 */
+  /** REQ-17 聚合区：卡片来源二级分类名；详情卡显示可见 chip，极简卡经 tooltip/ARIA 承载；空串不显示。 */
   export let sourceCategoryTitle = ''
 
   let cachedIconFailed = false
