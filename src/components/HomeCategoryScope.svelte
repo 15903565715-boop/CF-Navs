@@ -351,7 +351,7 @@
     flex: 0 1 auto;
     min-width: 0;
     max-width: 100%;
-    color: var(--home-text-color);
+    color: var(--category-root-title-color, var(--home-text-color));
     font-size: var(--category-root-font-size, 1.35rem);
     font-weight: 700;
     line-height: 1.15;
@@ -501,7 +501,7 @@
 
 
   .scope-tabs button {
-    color: var(--home-text-color, currentColor);
+    color: var(--category-child-title-color, var(--home-text-color, currentColor));
     font: inherit;
     font-size: var(--category-child-font-size, 0.82rem);
     font-weight: 600;

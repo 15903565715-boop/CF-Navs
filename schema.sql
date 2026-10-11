@@ -76,7 +76,7 @@ INSERT OR IGNORE INTO settings (key, value) VALUES
   ('card_size', '{"width":160,"height":60}'),
   ('card_style', '"info"'),
   ('card_icon_size', '60'),
-  ('category_display', '{"root_font_size":16,"root_icon_size":20,"child_font_size":14,"child_icon_size":18}'),
+  ('category_display', '{"root_font_size":16,"root_icon_size":20,"child_font_size":14,"child_icon_size":18,"root_title_color":"","child_title_color":""}'),
   ('card_show_description', 'true'),
   ('card_description_mode', '"always"'),
   ('card_background_color', '"#ffffff"'),

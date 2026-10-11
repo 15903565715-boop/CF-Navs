@@ -109,6 +109,47 @@ export function getMostVisitedBookmarks(items: PublicBookmark[], limit: number):
     .slice(0, normalizedLimit)
 }
 
+// REQ-17：一级分类自身无直属书签时，聚合其整个子树的「常用」书签。
+// 频次优先（click_count 降序）取前 N；不足 N 时按 sort 回填，保证子树非空即非空。
+// 隐私口径与公开「经常访问」一致：剔除私密书签，并（传入时）按公开分类祖先可见集过滤。
+export function getCategoryHotBookmarks(
+  root: CategoryNode<PublicCategory>,
+  categoryBookmarks: ReadonlyMap<number, PublicBookmark[]>,
+  limit: number,
+  options?: { publicCategoryIds?: ReadonlySet<number> },
+): PublicBookmark[] {
+  const n = Math.max(0, Math.floor(Number(limit) || 0))
+  if (n === 0) return []
+
+  const subtreeIds = [root.id, ...root.children.map((child) => child.id)]
+  const publicCategoryIds = options?.publicCategoryIds
+  const pool: PublicBookmark[] = []
+  for (const id of subtreeIds) {
+    const bucket = categoryBookmarks.get(id)
+    if (!bucket) continue
+    for (const bookmark of bucket) {
+      if (bookmark.is_private === true || bookmark.is_private === 1) continue
+      if (publicCategoryIds && !publicCategoryIds.has(bookmark.category_id)) continue
+      pool.push(bookmark)
+    }
+  }
+
+  const hot = pool
+    .filter((bookmark) => (bookmark.click_count ?? 0) > 0)
+    .sort((a, b) => (
+      (b.click_count ?? 0) - (a.click_count ?? 0)
+      || a.sort - b.sort
+      || a.id - b.id
+    ))
+  if (hot.length >= n) return hot.slice(0, n)
+
+  const rest = pool
+    .filter((bookmark) => (bookmark.click_count ?? 0) <= 0)
+    .sort((a, b) => a.sort - b.sort || a.id - b.id)
+
+  return [...hot, ...rest].slice(0, n)
+}
+
 export function getCategoryTreeBookmarkCount(
   category: CategoryNode<PublicCategory>,
   categoryBookmarks: Map<number, PublicBookmark[]>,
@@ -179,18 +220,17 @@ export function resolveHomeCategorySelection(
 export function resolveHomeCategoryForRoot(
   root: CategoryNode<PublicCategory>,
   activeId: string | number | null | undefined,
-  categoryBookmarks?: ReadonlyMap<number, PublicBookmark[]>,
+  _categoryBookmarks?: ReadonlyMap<number, PublicBookmark[]>,
 ): CategoryNode<PublicCategory> {
   const normalizedId = String(activeId ?? '')
-  const defaultCategory = categoryBookmarks && (categoryBookmarks.get(root.id)?.length ?? 0) === 0 && root.children.length > 0
-    ? root.children[0]
-    : root
 
+  // REQ-17：空一级（自身无直属书签）不再默认选首个子分类，而是默认选「本分类」(root)，
+  // 由 Home 在 root 被选中且触发条件成立时渲染子树聚合「常用」列表（见 getCategoryHotBookmarks）。
   if (normalizedId === String(root.id) || normalizedId === `category-${root.id}`) return root
 
   return root.children.find((child) => (
     normalizedId === String(child.id) || normalizedId === `category-${child.id}`
-  )) ?? defaultCategory
+  )) ?? root
 }
 
 export function getHomeCategoryGroups(

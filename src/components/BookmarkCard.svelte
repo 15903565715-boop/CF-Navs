@@ -57,6 +57,8 @@
    */
   export let iconAccessKey = ''
   export let reuseCompletedObject = false
+  /** REQ-17 聚合区：卡片来源二级分类名，仅详情卡渲染；空串不显示。 */
+  export let sourceCategoryTitle = ''
 
   let cachedIconFailed = false
   let fallbackFailed = false
@@ -454,6 +456,7 @@
   {#if style === 'info'}
     <BookmarkCardInfo
       {bookmark}
+      {sourceCategoryTitle}
       {openInNewTab}
       {sortMode}
       {cardLinkStyle}

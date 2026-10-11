@@ -45,7 +45,7 @@ describe('category hierarchy visibility markup', () => {
     expect(home).toContain('$: categoryGroups = getHomeCategoryGroups(categoryForest, selectedCategoryIds, allCategoryBookmarks)')
     expect(home).toContain('{#each categoryGroups as group (group.root.id)}')
     expect(home).toContain('{@const selectedCategory = group.selected}')
-    expect(home).toContain('bookmarks={selectedBookmarks}')
+    expect(home).toContain('bookmarks={showHot ? hotBookmarks : selectedBookmarks}')
     expect(home).toContain('showHeading={false}')
     expect(home).toContain('inlineActions={true}')
     expect(home).toContain('class:has-inline-actions={isAuthenticated}')
