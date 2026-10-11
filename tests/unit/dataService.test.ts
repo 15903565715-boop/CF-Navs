@@ -73,6 +73,7 @@ import {
   getCurrentDataVersion,
   isLoggedIn,
   refreshLoggedInData,
+  readAdminDataForEdit,
   refreshPublicData,
   refreshVisibleData,
 } from '../../src/lib/dataService'
@@ -622,6 +623,108 @@ describe('dataService refresh ownership', () => {
       await vi.runAllTimersAsync()
       expect(get(publicStore).data?.bookmarks).toHaveLength(1)
       expect(getCurrentDataVersion()).toBe('new')
+    } finally { vi.useRealTimers() }
+  })
+})
+
+describe('dataService authoritative edit reads', () => {
+  it('restores source fields without replacing projected view stores or snapshots', async () => {
+    authStore.setSession(session)
+    const projected = makeAdminData('v1')
+    projected.bookmarks[0] = { ...bookmark, icon: null, icon_blob: null, icon_display: 'image' }
+    applyLoggedInData(projected)
+    const view = get(publicStore).data, admin = get(adminStore).data
+    const raw = makeAdminData('v1')
+    raw.bookmarks = [{ ...bookmark, icon: 'data:image/svg+xml;base64,PHN2Zy8+', icon_source: 'custom' }]
+    raw.categories = [{ ...category, icon: 'data:image/svg+xml;base64,PHN2Zy8+' }]
+    api.admin.getData.mockResolvedValueOnce(raw)
+    expect(await readAdminDataForEdit()).toBe(raw)
+    expect(get(publicStore).data).toBe(view)
+    expect(get(adminStore).data).toBe(admin)
+    expect(adminCache.readCachedAdminDataEntry).not.toHaveBeenCalled()
+    expect(adminCache.writeCachedAdminData).not.toHaveBeenCalled()
+  })
+  it('does not read private edit data while logged out', async () => {
+    expect(await readAdminDataForEdit()).toBeNull()
+    expect(api.admin.getData).not.toHaveBeenCalled()
+  })
+  it('discards edit data after an identity change', async () => {
+    authStore.setSession(session)
+    let resolve!: (data: AdminData) => void
+    api.admin.getData.mockReturnValueOnce(new Promise<AdminData>(done => { resolve = done }))
+    const pending = readAdminDataForEdit()
+    authStore.setSession({ ...session, token: 'new-session' })
+    resolve(makeAdminData())
+    expect(await pending).toBeNull()
+  })
+  it('does not surface an old 401 into a new edit session', async () => {
+    authStore.setSession(session)
+    let reject!: (error: Error) => void
+    api.admin.getData.mockReturnValueOnce(new Promise((_resolve, fail) => { reject = fail }))
+    const pending = readAdminDataForEdit()
+    authStore.setSession({ ...session, token: 'new-session' })
+    reject(Object.assign(new Error('old 401'), { status: 401 }))
+    expect(await pending).toBeNull()
+    expect(get(authStore).session?.token).toBe('new-session')
+  })
+  it('does not substitute a lossy snapshot when the authoritative read fails', async () => {
+    authStore.setSession(session)
+    applyLoggedInData(makeAdminData())
+    api.admin.getData.mockRejectedValueOnce(new Error('offline'))
+    await expect(readAdminDataForEdit()).rejects.toThrow('offline')
+    expect(adminCache.readCachedAdminDataEntry).not.toHaveBeenCalled()
+  })
+})
+
+
+describe('warm public snapshot rendering', () => {
+  function largeData(version: string, count = 150): PublicData {
+    const data = makePublicData(version)
+    data.bookmarks = Array.from({ length: count }, (_, index) => makePublicBookmark({ ...bookmark, id: index + 1, title: 'Synthetic ' + index }))
+    return data
+  }
+  it('does not retract an already visible full list into a first batch on refresh', async () => {
+    vi.useFakeTimers()
+    const lengths: number[] = []
+    let stop = () => {}
+    try {
+      applyPublicData(largeData('before'))
+      stop = publicStore.subscribe(state => { if (state.data) lengths.push(state.data.bookmarks.length) })
+      const next = largeData('after'); next.bookmarks[149].title = 'Changed synthetic title'
+      applyPublicData(next, 'after', true)
+      expect(lengths).toEqual([150, 150])
+      expect(get(publicStore).data?.bookmarks[149].title).toBe('Changed synthetic title')
+      await vi.runAllTimersAsync()
+      expect(lengths).toEqual([150, 150])
+    } finally { stop(); vi.useRealTimers() }
+  })
+  it('keeps restored cached data complete while applying the authoritative response', async () => {
+    vi.useFakeTimers()
+    const lengths: number[] = []
+    const stop = publicStore.subscribe(state => { if (state.data) lengths.push(state.data.bookmarks.length) })
+    try {
+      publicCache.readCachedPublicDataEntry.mockResolvedValueOnce({data:largeData('before'),version:'before'})
+      api.data.version.mockResolvedValueOnce({version:'after',site_title:'Synthetic',public_mode:true})
+      const next=largeData('after');next.bookmarks[149].title='Refreshed'
+      api.public.getData.mockResolvedValueOnce(next)
+      await refreshPublicData(true)
+      expect(lengths).toEqual([150,150])
+      expect(dataHooks.onLocalSnapshotRestored).toHaveBeenCalledOnce()
+      expect(publicCache.writeCachedPublicData).toHaveBeenCalledOnce()
+      expect(get(publicStore).data?.bookmarks[149].title).toBe('Refreshed')
+    } finally { stop(); await vi.runAllTimersAsync(); vi.useRealTimers() }
+  })
+  it('applies removal immediately and invalidates previous first-load batches', async () => {
+    vi.useFakeTimers()
+    try {
+      applyPublicData(largeData('first'), 'first', true)
+      expect(get(publicStore).data?.bookmarks).toHaveLength(60)
+      applyPublicData(largeData('replacement',149), 'replacement', true)
+      expect(get(publicStore).data?.bookmarks).toHaveLength(149)
+      await vi.runAllTimersAsync()
+      expect(get(publicStore).data?.bookmarks).toHaveLength(149)
+      expect(get(publicStore).data?.bookmarks.some(item=>item.id===150)).toBe(false)
+      expect(getCurrentDataVersion()).toBe('replacement')
     } finally { vi.useRealTimers() }
   })
 })

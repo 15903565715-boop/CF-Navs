@@ -1,3 +1,7 @@
+import { objectIconLoader } from './objectIconLoader'
+import type { IconDescriptor } from '../../shared/iconLocalCopy'
+import { iconDevice } from './iconDeviceState'
+import { getAuthToken } from './api'
 // 前端数据编排层：公开/后台聚合数据的获取、版本确认、本地增量更新与浏览器快照持久化。
 // 只操作 store、API、缓存与本地图标缓存，不持有任何视图状态；需要向界面反馈的错误
 // 通过 configureDataService 注入的回调上报，视图切换/登录 UI 编排仍留在 App.svelte。
@@ -35,7 +39,6 @@ import {
 } from './appLocalData'
 import { clearCachedPublicData, readCachedPublicDataEntry, writeCachedPublicData } from './publicDataCache'
 import { isPublicModeForbidden, siteConfigFromForbiddenError } from './publicMode'
-import { createBookmarkIconCacheKey, writeBookmarkIconDataUri } from './localBookmarkIconCache'
 import { ensureIconAccessKey } from './iconAccessKey'
 import { adminStore, authStore, configStore, publicStore } from './stores'
 
@@ -68,6 +71,7 @@ let refreshEpoch = 0
 authStore.subscribe(({ session }) => {
   if (session === activeSession) return
   activeSession = session
+  iconDevice.authChanged()
   sessionEpoch += 1
   refreshEpoch += 1
   currentDataVersion = null
@@ -111,12 +115,16 @@ function applyConfigFromPublicData(data: PublicData): void {
 }
 
 export function applyPublicData(data: PublicData, version = getDataVersion(data), progressive = false): PublicData {
+  iconDevice.setDataset(data.dataset_epoch)
   const cleanData = stripPublicDataVersion(data)
   const currentState = get(publicStore)
   const merged = mergePublicData(currentState.data, cleanData)
 
   if (!currentState.loaded || merged !== currentState.data) {
-    if (progressive) {
+    // A restored snapshot is already visible. Replaying the first 60-item batch
+    // would tear down its later categories/icons, then recreate identical requests.
+    // Replacement still removes revoked/deleted data immediately; only cold loads batch.
+    if (progressive && !currentState.loaded) {
       publicStore.setDataProgressively(merged)
     } else {
       publicStore.setData(merged)
@@ -335,28 +343,20 @@ export async function applyLocalBookmarkIconBlob(bookmarkId: number, iconBlob: s
     bookmarks: updateBookmarkIconBlob(data.bookmarks, bookmarkId, iconBlob),
   }))
 
-  if (iconBlob?.startsWith('data:image/')) {
-    const current =
-      get(adminStore).data.bookmarks.find((bookmark) => bookmark.id === bookmarkId) ??
-      get(publicStore).data?.bookmarks.find((bookmark) => bookmark.id === bookmarkId)
-    if (current) {
-      await writeBookmarkIconDataUri(
-        createBookmarkIconCacheKey({
-          id: current.id,
-          icon: current.icon ?? '',
-          iconSource: current.icon_source,
-        }),
-        iconBlob,
-      )
-    }
-  }
-
   await persistCurrentAdminData()
 }
 
 export async function refreshBookmarkIconCache(bookmarkId: number): Promise<string | null> {
+  const isCurrent = captureSession()
   const result = await api.bookmarks.refreshIconCache(bookmarkId)
-  await applyLocalBookmarkIconBlob(bookmarkId, result.icon_blob)
+  if (!isCurrent()) return null
+  const descriptor = result.icon_descriptor
+  if (descriptor) applyIconDescriptor(descriptor)
+  if (result.icon_update !== 'unavailable') await applyLocalBookmarkIconBlob(bookmarkId, result.icon_blob)
+  if (isCurrent() && descriptor?.state === 'ready' && result.icon_blob && iconDevice.capture()) {
+    const handle = objectIconLoader.acquire(descriptor, result.icon_blob)
+    try { await handle.result } finally { handle.release() }
+  }
   return result.icon_blob
 }
 
@@ -412,6 +412,7 @@ export async function applyLocalSettings(settings: Settings): Promise<void> {
 }
 
 export function applyLoggedInData(data: AdminData, version = getDataVersion(data)): void {
+  iconDevice.setDataset(data.dataset_epoch)
   const cleanData = stripAdminDataVersion(data)
   if (!cleanData.settings) {
     throw new Error('failed to load admin settings')
@@ -439,12 +440,27 @@ export async function persistCurrentAdminData(isCurrent: IsCurrent = captureSess
   }
 }
 
+/** Read editable source fields without publishing full image bodies into the view
+ * stores. Snapshot projections are display data, never a safe PUT baseline. */
+export async function readAdminDataForEdit(): Promise<AdminData | null> {
+  if (!isLoggedIn()) return null
+  const isCurrent = captureSession()
+  try {
+    const data = await api.admin.getData({ keepSessionOnUnauthorized: true })
+    return isCurrent() ? data : null
+  } catch (error) {
+    if (!isCurrent()) return null
+    throw error
+  }
+}
+
 export function refreshLoggedInData(forceRemote = false): Promise<void> {
   return loadLoggedInData(forceRemote, beginRefresh())
 }
 
 async function loadLoggedInData(forceRemote: boolean, isCurrent: IsCurrent): Promise<void> {
   if (!isCurrent() || !isLoggedIn()) return
+  const requestToken = getAuthToken()
   // 后台预览私密对象图标需要短期授权 key。失败只降级成兜底图标，不影响数据刷新。
   void ensureIconAccessKey(() => api.auth.iconAccess())
   const cached = !forceRemote ? await readCachedAdminDataEntry(isCurrent) : null
@@ -459,8 +475,10 @@ async function loadLoggedInData(forceRemote: boolean, isCurrent: IsCurrent): Pro
     if (cached?.version) {
       const remoteVersion = await api.data.version(true)
       if (!isCurrent()) return
+      await iconDevice.acceptMetadata(remoteVersion, requestToken, isCurrent)
+      if (!isCurrent()) return
       currentDataVersion = remoteVersion.version
-      if (remoteVersion.version === cached.version) {
+      if (remoteVersion.version === cached.version && remoteVersion.dataset_epoch === cached.data.dataset_epoch) {
         return
       }
     }
@@ -469,6 +487,8 @@ async function loadLoggedInData(forceRemote: boolean, isCurrent: IsCurrent): Pro
     const data = await api.admin.getData({ keepSessionOnUnauthorized: true })
     if (!isCurrent()) return
     applyLoggedInData(data)
+    await iconDevice.acceptMetadata(data, requestToken, isCurrent)
+    if (!isCurrent()) return
     await persistCurrentAdminData(isCurrent)
   } catch (error) {
     if (!isCurrent()) return
@@ -480,3 +500,46 @@ async function loadLoggedInData(forceRemote: boolean, isCurrent: IsCurrent): Pro
     throw error
   }
 }
+
+let iconSnapshotTimer: ReturnType<typeof setTimeout> | null = null
+function scheduleIconSnapshot(): void {
+  if (iconSnapshotTimer) return
+  const valid = captureSession()
+  iconSnapshotTimer = setTimeout(() => { iconSnapshotTimer = null; void persistCurrentAdminData(valid).catch(error => hooks.onRootError(getErrorMessage(error), error)) }, 250)
+}
+function applyIconDescriptor(next: IconDescriptor, expected?: IconDescriptor): void {
+  if (get(adminStore).data.dataset_epoch !== next.dataset_epoch) return
+  if (next.object_type === 'category') {
+    const patch = <T extends Omit<Category, 'created_at'>>(rows: T[]): T[] => rows.map(row => {
+      if (row.id !== next.object_id || (row.icon_write_epoch ?? 0) > next.write_epoch || expected && (row.icon_write_epoch ?? 0) !== expected.write_epoch && row.icon_revision !== next.content_revision) return row
+      const display = next.state === 'ready' || next.state === 'unknown' ? 'image' : next.state
+      if (row.icon_revision === next.content_revision && row.icon_write_epoch === next.write_epoch && row.icon_display === display) return row
+      return { ...row, icon_revision: next.content_revision, icon_write_epoch: next.write_epoch, icon_display: display, icon_cached: display === 'image',
+        ...(display === 'empty' ? { icon: null, icon_blob: null, icon_cached: false } : {}) }
+    })
+    const admin = get(adminStore).data
+    const categories = patch(admin.categories)
+    if (categories.some((row, index) => row !== admin.categories[index])) {
+      adminStore.setCategories(categories)
+      const visible = get(publicStore).data
+      if (visible) publicStore.setData({ ...visible, categories: patch(visible.categories) })
+      scheduleIconSnapshot()
+    }
+    return
+  }
+  const patch = <T extends Bookmark>(rows: T[]): T[] => rows.map(row => {
+    if (row.id !== next.object_id || (row.icon_write_epoch ?? 0) > next.write_epoch || expected && (row.icon_write_epoch ?? 0) !== expected.write_epoch && row.icon_revision !== next.content_revision) return row
+    const display = next.state === 'ready' || next.state === 'unknown' ? 'image' : next.state
+    if (row.icon_revision === next.content_revision && row.icon_write_epoch === next.write_epoch && row.icon_display === display) return row
+    return { ...row, icon_revision: next.content_revision, icon_write_epoch: next.write_epoch, icon_display: display, icon_cached: display === 'image',
+      ...(display === 'empty' ? { icon: null, icon_blob: null, icon_cached: false } : {}) }
+  })
+  const before = get(adminStore).data.bookmarks
+  const after = patch(before)
+  if (after.every((row, index) => row === before[index])) return
+  adminStore.setBookmarks(after)
+  const visible = get(publicStore).data
+  if (visible) publicStore.setData({ ...visible, bookmarks: patch(visible.bookmarks as Bookmark[]) })
+  scheduleIconSnapshot()
+}
+objectIconLoader.configure((next, expected) => applyIconDescriptor(next, expected))

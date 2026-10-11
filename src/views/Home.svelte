@@ -150,6 +150,7 @@
   $: categoryDisplay = settings?.category_display ?? CATEGORY_DISPLAY_DEFAULTS
   $: cardTextColor = settings?.card_text_color?.trim() ?? ''
   let topNavHeight = 0
+  let topNavBottom = 0
   // 顶部分行导航高度增长时，用实测高度驱动首页顶部留白（+ 12px 顶距 + 12px 余量）。
   $: topNavPadding = isTopNavigation && topNavHeight > 0 ? `${Math.round(topNavHeight + 24)}px` : ''
   $: homeShellStyle = [
@@ -158,6 +159,7 @@
     `--content-margin-top: ${contentLayout.margin_top}%`,
     `--content-margin-bottom: ${contentLayout.margin_bottom}%`,
     `--home-sort-bottom-inset: ${homeSortBottomInset}px`,
+    `--home-top-inset: ${isTopNavigation ? topNavBottom : 0}px`,
     `--category-root-font-size-base: ${categoryDisplay.root_font_size}px`,
     `--category-root-icon-size-base: ${categoryDisplay.root_icon_size}px`,
     `--category-child-font-size-base: ${categoryDisplay.child_font_size}px`,
@@ -468,6 +470,7 @@
     onNavigate={handleNavigate}
     onPersistentExpansionChange={(expanded) => (persistentLeftExpanded = expanded)}
     onTopNavHeightChange={(height) => (topNavHeight = height)}
+    onTopNavBottomChange={(bottom) => (topNavBottom = bottom)}
     {publicCategoryIds}
     iconAccessKey={visibleIconAccessKey}
   />
@@ -489,7 +492,7 @@
               <section class="search-category-group" aria-labelledby={`search-category-${category.id}`}>
                 <header class="search-group-header">
                   <div class="search-group-title">
-                    {#if category.icon}
+                    {#if category.icon || category.icon_display === 'image'}
                       <CategoryIcon category={category} size="var(--category-root-icon-size, 38px)" className="search-category-icon" iconAccessKey={publicCategoryIds.has(Number(category.id)) ? '' : visibleIconAccessKey} />
                     {/if}
                     <h2 id={`search-category-${category.id}`} style={`font-size: var(--category-root-font-size, 1.28rem)`}>{category.title}</h2>
@@ -519,6 +522,7 @@
                       onEditBookmark={onEditBookmark}
                       publicCategoryIds={publicCategoryIds}
                       iconAccessKey={visibleIconAccessKey}
+                      reuseSharedIcon={true}
                     />
                   {/if}
 
@@ -541,6 +545,7 @@
                       onEditBookmark={onEditBookmark}
                       publicCategoryIds={publicCategoryIds}
                       iconAccessKey={visibleIconAccessKey}
+                      reuseSharedIcon={true}
                     />
                   {/each}
                 </div>
@@ -567,6 +572,7 @@
             canSort={false}
             onEditBookmark={onEditBookmark}
             iconAccessKey={visibleIconAccessKey}
+            reuseSharedIcon={true}
           />
         {/if}
         {#if categoryGroups.length > 0}
@@ -587,11 +593,17 @@
                 rootId={category.id}
                 title={category.title}
                 icon={category.icon}
+                icon_display={category.icon_display}
+                icon_revision={category.icon_revision}
+                icon_write_epoch={category.icon_write_epoch}
                 totalCount={getCategoryTreeBookmarkCount(category, allCategoryBookmarks)}
                 children={category.children.map((child) => ({
                   id: child.id,
                   title: child.title,
                   icon: child.icon,
+                  icon_display: child.icon_display,
+                  icon_revision: child.icon_revision,
+                  icon_write_epoch: child.icon_write_epoch,
                   count: allCategoryBookmarks.get(child.id)?.length ?? 0,
                 }))}
                 activeId={selectedCategory.id}
@@ -643,6 +655,7 @@
                       onSortTransfer={handleHomeSortTransfer}
                       publicCategoryIds={publicCategoryIds}
                       iconAccessKey={visibleIconAccessKey}
+                      reuseSharedIcon={true}
                     />
                   {/each}
                 {:else}
@@ -678,6 +691,7 @@
                     onSortTransfer={handleHomeSortTransfer}
                     publicCategoryIds={publicCategoryIds}
                     iconAccessKey={visibleIconAccessKey}
+                    reuseSharedIcon={true}
                   />
                 {/if}
               </div>

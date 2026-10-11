@@ -50,6 +50,7 @@
   export let publicCategoryIds: Set<number> = new Set()
   /** 私密对象的短期图标授权 key；只有需要授权的对象才会被附加。 */
   export let iconAccessKey = ''
+  export let reuseSharedIcon = false
 
   // 排序会话由页面统一控制：进入后拖拽只改页面草稿，保存/取消都由页面处理。
   let savingSort = false
@@ -94,7 +95,7 @@
     <header class="section-header" class:no-heading={!showHeading} class:inline-actions={inlineActions && !showHeading}>
       {#if showHeading}
         <div class="section-title-wrap">
-          {#if showCategoryIcon && category.icon}
+          {#if showCategoryIcon && (category.icon || category.icon_display === 'image')}
             <CategoryIcon category={category} size={level === 2 ? 'var(--category-child-icon-size, 30px)' : 'var(--category-root-icon-size, 38px)'} className="section-icon" iconAccessKey={publicCategoryIds.has(Number(category.id)) ? '' : iconAccessKey} />
           {/if}
           <div class="section-copy">
@@ -220,6 +221,7 @@
             onEdit={onEditBookmark}
             onMoveBookmark={onMoveBookmark}
             iconAccessKey={isBookmarkIconAccessRequired(bookmark, publicCategoryIds.has(Number(bookmark.category_id))) ? iconAccessKey : ''}
+            reuseCompletedObject={reuseSharedIcon}
           />
         </div>
       {/each}

@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { startIconDevice } from './lib/iconDeviceState'
+  let stopIconDevice: (() => void) | undefined
   import { onDestroy, onMount, tick } from 'svelte'
   import { get } from 'svelte/store'
   import { fade } from 'svelte/transition'
@@ -25,7 +27,7 @@
   import type { AdminTab, BookmarkFormValue, CategoryFormValue } from './lib/adminTypes'
   import { toBookmarkForm, toBookmarkPayload, toCategoryForm, toCategoryPayload } from './lib/adminFormAdapters'
   import { runAdminMutation } from './lib/appAdminMutation'
-  import { logoutRevocationWarning } from './lib/appAuthController'
+  import { createAuthViewIntent, logoutRevocationWarning } from './lib/appAuthController'
   import {
     createImportExportState,
     exportDataToFile,
@@ -67,7 +69,7 @@
     toInstallScreenState,
     type InstallScreenState,
   } from './lib/appInstall'
-  import { createBookmarkDraft, createCategoryDraft, findBookmarkForEdit } from './lib/appModalState'
+  import { createBookmarkDraft, createCategoryDraft } from './lib/appModalState'
   import {
     canSeeHomeView,
     createHomeGateState,
@@ -79,7 +81,6 @@
   import { getAdminBookmarkCategoryOptions } from './lib/adminListState'
   import { getNextThemePreference, resolveAppThemeState } from './lib/appThemeState'
   import type { ImportSource } from './lib/importData'
-  import { pruneBookmarkIconCacheStorageBackedByLocalStorage } from './lib/localBookmarkIconCache'
   import { installPublicDataFocusRefresh } from './lib/publicDataFocusRefresh'
   import { adminStore, authStore, configStore, isAuthenticated, publicStore } from './lib/stores'
   import { readPreferredThemeMode, writePreferredThemeMode } from './lib/themePreference'
@@ -97,6 +98,7 @@
     isLoggedIn,
     persistCurrentAdminData,
     refreshBookmarkIconCacheInBackground,
+    readAdminDataForEdit,
     refreshLoggedInData,
     refreshPublicData,
     refreshVisibleData,
@@ -168,6 +170,7 @@
     },
   })
 
+  const authViewIntent = createAuthViewIntent()
   let loginModalOpen = false
   let categoryModalOpen = false
   let bookmarkModalOpen = false
@@ -233,6 +236,7 @@
 
   let activeCategory: Partial<CategoryFormValue> | null = null
   let activeBookmark: Partial<BookmarkFormValue> | null = null
+  let editIntent = 0
 
   let savingCategory = false
   let savingBookmark = false
@@ -326,24 +330,6 @@
   function setPreferredThemeMode(mode: ThemeMode): void {
     preferredThemeMode = mode
     writePreferredThemeMode(mode)
-  }
-
-  function scheduleBookmarkIconCachePrune(): void {
-    if (typeof window === 'undefined') return
-
-    const prune = () => {
-      void pruneBookmarkIconCacheStorageBackedByLocalStorage().catch(() => undefined)
-    }
-    const idleWindow = window as Window & {
-      requestIdleCallback?: (callback: IdleRequestCallback, options?: IdleRequestOptions) => number
-    }
-
-    if (idleWindow.requestIdleCallback) {
-      idleWindow.requestIdleCallback(prune, { timeout: 5000 })
-      return
-    }
-
-    window.setTimeout(prune, 1500)
   }
 
   function handleToggleTheme(): void {
@@ -594,6 +580,7 @@
   }
 
   function resetCategoryState(): void {
+    editIntent += 1
     categoryModalOpen = false
     categoryModalMode = 'create'
     activeCategory = null
@@ -608,6 +595,7 @@
   }
 
   function resetBookmarkState(): void {
+    editIntent += 1
     bookmarkModalOpen = false
     bookmarkModalMode = 'create'
     activeBookmark = null
@@ -616,6 +604,7 @@
   }
 
   async function openLoginUseCase(): Promise<void> {
+    authViewIntent.invalidate()
     rootError = ''
     authStore.resetError()
     await ensureLoginModalComponent()
@@ -627,6 +616,7 @@
   }
 
   async function handleCloseLogin(): Promise<void> {
+    authViewIntent.invalidate()
     authStore.resetError()
     if (!canSeeHome) {
       loginModalOpen = true
@@ -642,6 +632,7 @@
   }
 
   async function completeLoginUseCase(payload: { username: string; password: string }): Promise<void> {
+    authViewIntent.invalidate()
     await authStore.login(payload.username, payload.password)
     loginModalOpen = false
     rootError = ''
@@ -663,11 +654,13 @@
 
   async function completeLogoutUseCase(previousSettings: Settings | null): Promise<string | null> {
     const revocationWarning = logoutRevocationWarning(await authStore.logout())
+    if (isLoggedIn()) return revocationWarning
     resetCategoryState()
     resetSettingsState()
     resetBookmarkState()
     adminStore.reset()
     await clearCachedAdminData()
+    if (isLoggedIn()) return revocationWarning
     if (previousSettings) {
       applyConfigFromSettings(previousSettings)
     }
@@ -676,6 +669,7 @@
   }
 
   async function handleLogout(): Promise<void> {
+    const viewIsCurrent = authViewIntent.begin()
     rootError = ''
     const previousSettings = get(adminStore).data.settings
 
@@ -686,17 +680,20 @@
         publicMode: get(configStore).data?.public_mode,
         authenticated: false,
       })
-      if (homeGate.loginModalOpen) {
-        await ensureLoginModalComponent()
+      if (viewIsCurrent() && !isLoggedIn()) {
+        if (homeGate.loginModalOpen) await ensureLoginModalComponent()
+        // Lazy loading can yield to another login/recovery action as well.
+        if (viewIsCurrent() && !isLoggedIn()) {
+          loginModalOpen = homeGate.loginModalOpen
+          currentView = homeGate.view
+        }
       }
-      loginModalOpen = homeGate.loginModalOpen
-      currentView = homeGate.view
       // 视图先切换，确保全局 Toast 不被登出后的页面切换影响。
       if (revocationWarning) {
         toastStore.addToast(revocationWarning, 'error', { duration: 12000 })
       }
     } catch (error) {
-      rootError = getErrorMessage(error)
+      if (viewIsCurrent()) rootError = getErrorMessage(error)
     }
   }
 
@@ -715,6 +712,7 @@
     currentView = 'admin'
   }
   async function openCreateCategoryUseCase(returnToHome: boolean): Promise<boolean> {
+    editIntent += 1
     if (!isLoggedIn()) {
       await handleOpenLogin()
       return false
@@ -744,13 +742,19 @@
   }
 
   async function openEditCategoryUseCase(category: { id: string | number }): Promise<void> {
-    const current = adminData.categories.find((item) => item.id === Number(category.id))
-    if (!current) return
-
-    categoryError = ''
-    categoryModalMode = 'edit'
-    activeCategory = toCategoryForm(current)
-    categoryModalOpen = true
+    const intent = ++editIntent
+    try {
+      const data = await readAdminDataForEdit()
+      if (!data || intent !== editIntent) return
+      const current = data.categories.find(item => item.id === Number(category.id))
+      if (!current) throw new Error('分类已不存在，请刷新后重试。')
+      categoryError = ''
+      categoryModalMode = 'edit'
+      activeCategory = toCategoryForm(current)
+      categoryModalOpen = true
+    } catch (error) {
+      if (intent === editIntent) rootError = `无法读取分类的原始编辑数据：${getErrorMessage(error)}`
+    }
   }
   async function handleEditCategory(category: { id: string | number }): Promise<void> {
     await openEditCategoryUseCase(category)
@@ -830,6 +834,7 @@
   }
 
   async function handleOpenCreateBookmark(categoryId?: string | number): Promise<void> {
+    editIntent += 1
     if (!isLoggedIn()) {
       await handleOpenLogin()
       return
@@ -847,28 +852,27 @@
   }
 
   async function handleEditBookmark(bookmark: { id: string | number }): Promise<void> {
+    const intent = ++editIntent
+    const editSession = get(authStore).session
     if (!isLoggedIn()) {
       await handleOpenLogin()
       return
     }
-
-    const current = findBookmarkForEdit(bookmark.id, adminData.bookmarks, publicData?.bookmarks ?? [])
-    if (!current) return
-
     bookmarkError = ''
-    if (!await ensureLoggedInDataLoaded()) {
-      return
+    try {
+      const data = await readAdminDataForEdit()
+      if (!data || intent !== editIntent) return
+      const current = data.bookmarks.find(item => item.id === Number(bookmark.id))
+      if (!current) throw new Error('书签已不存在，请刷新后重试。')
+      await ensureBookmarkEditModalComponent()
+      if (!isLoggedIn() || get(authStore).session !== editSession || intent !== editIntent) return
+      bookmarkModalMode = 'edit'
+      activeBookmark = toBookmarkForm(current)
+      bookmarkModalOpen = true
+      refreshBookmarkIconCacheInBackground(Number(bookmark.id))
+    } catch (error) {
+      if (intent === editIntent) rootError = `无法读取书签的原始编辑数据：${getErrorMessage(error)}`
     }
-    await ensureBookmarkEditModalComponent()
-    bookmarkModalMode = 'edit'
-    const refreshed = findBookmarkForEdit(
-      bookmark.id,
-      get(adminStore).data.bookmarks,
-      get(publicStore).data?.bookmarks ?? [],
-    ) ?? current
-    activeBookmark = toBookmarkForm(refreshed)
-    bookmarkModalOpen = true
-    refreshBookmarkIconCacheInBackground(Number(bookmark.id))
   }
 
   async function handleCloseBookmarkModal(): Promise<void> {
@@ -878,10 +882,13 @@
   async function handleSubmitBookmark(form: BookmarkFormValue): Promise<void> {
     // 同 handleSubmitCategory：意图只看表单，resetBookmarkState() 之后 mode 已经变回 'create'。
     const isEdit = form.id != null
+    const submitSession = get(authStore).session
+    const isCurrent = () => submitSession !== null && get(authStore).session === submitSession
     savingBookmark = true
     bookmarkError = ''
 
     await runAdminMutation({
+      isCurrent,
       run: () =>
         isEdit
           ? api.bookmarks.update(Number(form.id), toBookmarkPayload(form))
@@ -889,8 +896,9 @@
       onSuccess: async (bookmark) => {
         resetBookmarkState()
         await applyLocalBookmarkUpsert(bookmark)
+        if (!isCurrent()) return
         await refreshAdminDataAfterMutation()
-        refreshBookmarkIconCacheInBackground(bookmark.id)
+        if (isCurrent()) refreshBookmarkIconCacheInBackground(bookmark.id)
       },
       successMessage: (bookmark) =>
         isEdit ? `书签「${bookmark.title}」已更新` : `书签「${bookmark.title}」已创建`,
@@ -995,6 +1003,7 @@
   }
 
   async function handleChangePassword(payload: ChangePasswordReq): Promise<void> {
+    authViewIntent.invalidate()
     rootError = ''
 
     await api.auth.changePassword(payload)
@@ -1091,6 +1100,7 @@
     void initializeApp()
   }
   function handleForgotPassword(): void {
+    authViewIntent.invalidate()
     // 忘记密码是登录态的子流程，按模态语义处理：不改 URL，避免 pushState 制造一个没有
     // popstate 监听的历史项（后退键会让 URL 与视图错位）。直达 /recover 仍由 onMount 处理。
     loginModalOpen = false
@@ -1098,6 +1108,7 @@
   }
 
   onMount(() => {
+    stopIconDevice = startIconDevice()
     preferredThemeMode = readPreferredThemeMode()
     customScriptController = createCustomScriptController(createBrowserCustomScriptHost())
 
@@ -1117,13 +1128,13 @@
       return
     }
     void initializeApp()
-    scheduleBookmarkIconCachePrune()
     // 切回已打开的标签页时按会话状态刷新（Issue #25 跨标签页设置同步 / Issue #29
     // 登录态保留私密视图）：登录态走登录态聚合刷新，未登录走公开刷新。
     stopPublicDataFocusRefresh = installPublicDataFocusRefresh(() => refreshVisibleData())
   })
 
   onDestroy(() => {
+    stopIconDevice?.()
     if (mediaQuery && handleSystemThemeChange) {
       mediaQuery.removeEventListener('change', handleSystemThemeChange)
     }
@@ -1269,6 +1280,7 @@
         onBatchDeleteBookmarks={handleBatchDeleteBookmarks}
         onBatchMoveBookmarks={handleBatchMoveBookmarks}
         onSubmitSettings={handleSubmitSettings}
+        onVerifyDevice={() => refreshLoggedInData(true)}
         onChangePassword={handleChangePassword}
         onSortCategories={handleSortCategories}
         onSortBookmarks={handleSortBookmarks}
