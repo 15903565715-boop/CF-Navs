@@ -85,5 +85,10 @@ describe('category hierarchy visibility markup', () => {
     expect(sortable).toContain('preventOnFilter: options.preventOnFilter ?? true')
     expect(section).toContain("filter: '.bookmark-context-menu, .category-tree-menu, .bookmark-mobile-menu-trigger'")
     expect(section).toContain('preventOnFilter: false')
+    // REQ-16/17 复核修复：全页搜索一级标题消费 root 颜色变量；聚合来源名进入极简卡 tooltip
+    expect(home).toContain('color: var(--category-root-title-color, var(--home-text-color));')
+    expect(home).toContain('sourceCategoryTitles={showHot ? categoryLeafTitleById : undefined}')
+    expect(card).toContain('tooltipText={sourceCategoryTitle ?')
+    expect(scope).toContain('.scope-total-count {')
   })
 })

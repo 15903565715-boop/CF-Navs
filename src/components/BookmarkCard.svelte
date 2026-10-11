@@ -480,7 +480,7 @@
       {bookmark}
       {openInNewTab}
       {sortMode}
-      {tooltipText}
+      tooltipText={sourceCategoryTitle ? tooltipText + '\n来自：' + sourceCategoryTitle : tooltipText}
       {compactIconSize}
       {compactIconStyle}
       {showIconTitle}

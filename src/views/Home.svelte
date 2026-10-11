@@ -588,7 +588,7 @@
             {@const rootDirectEmpty = (allCategoryBookmarks.get(category.id)?.length ?? 0) === 0 && category.children.length > 0}
             {@const showHot = rootDirectEmpty && selectedCategory.id === category.id}
             {@const hotBookmarks = showHot ? getCategoryHotBookmarks(category, allCategoryBookmarks, settings?.most_visited_count ?? 8, { publicCategoryIds }) : []}
-            {@const hotSourceCount = showHot ? category.children.filter((child) => (allCategoryBookmarks.get(child.id)?.length ?? 0) > 0).length : 0}
+            {@const hotSourceCount = showHot ? new Set(hotBookmarks.map((bookmark) => bookmark.category_id)).size : 0}
             {@const panelId = `home-category-panel-${category.id}`}
             <section
               class="root-category-group"
@@ -884,14 +884,15 @@
     border-bottom: 1px solid color-mix(in srgb, var(--home-text-color) 14%, transparent);
   }
 
-  .search-group-header h2,
   .search-group-header span {
     margin: 0;
     color: var(--home-text-color);
   }
 
   .search-group-header h2 {
+    margin: 0;
     min-width: 0;
+    color: var(--category-root-title-color, var(--home-text-color));
     font-size: 1.28rem;
     line-height: 1.25;
     overflow-wrap: anywhere;

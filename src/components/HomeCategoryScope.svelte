@@ -372,6 +372,7 @@
     font-weight: 600;
     font-variant-numeric: tabular-nums;
     opacity: var(--home-muted-opacity);
+    color: var(--home-text-color);
   }
   .scope-action {
     display: inline-flex;
@@ -547,7 +548,7 @@
 
   .scope-tabs small {
     min-width: 1.2rem;
-    color: inherit;
+    color: var(--home-text-color);
     font-size: 0.66rem;
     font-variant-numeric: tabular-nums;
     text-align: right;
