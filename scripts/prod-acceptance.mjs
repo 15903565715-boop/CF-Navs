@@ -613,11 +613,17 @@ async function runModalChecks(session) {
   check('bookmark-modal-actions-single-row-on-mobile', 'PROB-13 U1–U4', verdict.passed, verdict.passed ? 'two visible, contained and hit-testable controls' : verdict.failures.join(', '))
   const traffic = [...requests.values()]
   const unexpected = traffic.filter((r) => (r.status >= 400) || (r.error && !r.canceled))
-  const writes = traffic.filter((r) => r.sameOrigin && !['GET', 'HEAD', 'OPTIONS'].includes(r.method))
+  const platformTelemetry = new Set(['/cdn-cgi/rum'])
+  const writes = traffic.filter((r) => (
+    r.sameOrigin &&
+    !platformTelemetry.has(r.path) &&
+    !['GET', 'HEAD', 'OPTIONS'].includes(r.method)
+  ))
+  const excludedWrites = traffic.filter((r) => r.sameOrigin && platformTelemetry.has(r.path) && !['GET', 'HEAD', 'OPTIONS'].includes(r.method))
   const consoleErrors = session.consoleErrors.slice(consoleStart), exceptions = session.pageExceptions.slice(exceptionStart)
   check('modal-flow-no-server-writes', 'PROB-13 U1–U4', writes.length === 0, 'writes=' + writes.length)
   check('modal-flow-browser-diagnostics', 'PROB-13 U1–U4', unexpected.length === 0 && browserErrors.length === 0 && consoleErrors.length === 0 && exceptions.length === 0, 'unexpected=' + unexpected.length + ' log=' + browserErrors.length + ' console=' + consoleErrors.length + ' exceptions=' + exceptions.length)
-  measured.evidence = { requests: traffic, unexpected, writes, browserErrors, consoleErrors, exceptions }
+  measured.evidence = { requests: traffic, unexpected, writes, excludedWrites, browserErrors, consoleErrors, exceptions }
   return measured
 }
 

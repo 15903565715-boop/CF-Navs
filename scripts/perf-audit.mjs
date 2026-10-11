@@ -482,6 +482,35 @@ function summarizeNetwork() {
   const countPath = (prefix) =>
     requests.filter((request) => new URL(request.url).pathname.startsWith(prefix)).length
 
+  const summarizePathRequests = (prefix) => {
+    const selected = requests
+      .filter((request) => new URL(request.url).pathname.startsWith(prefix))
+      .map((request) => new URL(request.url))
+    const paths = selected.map((url) => url.pathname)
+    const counts = new Map()
+    for (const path of paths) counts.set(path, (counts.get(path) || 0) + 1)
+    const exactUrls = new Map()
+    for (const url of selected) exactUrls.set(url.href, (exactUrls.get(url.href) || 0) + 1)
+    const duplicateRequests = [...counts.values()]
+      .filter((count) => count > 1)
+      .reduce((total, count) => total + count - 1, 0)
+    const exactDuplicateRequests = [...exactUrls.values()]
+      .filter((count) => count > 1)
+      .reduce((total, count) => total + count - 1, 0)
+    return {
+      total: paths.length,
+      uniquePaths: counts.size,
+      duplicateRequests,
+      uniqueUrls: exactUrls.size,
+      exactDuplicateRequests,
+      repeatedPaths: [...counts.entries()]
+        .filter(([, count]) => count > 1)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 20)
+        .map(([path, count]) => ({ path, count })),
+    }
+  }
+
   const byHost = {}
   for (const request of requests) {
     const host = new URL(request.url).host
@@ -524,6 +553,7 @@ function summarizeNetwork() {
     })),
     apiRequests: countPath('/api/'),
     iconRequests: countPath('/api/icon/'),
+    iconRequestSummary: summarizePathRequests('/api/icon/'),
     iconifyRequests: countPath('/api/iconify/'),
     categoryIconRequests: countPath('/api/category-icon/'),
     byHost,

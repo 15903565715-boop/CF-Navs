@@ -103,12 +103,14 @@ export function deriveBookmarkCardIconBase(input: BookmarkCardIconBaseInput): Bo
     !customTextIcon
   const shouldReadLocalIconCache =
     iconInView &&
-    (canUseRawHttpIconFallback || hasCachedRemoteIcon) &&
+    (canUseRawHttpIconFallback || hasCachedRemoteIcon || hasProjectedImageIcon) &&
     !iconifyRemoteUrl &&
     !hasEmbeddedIcon &&
     !customTextIcon
   // Local snapshots omit image bytes but preserve this display marker. A rollback
-  // build has no trusted local copy, so restore those images through the ordinary proxy.
+  // build has no trusted local copy, so restore those images through the ordinary
+  // proxy. Route the restore through the shared fetch path too, so repeated cards
+  // for the same bookmark coalesce while the response remains non-persistent.
   const shouldUseIconProxy = hasCachedRemoteIcon || hasProjectedImageIcon
   // 私密对象的代理响应是 `private, no-store`，必须带 key 才能拿到真实图标；
   // 公开对象 iconAccessKey 为空，URL 保持匿名以便命中 Worker edge cache，Service Worker 不接管对象代理。

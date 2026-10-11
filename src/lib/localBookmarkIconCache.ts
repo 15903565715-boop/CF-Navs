@@ -4,6 +4,8 @@ const CACHE_NAME = CURRENT_EXTERNAL_ICON_CACHE_NAME
 const MAX_LOCAL_ICON_CACHE_BYTES = 512 * 1024
 const CACHE_ORIGIN = 'https://cf-navs.local'
 const CACHE_PATH_PREFIX = '/bookmark-icon/'
+const TRANSIENT_OBJECT_ICON_TTL_MS = 30_000
+const MAX_TRANSIENT_OBJECT_ICONS = 64
 
 export type BookmarkIconCacheInput = {
   id: string | number
@@ -108,7 +110,36 @@ async function responseToIconPayload(response: Response): Promise<IconPayload> {
 }
 
 const pendingObjectIcons = new Map<string, Promise<IconPayload>>()
+const transientObjectIcons = new Map<string, { blob: Blob; expiresAt: number }>()
 const OBJECT_ICON_TIMEOUT_MS = 10000
+
+function isPublicObjectIconUrl(url: string): boolean {
+  try {
+    return !new URL(url, typeof location !== 'undefined' ? location.href : CACHE_ORIGIN).searchParams.has('key')
+  } catch {
+    return false
+  }
+}
+
+function readTransientObjectIcon(url: string): Blob | null {
+  const cached = transientObjectIcons.get(url)
+  if (!cached) return null
+  if (cached.expiresAt <= Date.now()) {
+    transientObjectIcons.delete(url)
+    return null
+  }
+  transientObjectIcons.delete(url)
+  transientObjectIcons.set(url, cached)
+  return cached.blob
+}
+
+function writeTransientObjectIcon(url: string, blob: Blob): void {
+  transientObjectIcons.delete(url)
+  transientObjectIcons.set(url, { blob, expiresAt: Date.now() + TRANSIENT_OBJECT_ICON_TTL_MS })
+  while (transientObjectIcons.size > MAX_TRANSIENT_OBJECT_ICONS) {
+    transientObjectIcons.delete(transientObjectIcons.keys().next().value as string)
+  }
+}
 
 async function fetchObjectIconPayload(url: string): Promise<IconPayload> {
   const controller = new AbortController()
@@ -130,7 +161,11 @@ async function fetchObjectIconPayload(url: string): Promise<IconPayload> {
   } finally { clearTimeout(timer) }
 }
 
-async function fetchObjectIcon(url: string): Promise<BookmarkIconFetchResult> {
+async function fetchObjectIcon(url: string, reuseCompleted = false): Promise<BookmarkIconFetchResult> {
+  if (reuseCompleted && isPublicObjectIconUrl(url)) {
+    const blob = readTransientObjectIcon(url)
+    if (blob) return { url: URL.createObjectURL(blob), status: 'ready' }
+  }
   let pending = pendingObjectIcons.get(url)
   if (!pending) {
     pending = fetchObjectIconPayload(url)
@@ -138,6 +173,9 @@ async function fetchObjectIcon(url: string): Promise<BookmarkIconFetchResult> {
     pendingObjectIcons.set(url, pending)
   }
   const { blob, status } = await pending
+  if (reuseCompleted && status === 'ready' && blob && isPublicObjectIconUrl(url)) {
+    writeTransientObjectIcon(url, blob)
+  }
   return { url: blob ? URL.createObjectURL(blob) : null, status }
 }
 
@@ -204,11 +242,15 @@ export async function writeBookmarkIconDataUri(cacheKey: string, dataUri: string
   await deleteCachedBookmarkIcon(cacheKey)
 }
 
-export async function fetchBookmarkIcon(cacheKey: string, url: string): Promise<BookmarkIconFetchResult> {
+export async function fetchBookmarkIcon(
+  cacheKey: string,
+  url: string,
+  options: { reuseCompletedObject?: boolean } = {},
+): Promise<BookmarkIconFetchResult> {
   if (!url) return { url: null, status: 'unavailable' }
 
   try {
-    if (isObjectIconProxyUrl(url)) return await fetchObjectIcon(url)
+    if (isObjectIconProxyUrl(url)) return await fetchObjectIcon(url, options.reuseCompletedObject)
     const response = await fetch(url, {
       credentials: 'same-origin',
       cache: 'force-cache',

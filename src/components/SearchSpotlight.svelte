@@ -218,6 +218,7 @@
           >
             <SpotlightBookmarkIcon
               {bookmark}
+              reuseCompletedObject={true}
               iconAccessKey={isBookmarkIconAccessRequired(bookmark, publicCategoryIds.has(Number(bookmark.category_id))) ? visibleIconAccessKey : ''}
             />
             <span class="spotlight-option-main">

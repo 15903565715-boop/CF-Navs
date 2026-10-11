@@ -23,6 +23,7 @@
   export let bookmark: PublicBookmark
   /** 私密对象及其私密分类树下的书签需要授权 key；公开对象传空串以保留共享缓存。 */
   export let iconAccessKey = ''
+  export let reuseCompletedObject = false
 
   let cachedIconFailed = false
   let fallbackFailed = false
@@ -103,7 +104,9 @@
     }
 
     if (remoteUrl) {
-      const remote = await fetchBookmarkIcon(cacheKey, remoteUrl)
+      const remote = await fetchBookmarkIcon(cacheKey, remoteUrl, {
+        reuseCompletedObject: reuseCompletedObject || iconBaseState.hasProjectedImageIcon,
+      })
       if (requestSequence !== localCacheRequest.current) {
         if (remote.url) revokeLocalIconUrl(remote.url)
         return

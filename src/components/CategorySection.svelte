@@ -50,6 +50,7 @@
   export let publicCategoryIds: Set<number> = new Set()
   /** 私密对象的短期图标授权 key；只有需要授权的对象才会被附加。 */
   export let iconAccessKey = ''
+  export let reuseSharedIcon = false
 
   // 排序会话由页面统一控制：进入后拖拽只改页面草稿，保存/取消都由页面处理。
   let savingSort = false
@@ -220,6 +221,7 @@
             onEdit={onEditBookmark}
             onMoveBookmark={onMoveBookmark}
             iconAccessKey={isBookmarkIconAccessRequired(bookmark, publicCategoryIds.has(Number(bookmark.category_id))) ? iconAccessKey : ''}
+            reuseCompletedObject={reuseSharedIcon}
           />
         </div>
       {/each}

@@ -146,7 +146,7 @@ describe('bookmark card icon state', () => {
     expect(result.shouldUseIconProxy).toBe(true)
     expect(result.iconUrl).toBe(result.proxiedHttpIconUrl)
     expect(result.iconUrl).toContain('/api/icon/42?v=')
-    expect(result.shouldReadLocalIconCache).toBe(false)
+    expect(result.shouldReadLocalIconCache).toBe(true)
     expect(result.canUseRawHttpIconFallback).toBe(false)
   })
 

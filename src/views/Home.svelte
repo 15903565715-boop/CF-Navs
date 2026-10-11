@@ -522,6 +522,7 @@
                       onEditBookmark={onEditBookmark}
                       publicCategoryIds={publicCategoryIds}
                       iconAccessKey={visibleIconAccessKey}
+                      reuseSharedIcon={true}
                     />
                   {/if}
 
@@ -544,6 +545,7 @@
                       onEditBookmark={onEditBookmark}
                       publicCategoryIds={publicCategoryIds}
                       iconAccessKey={visibleIconAccessKey}
+                      reuseSharedIcon={true}
                     />
                   {/each}
                 </div>
@@ -570,6 +572,7 @@
             canSort={false}
             onEditBookmark={onEditBookmark}
             iconAccessKey={visibleIconAccessKey}
+            reuseSharedIcon={true}
           />
         {/if}
         {#if categoryGroups.length > 0}
@@ -652,6 +655,7 @@
                       onSortTransfer={handleHomeSortTransfer}
                       publicCategoryIds={publicCategoryIds}
                       iconAccessKey={visibleIconAccessKey}
+                      reuseSharedIcon={true}
                     />
                   {/each}
                 {:else}
@@ -687,6 +691,7 @@
                     onSortTransfer={handleHomeSortTransfer}
                     publicCategoryIds={publicCategoryIds}
                     iconAccessKey={visibleIconAccessKey}
+                    reuseSharedIcon={true}
                   />
                 {/if}
               </div>

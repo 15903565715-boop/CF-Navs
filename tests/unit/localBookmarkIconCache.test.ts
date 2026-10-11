@@ -251,6 +251,25 @@ describe('local bookmark icon cache', () => {
     revokeLocalIconUrl(later!)
   })
 
+  it('reuses completed public projected icons within the short in-memory window', async () => {
+    setupCacheStorage()
+    const fetchMock = vi.fn().mockResolvedValue(new Response('<svg/>', {
+      headers: { 'content-type': 'image/svg+xml' },
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+    const url = '/api/icon/42?v=projected&cv=4'
+
+    const first = await fetchBookmarkIcon('42-projected', url, { reuseCompletedObject: true })
+    const second = await fetchBookmarkIcon('42-projected', url, { reuseCompletedObject: true })
+
+    expect(fetchMock).toHaveBeenCalledOnce()
+    expect(first.url).toMatch(/^blob:/)
+    expect(second.url).toMatch(/^blob:/)
+    expect(URL.createObjectURL).toHaveBeenCalledTimes(2)
+    if (first.url) revokeLocalIconUrl(first.url)
+    if (second.url) revokeLocalIconUrl(second.url)
+  })
+
   it('never coalesces across authorization grants or icon versions', async () => {
     setupCacheStorage()
     const releases: Array<(response: Response) => void> = []

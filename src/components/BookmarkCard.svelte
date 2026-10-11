@@ -56,6 +56,7 @@
    * 带 key 会让 `/api/icon/:id` 返回 `private, no-store`，白丢共享缓存。
    */
   export let iconAccessKey = ''
+  export let reuseCompletedObject = false
 
   let cachedIconFailed = false
   let fallbackFailed = false
@@ -175,7 +176,9 @@
     }
 
     if (remoteUrl) {
-      const remote = await fetchBookmarkIcon(cacheKey, remoteUrl)
+      const remote = await fetchBookmarkIcon(cacheKey, remoteUrl, {
+        reuseCompletedObject: reuseCompletedObject || iconBaseState.hasProjectedImageIcon,
+      })
       if (requestSequence !== localCacheRequest.current) {
         if (remote.url) revokeLocalIconUrl(remote.url)
         return
