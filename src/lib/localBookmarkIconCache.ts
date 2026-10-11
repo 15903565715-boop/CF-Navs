@@ -6,7 +6,12 @@ const MAX_LOCAL_ICON_CACHE_BYTES = 512 * 1024
 const CACHE_ORIGIN = 'https://cf-navs.local'
 const CACHE_PATH_PREFIX = '/bookmark-icon/'
 const TRANSIENT_OBJECT_ICON_TTL_MS = 30_000
-const MAX_TRANSIENT_OBJECT_ICONS = 64
+// Short-term public completed-blob reuse window. The cap must exceed the public object-icon set a
+// home can mount (card-count gate is >=300; production ~355) so first-loaded above-the-fold icons
+// are not evicted mid-scroll and then re-fetched on cross-phase remount (search-clear / view
+// switch). Entries are small object-icon blobs bounded by the 30s TTL. Raised from 64 (which held
+// only a fraction of the mounted set, forcing C-5 /api/icon re-fetches) to cover the full page.
+const MAX_TRANSIENT_OBJECT_ICONS = 512
 
 export type BookmarkIconCacheInput = {
   id: string | number
