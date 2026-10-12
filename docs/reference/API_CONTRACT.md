@@ -21,7 +21,13 @@
 - **缺 `SESSION` 绑定时的行为按「正确性是否依赖它」分两类**（判定统一在 `worker/lib/sessionStore.ts` 的 `hasSessionBinding`，要求 `get`/`put`/`delete` 三个方法都存在）：
   - **鉴权与登录 fail-closed**：`validateSession` 拒绝会话（受保护端点因此 401 / `code=1001`），`POST /api/login` 返回 `code=1500` + `required SESSION binding is unavailable`。撤销名单不可用时不能静默放行——那等于「撤销名单不存在」而调用方无从得知。缺绑定是确定性的配置错误，`/install` 本来就以 `bindings_missing` 拒绝安装。
   - **best-effort 降级继续**：`POST /api/public/bookmarks/:id/click` 的点击计数限流在缺绑定或 KV 抛错时跳过限流但**仍然计数**。限流失效只是计数偏高，拒绝匿名点击会让公开首页的正常功能坏掉。
-- `/api/public/data`：匿名请求默认可查公开数据 edge cache；缓存未命中时先复用 `/api/config` edge cache，仍未命中才读取轻量 `site_title/public_mode`，公开模式关闭则要求有效 token，否则返回 `code=1005`，该轻量 1005 响应也会短时写入 edge cache。请求带 `Cache-Control: no-cache`、`Cache-Control: no-store`、`Cache-Control: max-age=0` 或 `Pragma: no-cache` 时，服务端必须绕过公开数据和站点配置 edge cache。
+- `/api/public/data`：**匿名请求一律先查公开数据 edge cache，且忽略客户端的 `Cache-Control: no-cache / no-store / max-age=0` 与 `Pragma: no-cache`**——否则任何人用一个请求头就能强制读 D1。新鲜度改由版本化 URL 保证：
+  - `GET /api/public/data?v=<data_version>`（`v` 取自 `/api/data/version`，格式 `[A-Za-z0-9_-]{1,64}`，不合格式视为未带版本）。缓存键为路径 + 规范化的 `v`，与版本一一对应；版本前进即换键，旧键自然不可达，不依赖 Cache API 只作用于当前 colo 的 `delete`。
+  - 带版本未命中时，服务端先用一条轻量 settings 查询（与 `/api/data/version` 同一条）确认 `v` 是否仍是当前版本：是则读一次聚合 batch 并缓存到该键；否（过期或伪造的 `v`）则优先用**当前版本**键的缓存副本回应，响应改为 `Cache-Control: no-store`，正文是当前版本的数据（`data.version` 为当前版本），不重定向、也不把内容写进过期键；当前版本键也未命中时才读聚合 batch。因此过期或随机 `v` 最多只引发这条单行查询。
+  - 聚合 batch 读出的内容总是写进它真实版本的键；只有 `v` 等于读出的版本（或未带版本）时，返回给客户端的响应才是可缓存的公开头。
+  - 未带 `v` 的旧客户端请求继续可用：使用无版本键（写操作失效的就是这一个），未命中时同时写入无版本键与版本键。跨 colo 场景下无版本键最多滞后一个 edge TTL（120 秒）；响应自带 `version`，前端下一次版本确认即自愈。
+  - 缓存未命中且未带版本时，先复用 `/api/config` edge cache，仍未命中才读取轻量 `site_title/public_mode`；公开模式关闭时匿名请求返回 `code=1005`，该轻量 1005 响应短时写入本次请求的缓存键（过期 `v` 不写）。
+  - 带 Bearer 的请求从不读写共享缓存：先校验会话，无效返回 401，有效则返回包含私密书签的数据（`no-store`）。
 - `/api/data/version`：用一次 `settings` 查询读取 `site_title`、`public_mode`、内部 `data_version` 与图标数据集代次。带 Bearer 时始终校验会话（包括公开模式），成功才返回 `auth_receipt`；无效会话返回 401，不能退回匿名成功。无 Bearer 的公开访问不产生认证回执，私有站点仍返回 `code=1005`。单次版本元数据查询是热路径契约；既有会话验证的 D1/KV 成本单独计量。
 
 ## 公开接口
@@ -35,7 +41,7 @@
 | POST | `/api/public/bookmarks/:id/click` | 无 | `null` |
 | POST | `/api/error-report` | 无 | `{ received: number }` |
 
-`/api/config` 使用短 TTL Cloudflare edge cache，设置保存或数据导入后会主动失效，主要作为兼容和兜底轻量配置接口。前端普通启动路径优先使用本地快照加 `/api/data/version` 做远端确认；本地无可用快照或版本变化时，才请求 `/api/public/data` 或 `/api/admin/data` 派生站点配置。公开模式关闭时，匿名 `/api/public/data` 的 1005 响应会在 `data` 中携带 `{ site_title, public_mode: false }`，登录页无需再额外请求 `/api/config`。该 1005 响应使用浏览器 `max-age=0` 和短 edge TTL，避免本地浏览器缓存卡住公开模式切换，同时减少私有站点匿名访问对 D1 的重复读取。`/api/public/data` 只查询并返回首页渲染需要的公开设置、分类和书签字段，书签公开字段携带用于轻量判断图标缓存的 `icon_cached`，`icon_blob` 恒为 `null`，但不包含 `admin_username`、`admin_password` 等内部字段，也不包含分类/书签的 `created_at`。**注意 `custom_css` 与 `custom_js` 属于公开设置**（见 `shared/settings.ts` 的 `PUBLIC_SETTINGS_KEYS`）：它们会随公开数据下发给每个匿名访客并在其浏览器中生效，这是「自定义 CSS/JS」这个功能的预期行为；未携带 no-cache 指令的匿名公开访问会先查短 TTL edge cache，命中时直接返回而不读取 D1。前端拉取完整聚合数据时默认带 `Cache-Control: no-cache`、`Pragma: no-cache` 和 fetch `cache: "no-store"`；服务端收到 no-cache 指令或带登录态请求时会绕过匿名缓存。缓存未命中时，服务端先复用或预热 `/api/config` 的轻量 edge cache 来判断是否公开，公开时再通过一次 D1 batch 聚合读取公开 settings、分类和书签；该 batch 同时读取 `site_title/public_mode`、数据版本和图标数据集代次，避免把先前配置与新数据版本拼接成不一致的权限快照。
+`/api/config` 使用短 TTL Cloudflare edge cache，设置保存或数据导入后会主动失效，主要作为兼容和兜底轻量配置接口。前端普通启动路径优先使用本地快照加 `/api/data/version` 做远端确认；本地无可用快照或版本变化时，才请求 `/api/public/data` 或 `/api/admin/data` 派生站点配置。公开模式关闭时，匿名 `/api/public/data` 的 1005 响应会在 `data` 中携带 `{ site_title, public_mode: false }`，登录页无需再额外请求 `/api/config`。该 1005 响应使用浏览器 `max-age=0` 和短 edge TTL，避免本地浏览器缓存卡住公开模式切换，同时减少私有站点匿名访问对 D1 的重复读取。`/api/public/data` 只查询并返回首页渲染需要的公开设置、分类和书签字段，书签公开字段携带用于轻量判断图标缓存的 `icon_cached`，`icon_blob` 恒为 `null`，但不包含 `admin_username`、`admin_password` 等内部字段，也不包含分类/书签的 `created_at`。**注意 `custom_css` 与 `custom_js` 属于公开设置**（见 `shared/settings.ts` 的 `PUBLIC_SETTINGS_KEYS`）：它们会随公开数据下发给每个匿名访客并在其浏览器中生效，这是「自定义 CSS/JS」这个功能的预期行为；匿名公开访问会先查短 TTL edge cache，命中时直接返回而不读取 D1。前端匿名拉取完整聚合数据时，若刚通过 `/api/data/version` 确认了远端版本，就请求 `/api/public/data?v=<version>`（冷启动没有本地快照时不为此额外请求版本，直接请求无版本地址），只保留 fetch `cache: "no-store"`、不再发送 no-cache 请求头；带登录态请求始终绕过匿名缓存。缓存未命中时，服务端先复用或预热 `/api/config` 的轻量 edge cache 来判断是否公开，公开时再通过一次 D1 batch 聚合读取公开 settings、分类和书签；该 batch 同时读取 `site_title/public_mode`、数据版本和图标数据集代次，避免把先前配置与新数据版本拼接成不一致的权限快照。
 
 `/api/error-report` 接收前端运行时错误上报，payload 为 `{ errors: ErrorReportEntry[] }` 或单个 `ErrorReportEntry`。该接口不要求登录，但限制请求体为 16 KB、单批最多 10 条，并对消息、分类、URL 和行列字段做类型与长度归一化；有效请求通过 D1 原子计数按来源 IP 限制为每分钟 12 次，已封禁来源可由当前 Worker isolate 内存快速拒绝。超大请求返回 HTTP 413，高频请求返回 HTTP 429，无效 JSON 或无有效条目返回 HTTP 400。Worker 只把有限字段写入 `console.error`，响应中的 `received` 表示实际接收条数；前端会对同一错误做 60 秒去重，且上报失败不得影响页面主流程。
 
@@ -86,7 +92,7 @@
 | --- | --- | --- | --- |
 | GET | `/api/admin/data` | `AdminData` | 后台初始化聚合数据，一次返回分类、书签和完整 `Settings`，用于替代进入后台时分别请求公开数据和设置 |
 
-`AdminData` 和 `PublicData` 响应可携带可选 `version` 字段，前端只用于快照校验，不参与页面渲染。前端会按当前登录态把 `AdminData` 写入浏览器本地快照（优先 localStorage，超出限制时仍可用 Cache Storage）；匿名公开数据也会写入同源本地快照。页面刷新时可以先用快照恢复界面，随后请求 `/api/data/version`：版本相同则不拉完整数据，版本不同才请求 `/api/admin/data` 或 `/api/public/data`。完整聚合请求默认带 no-cache 指令，服务端收到后会绕过 Worker isolate 内的短 TTL 运行时聚合缓存。退出登录会清除本地后台快照。
+`AdminData` 和 `PublicData` 响应可携带可选 `version` 字段，前端只用于快照校验，不参与页面渲染。前端会按当前登录态把 `AdminData` 写入浏览器本地快照（优先 localStorage，超出限制时仍可用 Cache Storage）；匿名公开数据也会写入同源本地快照。页面刷新时可以先用快照恢复界面，随后请求 `/api/data/version`：版本相同则不拉完整数据，版本不同才请求 `/api/admin/data` 或 `/api/public/data`。`/api/admin/data` 每次直读一次 D1 batch（原 Worker isolate 内 3 秒运行时聚合缓存已删除：前端请求总带 no-cache 绕过它，它从未被命中，却要求每个写路由记得失效）。退出登录会清除本地后台快照。
 
 ## 分类接口
 

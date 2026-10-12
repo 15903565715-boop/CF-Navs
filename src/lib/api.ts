@@ -363,9 +363,17 @@ export const installApi = {
     jsonRequest<LoginResp>('/install', 'POST', payload, false, { 'X-Setup-Token': setupToken }),
 }
 
+export function publicDataPath(version?: string | null): string {
+  return version ? `/public/data?v=${encodeURIComponent(version)}` : '/public/data'
+}
+
 export const publicApi = {
-  getData: (auth = false) =>
-    request<PublicData>('/public/data', { auth, cache: 'no-store', headers: NO_CACHE_HEADERS, keepSessionOnUnauthorized: true }),
+  // 匿名请求带上已知的 data_version（`?v=`），服务端按版本命中 edge cache，且会忽略匿名
+  // 请求的 no-cache 指令，因此匿名请求不再发送 no-cache 头。登录态请求从不读共享缓存。
+  getData: (auth = false, version?: string | null) =>
+    request<PublicData>(publicDataPath(auth ? null : version), auth
+      ? { auth, cache: 'no-store', headers: NO_CACHE_HEADERS, keepSessionOnUnauthorized: true }
+      : { cache: 'no-store', keepSessionOnUnauthorized: true }),
   registerClick: (id: number) =>
     request<null>(`/public/bookmarks/${id}/click`, { method: 'POST', keepalive: true }),
 }

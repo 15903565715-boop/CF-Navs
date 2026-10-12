@@ -1,6 +1,6 @@
 // 写路由的统一收尾：按收据做提交后的缓存失效，并把新 data_version 附在响应包络上。
 //
-// 之前约 15 个写路由各自重复「touchDataVersion + invalidateRuntimeDataCache +
+// 之前约 15 个写路由各自重复「touchDataVersion + 运行时缓存失效 +
 // invalidatePublicDataCache」，漏一处就会出现「数据变了缓存没失效」。现在版本提升在
 // db 层与业务写入同一 batch 提交（见 db/mutation.ts），路由只需把收据交给这里。
 
@@ -8,7 +8,6 @@ import { invalidatePublicDataCache, invalidateSiteConfigCache } from './cache'
 import type { MutationReceipt } from './db/mutation'
 import { ok } from './response'
 import type { AppContext } from './routeHelpers'
-import { invalidateRuntimeDataCache } from './runtimeCache'
 
 export interface MutationInvalidationOptions {
   /** 站点标题 / 公开模式可能变化（设置保存、覆盖导入）时一并失效 `/api/config` edge cache。 */
@@ -22,7 +21,6 @@ export function invalidateAfterMutation(
   options: MutationInvalidationOptions = {},
 ): void {
   if (!receipt.data_version) return
-  invalidateRuntimeDataCache()
   invalidatePublicDataCache(c, c.req.url)
   if (options.siteConfig) invalidateSiteConfigCache(c, c.req.url)
 }

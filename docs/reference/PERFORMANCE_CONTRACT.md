@@ -18,6 +18,7 @@ This document records the current performance-sensitive behavior that should not
 ## Aggregate Data
 
 - `/api/admin/data` and `/api/public/data` should stay lightweight.
+- Anonymous `/api/public/data` must not let a request header force a D1 read: anonymous `no-cache` / `Pragma` directives are ignored and freshness comes from the versioned URL `/api/public/data?v=<data_version>`. A stale or forged `v` may cost at most the single settings version query before being answered from the current version's cached copy (`no-store`). Cold starts without a snapshot keep requesting the unversioned URL rather than adding a version probe.
 - Aggregate bookmark payloads should not include large icon blobs for normal authenticated/admin loading unless a specific workflow requires them.
 - The observed authenticated `/api/admin/data` transfer target is roughly 38 KB for the current 345-bookmark dataset.
 

@@ -232,9 +232,21 @@ describe('dataService.refreshPublicData', () => {
 
     await refreshPublicData()
 
-    expect(api.public.getData).toHaveBeenCalledWith(false)
+    // The confirmed remote version keys the edge cache (`/public/data?v=new`).
+    expect(api.public.getData).toHaveBeenCalledWith(false, 'new')
     expect(publicCache.writeCachedPublicData).toHaveBeenCalledOnce()
     expect(getCurrentDataVersion()).toBe('new')
+  })
+
+  it('requests unversioned public data on a cold start without an extra version probe', async () => {
+    publicCache.readCachedPublicDataEntry.mockResolvedValue(null)
+    api.public.getData.mockResolvedValue(makePublicData('cold'))
+
+    await refreshPublicData()
+
+    expect(api.data.version).not.toHaveBeenCalled()
+    expect(api.public.getData).toHaveBeenCalledWith(false, null)
+    expect(getCurrentDataVersion()).toBe('cold')
   })
 
   it('clears admin snapshot when private-mode authenticated public fetch returns unauthorized', async () => {
@@ -468,7 +480,7 @@ describe('dataService.refreshVisibleData', () => {
 
     await refreshVisibleData()
 
-    expect(api.public.getData).toHaveBeenCalledWith(false)
+    expect(api.public.getData).toHaveBeenCalledWith(false, null)
     expect(api.admin.getData).not.toHaveBeenCalled()
   })
 
@@ -486,7 +498,7 @@ describe('dataService.refreshVisibleData', () => {
     expect(get(authStore).session).toBeNull()
     expect(get(adminStore).data.settings).toBeNull()
     expect(adminCache.clearCachedAdminData).toHaveBeenCalledOnce()
-    expect(api.public.getData).toHaveBeenCalledWith(false)
+    expect(api.public.getData).toHaveBeenCalledWith(false, null)
   })
 
   it('drops the private home data before an unauthorized public fallback that itself fails', async () => {

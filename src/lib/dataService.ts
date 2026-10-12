@@ -155,6 +155,7 @@ async function loadPublicData(progressive: boolean, isCurrent: IsCurrent): Promi
   }
 
   try {
+    let confirmedVersion: string | null = null
     if (cached?.version) {
       const remoteVersion = await api.data.version(false)
       if (!isCurrent()) return null
@@ -163,13 +164,15 @@ async function loadPublicData(progressive: boolean, isCurrent: IsCurrent): Promi
         public_mode: remoteVersion.public_mode,
       })
       currentDataVersion = remoteVersion.version
+      confirmedVersion = remoteVersion.version
 
       if (remoteVersion.version === cached.version) {
         return get(publicStore).data
       }
     }
 
-    const response = await api.public.getData(false)
+    // 已确认远端版本时按版本请求，命中该版本的 edge cache；冷启动没有快照时不为此额外请求版本。
+    const response = await api.public.getData(false, confirmedVersion)
     if (!isCurrent()) return null
     const data = applyPublicData(response, undefined, progressive)
     if (!isLoggedIn()) {
