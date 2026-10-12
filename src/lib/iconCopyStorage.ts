@@ -86,6 +86,7 @@ export function createIconCopyStorage(options: { factory?: IDBFactory; name?: st
         request.onerror = () => reject(storageError(request.error))
         request.onblocked = () => { abandoned = true; reject(new IconStorageError('unavailable')) }
       })
+      // 失败的连接不缓存，下次 open() 重新尝试；拒绝本身照常交给等待 connection 的调用方。
       connection.catch(() => { connection = null })
     }
     return connection
@@ -104,6 +105,7 @@ export function createIconCopyStorage(options: { factory?: IDBFactory; name?: st
       return value
     } catch (error) {
       try { tx.abort() } catch { /* already committed/aborted */ }
+      // 有意吞掉：事务已中止，done 的拒绝只是 abort 的回声；对外抛出的是原始操作错误。
       await done.catch(() => undefined)
       throw storageError(error)
     }
@@ -281,6 +283,7 @@ export function createIconCopyStorage(options: { factory?: IDBFactory; name?: st
   async function close(): Promise<void> {
     closed = true
     touches.clear()
+    // 有意吞掉：打开失败的连接没有可关闭的句柄，失败已由当初的 open() 调用方处理。
     const db = await connection?.catch(() => null)
     db?.close()
     connection = null

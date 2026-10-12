@@ -272,10 +272,11 @@ bookmarksRoutes.post('/check-health', async (c) => {
      let { response: res } = await probe('HEAD')
 
      if (!res.ok && (res.status === 405 || res.status === 403 || res.status === 400)) {
+      // 有意吞掉：只为释放连接，流已关闭等取消失败不影响结果。
       void res.body?.cancel().catch(() => undefined)
       ;({ response: res } = await probe('GET'))
      }
-     // 只要状态码：不读正文，立即释放连接。
+     // 只要状态码：不读正文，立即释放连接（取消失败同上，有意忽略）。
      void res.body?.cancel().catch(() => undefined)
 
      return { id: bm.id, status: res.status, ok: res.ok }

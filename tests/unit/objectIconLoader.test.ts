@@ -174,6 +174,30 @@ describe('versioned object icon orchestration', () => {
     expect((await handle.result).status).toBe('blocked'); expect(f.data.has('bookmark:1')).toBe(false)
     handle.release()
   })
+  it('reports a failed local removal after an authorization failure instead of swallowing it', async () => {
+    const f = await fixture()
+    const failure = new IconStorageError('unavailable')
+    f.storage.remove.mockRejectedValueOnce(failure)
+    f.fetchCopy.mockRejectedValue(new ApiError('forbidden', { status: 403 }))
+    const handle = f.loader.acquire(f.unknown)
+    expect((await handle.result).status).toBe('blocked')
+    expect(f.device.reportStorageError).toHaveBeenCalledWith(failure)
+    handle.release()
+  })
+  it('warns when the post-store stats refresh fails without failing the icon', async () => {
+    const f = await fixture()
+    const failure = new Error('stats unavailable')
+    f.device.refreshStats.mockRejectedValueOnce(failure)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    try {
+      const handle = f.loader.acquire(f.unknown)
+      expect((await handle.result).status).toBe('ready')
+      await vi.waitFor(() => expect(warn).toHaveBeenCalledWith('[CF-Navs] icon storage stats refresh failed', failure))
+      handle.release()
+    } finally {
+      warn.mockRestore()
+    }
+  })
   it('drops a late network success after the device generation was revoked', async () => {
     const f = await fixture()
     let finish!: (value: any) => void

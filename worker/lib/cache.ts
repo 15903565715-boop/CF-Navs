@@ -53,11 +53,11 @@ function waitUntil(c: unknown, promise: Promise<unknown>): void {
   } catch {
     executionCtx = undefined
   }
-  if (executionCtx) {
-    executionCtx.waitUntil(promise)
-  } else {
-    promise.catch(() => undefined)
-  }
+  // 失败只记日志：边缘缓存不可用时请求照常回源，但要能在 Workers 日志里看到。
+  const observed = promise.catch((error) => {
+    console.warn('[edge-cache] best-effort cache operation failed:', error)
+  })
+  if (executionCtx) executionCtx.waitUntil(observed)
 }
 
 export async function matchPublicDataCache(requestUrl: string, version: string | null = null): Promise<Response | undefined> {

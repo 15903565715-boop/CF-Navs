@@ -383,7 +383,10 @@ export async function refreshBookmarkIconCache(bookmarkId: number): Promise<stri
 }
 
 export function refreshBookmarkIconCacheInBackground(bookmarkId: number): void {
-  void refreshBookmarkIconCache(bookmarkId).catch(() => undefined)
+  // 保存书签后的后台补图是尽力而为：失败不打断用户操作，下次加载 / 显式刷新会重试。
+  void refreshBookmarkIconCache(bookmarkId).catch((error) => {
+    console.warn('[CF-Navs] background bookmark icon refresh failed', bookmarkId, error)
+  })
 }
 
 export async function applyLocalCategorySort(

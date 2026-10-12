@@ -228,6 +228,8 @@ export function createIconDeviceController(options: DeviceOptions) {
     record = { ...record, ...(forget ? { receipt: null, dataset: null } : {}), cleanupPending: true }
     persist()
     const epoch = state.epoch
+    // 有意吞掉：上一轮清理在自己的 try/catch 里把失败写进 phase（cleanup-failed），
+    // 这里只串行化，旧失败不能阻断本轮清理。
     clearTask = clearTask.catch(() => undefined).then(async () => {
       try {
         const expectedScope = revokedScope ?? (revokedToken ? await scope(revokedToken) : null)

@@ -77,6 +77,7 @@ import {
   refreshLoggedInData,
   readAdminDataForEdit,
   recordBookmarkClick,
+  refreshBookmarkIconCacheInBackground,
   refreshPublicData,
   refreshVisibleData,
 } from '../../src/lib/dataService'
@@ -864,5 +865,19 @@ describe('dataService icon descriptor state split', () => {
     expect(bookmarkIconDisplay.size).toBe(1)
     authStore.setSession(null)
     expect(bookmarkIconDisplay.size).toBe(0)
+  })
+})
+
+describe('dataService.refreshBookmarkIconCacheInBackground', () => {
+  it('后台补图失败不抛出，但用 console.warn 留下诊断线索', async () => {
+    const failure = new Error('network down')
+    api.bookmarks.refreshIconCache.mockRejectedValueOnce(failure)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    try {
+      expect(() => refreshBookmarkIconCacheInBackground(7)).not.toThrow()
+      await vi.waitFor(() => expect(warn).toHaveBeenCalledWith('[CF-Navs] background bookmark icon refresh failed', 7, failure))
+    } finally {
+      warn.mockRestore()
+    }
   })
 })

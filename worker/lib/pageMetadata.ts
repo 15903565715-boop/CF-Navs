@@ -61,7 +61,8 @@ export async function readHtmlHeadBytes(
       if (indexOfAsciiSequence(buffer, HEAD_END, searchFrom, length) >= 0) break
     }
   } finally {
-    void reader.cancel().catch(() => { })
+    // 有意吞掉：读够 <head> 后提前释放连接，流已结束 / 已出错时取消失败无需处理。
+    void reader.cancel().catch(() => undefined)
   }
 
   return buffer.subarray(0, length)
