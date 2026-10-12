@@ -112,6 +112,10 @@ export async function validateSession(env: Env, token: string): Promise<SessionV
 }
 
 export const authRequired: MiddlewareHandler<HonoEnv> = async (c, next) => {
+  if (c.get('authenticated') === true) {
+    await next()
+    return
+  }
   const token = extractBearerToken(c.req.header('Authorization'))
   if (!token) {
     return c.json(fail(ErrCode.UNAUTHORIZED, 'unauthorized'), 401)
@@ -124,5 +128,6 @@ export const authRequired: MiddlewareHandler<HonoEnv> = async (c, next) => {
 
   c.set('username', session.username)
   c.set('sessionExpiresAt', session.exp)
+  c.set('authenticated', true)
   await next()
 }

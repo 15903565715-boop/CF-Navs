@@ -1,4 +1,4 @@
-import { Hono } from 'hono'
+import { Hono, type MiddlewareHandler } from 'hono'
 import { ICON_COPY_PROTOCOL, parseIconCopyRequest } from '../../shared/iconLocalCopy'
 import { ErrCode } from '../../shared/types'
 import { authRequired } from '../middleware/auth'
@@ -8,15 +8,18 @@ import { readBoundedBody } from '../lib/boundedBody'
 import { fail, ok } from '../lib/response'
 import type { HonoEnv } from '../types'
 
-export const iconLocalCopyRoutes = new Hono<HonoEnv>()
-iconLocalCopyRoutes.use('/icon-local-copy', async (c, next) => {
-  // Applied before auth, including failures; no shared response-cache access on this router.
+// Applied before auth, including failures; no shared response-cache access on this router.
+// worker/index.ts registers it on the public side ahead of the protected sub-app so 401s carry it too.
+export const iconLocalCopyHeaders: MiddlewareHandler<HonoEnv> = async (c, next) => {
   c.header('Cache-Control', 'private, no-store')
   c.header('CDN-Cache-Control', 'no-store')
   c.header('Cloudflare-CDN-Cache-Control', 'no-store')
   c.header('X-Content-Type-Options', 'nosniff')
   await next()
-})
+}
+
+export const iconLocalCopyRoutes = new Hono<HonoEnv>()
+iconLocalCopyRoutes.use('/icon-local-copy', iconLocalCopyHeaders)
 iconLocalCopyRoutes.post('/icon-local-copy', authRequired, async (c) => {
   const origin = c.req.header('Origin')
   if (origin && origin !== new URL(c.req.url).origin) return c.json(fail(ErrCode.FORBIDDEN, 'forbidden'), 403)

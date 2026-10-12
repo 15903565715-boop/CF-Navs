@@ -28,9 +28,12 @@ export function isValidNewPassword(value: unknown): value is string {
   return typeof value === 'string' && value.length >= MIN_PASSWORD_LENGTH && value.length <= MAX_PASSWORD_LENGTH
 }
 
-export const authRoutes = new Hono<HonoEnv>()
+// 公开：登录。受保护：登出、改密码、当前用户——worker/index.ts 把它们挂进统一
+// authRequired 的受保护子应用；逐路由的 authRequired 保留为纵深防御（幂等，不重复校验）。
+export const authPublicRoutes = new Hono<HonoEnv>()
+export const authProtectedRoutes = new Hono<HonoEnv>()
 
-authRoutes.post('/login', loginRateLimit, async (c) => {
+authPublicRoutes.post('/login', loginRateLimit, async (c) => {
   let credentials: AdminCredentials
   try {
     credentials = await ensureAdminBootstrap(c.env)
@@ -73,7 +76,7 @@ authRoutes.post('/login', loginRateLimit, async (c) => {
   return c.json(ok(data))
 })
 
-authRoutes.post('/logout', authRequired, async (c) => {
+authProtectedRoutes.post('/logout', authRequired, async (c) => {
   // authRequired 已经校验过 token，这里只是取回原始串用于写撤销名单。
   const token = extractBearerToken(c.req.header('Authorization'))
   if (!token) {
@@ -106,7 +109,7 @@ authRoutes.post('/logout', authRequired, async (c) => {
   return c.json(ok(result))
 })
 
-authRoutes.post('/password', authRequired, async (c) => {
+authProtectedRoutes.post('/password', authRequired, async (c) => {
   let body: ChangePasswordReq
   try {
     body = await c.req.json<ChangePasswordReq>()
@@ -144,8 +147,13 @@ authRoutes.post('/password', authRequired, async (c) => {
   }
 })
 
-authRoutes.get('/me', authRequired, (c) => {
+authProtectedRoutes.get('/me', authRequired, (c) => {
   return c.json(ok({ username: c.get('username') }))
 })
+
+/** 两组合并的完整认证路由（单测与独立挂载用）。 */
+export const authRoutes = new Hono<HonoEnv>()
+authRoutes.route('/', authPublicRoutes)
+authRoutes.route('/', authProtectedRoutes)
 
 export default authRoutes

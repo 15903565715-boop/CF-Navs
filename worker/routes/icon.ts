@@ -36,7 +36,10 @@ import { decodeVersionedIcon } from '../lib/iconRevision'
 import { fail, ok } from '../lib/response'
 import type { HonoEnv } from '../types'
 
+// 公开：图标代理（Iconify 预览、书签/分类对象图标，匿名可见性闸门在各自处理器内）。
 export const iconRoutes = new Hono<HonoEnv>()
+// 受保护：签发私密图标授权、Iconify 搜索。由 worker/index.ts 挂进受保护子应用。
+export const iconProtectedRoutes = new Hono<HonoEnv>()
 function normalizeCategoryIconUrl(value: string): string | null {
   const icon = value.trim()
   if (!icon) return null
@@ -49,8 +52,8 @@ function normalizeCategoryIconUrl(value: string): string | null {
 
 // 后台预览私密对象图标用的短期授权。签名密钥复用 settings.jwt_secret，因此改密码
 // （rotateJwtSecret）会顺带作废全部已签发授权。该端点在 worker/index.ts 上挂
-// authRequired，只有登录态能取到。
-iconRoutes.get('/icon-access', async (c) => {
+// 受保护子应用的 authRequired，只有登录态能取到。
+iconProtectedRoutes.get('/icon-access', async (c) => {
   const grant = await createIconAccessGrant(await getJwtSecret(c.env.DB))
   const data: IconAccessResp = { key: grant.grant, expires_at: grant.expires_at }
   const response = c.json(ok(data))
@@ -58,7 +61,7 @@ iconRoutes.get('/icon-access', async (c) => {
   return response
 })
 
-iconRoutes.get('/iconify-search', async (c) => {
+iconProtectedRoutes.get('/iconify-search', async (c) => {
   const query = normalizeIconifySearchQuery(c.req.query('query') ?? '')
   if (!query) {
     return c.json(fail(ErrCode.BAD_REQUEST, 'invalid iconify query'), 400)

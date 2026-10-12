@@ -14,6 +14,7 @@
 ## 鉴权规则
 
 - `authRequired`：读取 Bearer token，用 `settings.jwt_secret` 校验 HS256 签名和 `exp`，再查 KV 撤销名单。签名、过期或撤销不通过返回 401；KV 读取故障可能由全局错误处理返回服务端错误。**缺少 `SESSION` 绑定时不再跳过撤销检查，而是直接拒绝会话**（见下方口径）。
+- **路由鉴权按构造保证**：`worker/index.ts` 把 API 拆成公开子应用 `publicApi`（唯一的公开清单，见下方「公开接口」「安装接口」与 `/login`、`/recover`、图标代理）和受保护子应用 `protectedApi`（`use('*', authRequired)`，在全部公开处理器之后挂载）。新增接口默认受保护；未登录访问未知的 `/api/*` 路径或公开路径的未定义方法时返回 401 / `code=1001`（此前为 `code=1004` not found），登录后仍返回 not found。`tests/unit/routeAuth.test.ts` 枚举受保护子应用的全部路由断言无 token / 伪造 token 均为 401，并对公开路由清单做快照。
 - 会话是无状态 JWT，payload 为 `{ username, exp, jti }`。`jti` 保证同一毫秒内的两次登录也会签出不同 token，否则「退出这台设备」会连带撤销另一台。
 - `POST /api/logout` 把当前 token 的 SHA-256 摘要写入 KV `revoked:<sha256>`，TTL 为 `max(60 秒, token 剩余寿命)`，以满足 KV `expirationTtl` 的下限。用摘要而不是 token 本身做 key，避免 KV 被 dump 时泄露仍在有效期内的 token。其它 isolate 上最多 15 秒后才感知到撤销，这是内存缓存换来的固定窗口。撤销名单是「退出登录」的**全部实质**，写不进去就等于没退，因此该接口用 `LogoutResp` 把结果显式告知调用方，不再一律返回纯成功——三种结果见「认证接口」小节。
 - 修改密码和凭据重置走 `rotateJwtSecret`，一次性作废全部会话。
