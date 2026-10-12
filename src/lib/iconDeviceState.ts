@@ -13,8 +13,12 @@ export interface IconDeviceSnapshot {
   trusted: boolean; enabledForPage: boolean; phase: IconDevicePhase; epoch: number; lease: IconStorageLease | null
   inlineProtocol?: number
   dataset: string | null; leaseUntil: number | null; checkedAt: number | null
-  stats: IconStorageTotals; error: string | null
+  error: string | null
 }
+// 存储统计（条目数 / 正文字节）单独成 store：只有设备面板关心它。放在主快照里时，
+// 每存入一个图标都会向所有图标视图（每张卡片一个订阅者）广播一次，N 个图标即 O(N²)。
+export const ICON_STATS_REFRESH_DEBOUNCE_MS = 250
+const emptyStats = (): IconStorageTotals => ({ bodyBytes: 0, entries: 0, indexBytes: 0 })
 type Session = { token: string; expires_at: number } | null
 interface DeviceOptions {
   storage: IconCopyStorage
@@ -58,9 +62,18 @@ export function createIconDeviceController(options: DeviceOptions) {
   let clockRetry: ReturnType<typeof setTimeout> | null = null
   let receiptRenewal: ReturnType<typeof setTimeout> | null = null
   let clearTask: Promise<void> = Promise.resolve()
-  let state: IconDeviceSnapshot = { trusted: false, enabledForPage: false, phase: 'disabled', epoch: 0, lease: null, dataset: null, leaseUntil: null, checkedAt: null, stats: { bodyBytes: 0, entries: 0, indexBytes: 0 }, error: null }
+  let state: IconDeviceSnapshot = { trusted: false, enabledForPage: false, phase: 'disabled', epoch: 0, lease: null, dataset: null, leaseUntil: null, checkedAt: null, error: null }
   const listeners = new Set<(snapshot: IconDeviceSnapshot) => void>()
   function update(patch: Partial<IconDeviceSnapshot>) { state = { ...state, ...patch }; for (const listener of listeners) listener(state) }
+  let stats = emptyStats()
+  const statsListeners = new Set<(value: IconStorageTotals) => void>()
+  function setStats(next: IconStorageTotals) {
+    if (next.bodyBytes === stats.bodyBytes && next.entries === stats.entries && next.indexBytes === stats.indexBytes) return
+    stats = { bodyBytes: next.bodyBytes, entries: next.entries, indexBytes: next.indexBytes }
+    for (const listener of statsListeners) listener(stats)
+  }
+  let statsTimer: ReturnType<typeof setTimeout> | null = null
+  let statsWaiters: Array<{ resolve: () => void; reject: (error: unknown) => void }> = []
   function cancelReceiptRenewal() {
     if (receiptRenewal) clearTimeout(receiptRenewal)
     receiptRenewal = null
@@ -193,10 +206,11 @@ export function createIconDeviceController(options: DeviceOptions) {
       const valid = () => own === sequence && permitted()
       await options.storage.activate(lease, valid, previous)
       if (!valid()) return
-      const stats = await options.storage.state()
+      const current = await options.storage.state()
       if (!valid()) return
+      if (current) setStats(current)
       update({ trusted: true, phase: 'ready', lease, inlineProtocol: record.inlineProtocol, dataset: record.dataset, leaseUntil: iconLeaseUntil(record.receipt!), checkedAt: record.receipt!.checked_at,
-        stats: stats ? { bodyBytes: stats.bodyBytes, entries: stats.entries, indexBytes: stats.indexBytes } : state.stats, error: null })
+        error: null })
       scheduleExpiry()
     } catch (error) {
       if (own !== sequence) return
@@ -223,7 +237,8 @@ export function createIconDeviceController(options: DeviceOptions) {
         if (state.epoch !== epoch || disposed) return
         record = { ...record, cleanupPending: false }
         if (!persist()) return
-        update({ phase, stats: { bodyBytes: 0, entries: 0, indexBytes: 0 }, error: null })
+        setStats(emptyStats())
+        update({ phase, error: null })
       } catch {
         if (state.epoch === epoch) update({ phase: 'cleanup-failed', error: '已停止使用图标副本，但磁盘清理未完成。请重试清理。', lease: null })
       }
@@ -399,14 +414,39 @@ export function createIconDeviceController(options: DeviceOptions) {
   function isCurrent(captured: { lease: IconStorageLease; epoch: number }): boolean {
     return permitted() && state.phase === 'ready' && state.epoch === captured.epoch && state.lease?.generation === captured.lease.generation && state.lease.scope === captured.lease.scope
   }
-  async function refreshStats() {
+  async function refreshStatsNow() {
     const captured = capture()
     if (!captured) return
-    const stats = await options.storage.state()
-    if (stats && isCurrent(captured)) update({ stats: { bodyBytes: stats.bodyBytes, entries: stats.entries, indexBytes: stats.indexBytes } })
+    const current = await options.storage.state()
+    if (current && isCurrent(captured)) setStats(current)
   }
-  function dispose() { disposed = true; sequence++; cancelReceiptRenewal(); if (clockRetry) clearTimeout(clockRetry); if (expiry) clearTimeout(expiry); listeners.clear(); void options.storage.close() }
+  /**
+   * 合并刷新：批量存入图标时每次 put 都会调用；在 ICON_STATS_REFRESH_DEBOUNCE_MS 窗口内
+   * 只读一次存储状态（storage.state() 本身要扫索引），所有调用者等同一次结果。
+   */
+  function refreshStats(): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      statsWaiters.push({ resolve, reject })
+      if (statsTimer || disposed) { if (disposed) flushStatsWaiters(); return }
+      statsTimer = setTimeout(() => {
+        statsTimer = null
+        const waiters = statsWaiters
+        statsWaiters = []
+        refreshStatsNow().then(() => { for (const waiter of waiters) waiter.resolve() }, error => { for (const waiter of waiters) waiter.reject(error) })
+      }, ICON_STATS_REFRESH_DEBOUNCE_MS)
+    })
+  }
+  function flushStatsWaiters() {
+    if (statsTimer) clearTimeout(statsTimer)
+    statsTimer = null
+    const waiters = statsWaiters
+    statsWaiters = []
+    for (const waiter of waiters) waiter.resolve()
+  }
+  function dispose() { disposed = true; sequence++; cancelReceiptRenewal(); if (clockRetry) clearTimeout(clockRetry); if (expiry) clearTimeout(expiry); flushStatsWaiters(); listeners.clear(); statsListeners.clear(); void options.storage.close() }
   return { subscribe: (listener: (value: IconDeviceSnapshot) => void) => { listeners.add(listener); listener(state); return () => listeners.delete(listener) },
+    stats: { subscribe: (listener: (value: IconStorageTotals) => void) => { statsListeners.add(listener); listener(stats); return () => { statsListeners.delete(listener) } } },
+    statsSnapshot: () => stats,
     snapshot: () => state, initialize, acceptMetadata, setTrusted, clearCopies, setDataset, authChanged, storageChanged, resume, capture, isCurrent, refreshStats,
     beginLogout: () => { record = { ...record, revokedScope: currentScope ?? record.receipt?.cache_scope }; return revoke(record.trusted ? 'waiting-auth' : 'disabled', true, true, options.session()?.token ?? null) }, reportStorageError: failure, checkpoint, dispose, storage: options.storage }
 }

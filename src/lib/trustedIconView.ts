@@ -21,6 +21,8 @@ export function createTrustedIconView(onChange: (value: TrustedIconState) => voi
   let deviceState = iconDevice.snapshot()
   let handle: ObjectIconHandle | null = null
   let signature = ''
+  let signatureIcon: string | null | undefined
+  let signatureBlob: string | null | undefined
   let sequence = 0
   let disposed = false
   let presentation = emptyTrustedIcon
@@ -33,8 +35,11 @@ export function createTrustedIconView(onChange: (value: TrustedIconState) => voi
     if (disposed || !input) return
     const active = deviceState.enabledForPage && deviceState.trusted && !input.preview && Number.isSafeInteger(input.id) && input.id > 0 && !['unsupported', 'unavailable'].includes(deviceState.phase)
     const descriptor = deviceState.dataset ? bookmarkDescriptor(input, deviceState.dataset) : null
-    const next = JSON.stringify([active, input.object_type, input.id, input.icon, input.icon_blob, input.icon_revision, input.icon_write_epoch, input.icon_cached, input.icon_display, input.visible, input.online_url, deviceState.epoch, deviceState.phase, deviceState.dataset])
-    if (!force && next === signature) return
+    // 签名不序列化 icon / icon_blob：它们可能是几百 KB 的 base64 data URI，而每次设备状态
+    // 广播都会让所有视图重算签名。两者单独按值比较（同一字符串引用时是 O(1)）。
+    const next = JSON.stringify([active, input.object_type, input.id, input.icon_revision, input.icon_write_epoch, input.icon_cached, input.icon_display, input.visible, input.online_url, deviceState.epoch, deviceState.phase, deviceState.dataset])
+    const sameBodies = input.icon === signatureIcon && input.icon_blob === signatureBlob
+    if (!force && next === signature && sameBodies) return
     // Snapshot hydration and refreshed online grants can change raw fields while
     // the same verified image is still owned by this view. They are not a new
     // image identity. write_epoch fences writes, not content-addressed reads; a
@@ -43,10 +48,10 @@ export function createTrustedIconView(onChange: (value: TrustedIconState) => voi
     if (!force && active && input.visible && handle && presentation.url && presentation.active &&
       deviceState.phase === 'ready' && deviceState.epoch === displayedEpoch && descriptor?.state === 'ready' && displayedDescriptor &&
       (['object_type', 'object_id', 'dataset_epoch', 'state', 'content_revision'] as const).every(key => descriptor[key] === displayedDescriptor![key])) {
-      signature = next
+      signature = next; signatureIcon = input.icon; signatureBlob = input.icon_blob
       return
     }
-    signature = next; reset()
+    signature = next; signatureIcon = input.icon; signatureBlob = input.icon_blob; reset()
     if (!force) retry.reset()
     if (!active) { publish(emptyTrustedIcon); return }
     if (descriptor?.state === 'text') {
