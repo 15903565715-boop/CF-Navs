@@ -109,6 +109,10 @@ export function getMostVisitedBookmarks(items: PublicBookmark[], limit: number):
     .slice(0, normalizedLimit)
 }
 
+// REQ-17：一级分类聚合「常用」区的固定显示上限，与全局「经常访问」数量(most_visited_count)解耦——
+// 分类聚合不随全局数量缩放，只设一个最多显示条数（Issue #31 第 2 点后续）。
+export const CATEGORY_HOT_LIMIT = 12
+
 // REQ-17：一级分类自身无直属书签时，聚合其整个子树的「常用」书签。
 // 频次优先（click_count 降序）取前 N；不足 N 时按 sort 回填，保证子树非空即非空。
 // 隐私口径：剔除私密书签（is_private），与公开「经常访问」一致。

@@ -7,7 +7,7 @@
 
 ## 0. 交付范围一句话
 
-当一级分类自身无直属书签、只有二级分类有书签时，该一级「本分类」区展示其整个子树的**常用书签**（`click_count` 优先、`most_visited_count` 封顶、低点击按 `sort` 回填保证非空），卡片标注来源二级分类名；取代现状「只渲染排序第一个子分类（可能为空）的内容」。
+当一级分类自身无直属书签、只有二级分类有书签时，该一级「本分类」区展示其整个子树的**常用书签**（`click_count` 优先、固定常量 `CATEGORY_HOT_LIMIT` 封顶、低点击按 `sort` 回填保证非空），卡片标注来源二级分类名；取代现状「只渲染排序第一个子分类（可能为空）的内容」。（2026-10-12 复核修订：封顶由全局 `most_visited_count` 改为独立常量，二者解耦。）
 
 ## 1. 关键实现决策
 
@@ -67,7 +67,7 @@ export function getCategoryHotBookmarks(
 const rootDirectEmpty = (allCategoryBookmarks.get(category.id)?.length ?? 0) === 0 && category.children.length > 0
 const showHot = rootDirectEmpty && selectedCategory.id === category.id   // 「本分类」被选中（默认或点标题回来）
 const hotBookmarks = showHot
-  ? getCategoryHotBookmarks(category, allCategoryBookmarks, settings?.most_visited_count ?? 8)
+  ? getCategoryHotBookmarks(category, allCategoryBookmarks, CATEGORY_HOT_LIMIT)
   : null
 ```
 - `selectedCategory` 由 `getHomeCategoryGroups`→`resolveHomeCategoryForRoot` 决定；DEV-17-B 使空一级默认 `selectedCategory === root`，故默认 `showHot=true`。
@@ -78,8 +78,8 @@ const hotBookmarks = showHot
 - 面板顶部加小标题「常用（来自 N 个子分类）」，N = 有书签的子分类数；`showHot=false` 时不渲染该小标题，保持现状。
 - `showHot=false` 时：完全维持现有 `category={selectedCategory} bookmarks={selectedBookmarks}` 路径。
 
-### 4.3 `most_visited_count === 0`
-与全局区一致：N=0 时 `getCategoryHotBookmarks` 返回 `[]`，聚合区隐藏（面板仅剩小标题则一并不渲染）；此时空一级退回普通空态。实现上 `showHot` 额外与 `n>0` 关联或由空结果驱动隐藏，二选一，单测锁定。
+### 4.3 数量与全局解耦（2026-10-12 复核修订）
+聚合封顶改用 `src/lib/homeData.ts` 的固定常量 `CATEGORY_HOT_LIMIT`（当前 12），**不读** `most_visited_count`。因此全局「经常访问」设为 0 时，分类聚合区照常显示（二者独立）；用户要求去掉对全局数量的继承，只保留一个最大显示条数。单测锁定「`most_visited_count=0` 仍显示聚合区」。
 
 ## 5. 分阶段实施与验证门
 

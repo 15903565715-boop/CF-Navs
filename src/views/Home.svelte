@@ -17,6 +17,7 @@
     createHomeDataMemo,
     getCategoryTreeBookmarkCount,
     getCategoryHotBookmarks,
+    CATEGORY_HOT_LIMIT,
     getHomeCategoryGroups,
     getHomeScrollTarget,
     getHomeSections,
@@ -587,7 +588,7 @@
             {@const selectedBookmarks = displayCategoryBookmarks.get(selectedCategory.id) ?? []}
             {@const rootDirectEmpty = (allCategoryBookmarks.get(category.id)?.length ?? 0) === 0 && category.children.length > 0}
             {@const showHot = rootDirectEmpty && selectedCategory.id === category.id}
-            {@const hotBookmarks = showHot ? getCategoryHotBookmarks(category, allCategoryBookmarks, settings?.most_visited_count ?? 8) : []}
+            {@const hotBookmarks = showHot ? getCategoryHotBookmarks(category, allCategoryBookmarks, CATEGORY_HOT_LIMIT) : []}
             {@const hotSourceCount = showHot ? new Set(hotBookmarks.map((bookmark) => bookmark.category_id)).size : 0}
             {@const panelId = `home-category-panel-${category.id}`}
             <section

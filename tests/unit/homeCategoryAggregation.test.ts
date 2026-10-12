@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/svelte'
 import Home from '../../src/views/Home.svelte'
-import type { PublicBookmark, PublicCategory } from '../../shared/types'
+import type { PublicBookmark, PublicCategory, PublicSettings } from '../../shared/types'
 
 const originalScrollIntoView = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollIntoView')
 
@@ -82,4 +82,15 @@ it('空私密一级（管理员可见）聚合其公开子分类的常用书签�
   expect(panel.textContent).toContain('Dashboard')
   expect(panel.querySelector('.scope-hot-caption')?.textContent).toBe('常用（来自 1 个子分类）')
   expect(panel.querySelector('.bookmark-source')?.textContent).toBe('PublicChild')
+})
+
+it('分类聚合数量与全局「经常访问」解耦：most_visited_count=0 仍显示聚合区（Issue #31 第 2 点后续）', () => {
+  const bookmarks = [bm(10, 3, 'Hot Bookmark', 5)]
+  // 全局「经常访问」数量设为 0；分类聚合改用固定上限 CATEGORY_HOT_LIMIT，不应因此被隐藏
+  const settings = { most_visited_count: 0 } as unknown as PublicSettings
+  const { container } = render(Home, { props: { categories: [emptyRoot, childA, childB], bookmarks, settings } })
+
+  const panel = container.querySelector('#home-category-panel-1') as HTMLElement
+  expect(panel.textContent).toContain('Hot Bookmark')
+  expect(panel.querySelector('.scope-hot-caption')).not.toBeNull()
 })
