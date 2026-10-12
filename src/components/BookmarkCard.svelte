@@ -9,7 +9,7 @@
   import BookmarkCardCompact from './BookmarkCardCompact.svelte'
   import { recordBookmarkClick } from '../lib/dataService'
   import BookmarkCardInfo from './BookmarkCardInfo.svelte'
-  import BookmarkContextMenu from './BookmarkContextMenu.svelte'
+  import { getLoadedBookmarkContextMenu, loadBookmarkContextMenu, preloadBookmarkContextMenuWhenIdle } from '../lib/lazyBookmarkContextMenu'
   import BookmarkLinkModal from './BookmarkLinkModal.svelte'
   import { getInfoCardTrackWidth, getIconCardTrackWidth } from '../lib/bookmarkCardLayout'
   import { createIconRetry } from '../lib/iconRetry'
@@ -88,6 +88,19 @@
   const LONG_PRESS_MS = 500
 
   $: openInNewTab = bookmark.open_method === 1
+  // 菜单组件按需加载：能打开菜单的卡片在空闲时预取，打开时若尚未就绪则等待加载完成再渲染。
+  let ContextMenuComponent = getLoadedBookmarkContextMenu()
+  $: menuAvailable = !preview && canOpenBookmarkContextMenu({ sortMode, canEdit, hasEditHandler: Boolean(onEdit), hasMoveHandler: Boolean(onMoveBookmark) })
+  $: if (menuAvailable && !ContextMenuComponent) preloadBookmarkContextMenuWhenIdle()
+  $: if (contextMenuOpen && !ContextMenuComponent) void ensureContextMenuComponent()
+  async function ensureContextMenuComponent(): Promise<void> {
+    try {
+      ContextMenuComponent = await loadBookmarkContextMenu()
+    } catch (error) {
+      console.warn('[CF-Navs] failed to load bookmark context menu', error)
+      contextMenuOpen = false
+    }
+  }
   // 图标显示状态来自独立的按 id 订阅表：图标更新只重算这张卡片，不触发首页结构数据重建。
   $: iconDisplayOverride = bookmarkIconDisplay.watch(bookmark.id)
   $: iconBookmark = applyIconDisplayOverride(bookmark, $iconDisplayOverride)
@@ -514,8 +527,9 @@
     </button>
   {/if}
 
-  {#if contextMenuOpen}
-    <BookmarkContextMenu
+  {#if contextMenuOpen && ContextMenuComponent}
+    <svelte:component
+      this={ContextMenuComponent}
       categories={moveCategories}
       currentCategoryId={bookmark.category_id}
       canMove={sortMode}

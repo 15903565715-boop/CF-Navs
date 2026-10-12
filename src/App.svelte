@@ -16,8 +16,6 @@
   import ConfirmDialog from './components/ConfirmDialog.svelte'
   import Toast from './components/Toast.svelte'
   import Home from './views/Home.svelte'
-  import Install from './views/Install.svelte'
-  import Recover from './views/Recover.svelte'
   import BookmarkLinkModal from './components/BookmarkLinkModal.svelte'
   import { api, getErrorMessage, isUnauthorizedError } from './lib/api'
   import type { BackupSelection as BackupSelectionInput } from './lib/appBackup'
@@ -125,6 +123,10 @@
   let BookmarkEditModalComponent: typeof import('./components/BookmarkEditModal.svelte').default | null = null
   let CategoryEditModalComponent: typeof import('./components/CategoryEditModal.svelte').default | null = null
   let SearchSpotlightComponent: typeof import('./components/SearchSpotlight.svelte').default | null = null
+  // 安装 / 找回密码视图只在首次部署或忘记密码时出现，不进首屏 chunk（代码审查二轮第 4 项）。
+  let InstallComponent: typeof import('./views/Install.svelte').default | null = null
+  let RecoverComponent: typeof import('./views/Recover.svelte').default | null = null
+  let lazyViewError = ''
   let confirmDialog: ConfirmDialogState | null = null
   let confirmDialogResolver: ((confirmed: boolean) => void) | null = null
 
@@ -166,6 +168,31 @@
       SearchSpotlightComponent = component
     },
   })
+
+  const ensureInstallComponent = createLazyComponentLoader({
+    load: () => import('./views/Install.svelte'),
+    getCurrent: () => InstallComponent,
+    setCurrent: (component) => {
+      InstallComponent = component
+    },
+  })
+  const ensureRecoverComponent = createLazyComponentLoader({
+    load: () => import('./views/Recover.svelte'),
+    getCurrent: () => RecoverComponent,
+    setCurrent: (component) => {
+      RecoverComponent = component
+    },
+  })
+  function loadLazyView(ensure: () => Promise<void>): void {
+    lazyViewError = ''
+    void ensure().catch((error) => {
+      console.warn('[CF-Navs] failed to load view chunk', error)
+      lazyViewError = '页面资源加载失败，请检查网络后刷新重试。'
+    })
+  }
+  // 加载期间沿用启动 splash；失败时在 splash 上给出可读提示而不是一直转圈。
+  $: if (recoverActive && !RecoverComponent) loadLazyView(ensureRecoverComponent)
+  $: if (!recoverActive && installView && !InstallComponent) loadLazyView(ensureInstallComponent)
 
   const authViewIntent = createAuthViewIntent()
   let loginModalOpen = false
@@ -1129,14 +1156,16 @@
 
 <svelte:window on:keydown={handleGlobalKeyDown} />
 
-{#if recoverActive}
-  <Recover
+{#if recoverActive && RecoverComponent}
+  <svelte:component
+    this={RecoverComponent}
     onRecovered={handleRecovered}
     onGoInstall={handleGoInstall}
     onCancel={handleRecoverCancel}
   />
-{:else if installView}
-  <Install
+{:else if !recoverActive && installView && InstallComponent}
+  <svelte:component
+    this={InstallComponent}
     mode={installView.mode}
     missingBindings={installView.missingBindings}
     schemaVersion={installView.schemaVersion}
@@ -1145,7 +1174,7 @@
     onInstall={handleInstall}
     onRetryStatus={initializeApp}
   />
-{:else if booting}
+{:else if booting || recoverActive || installView}
   <div class="app-splash">
     <div class="app-splash-card app-splash-card--loading" role="status" aria-live="polite" aria-busy="true">
       <div class="app-splash-mark" aria-hidden="true">
@@ -1162,8 +1191,13 @@
         </svg>
       </div>
       <p class="eyebrow">CF-Navs</p>
-      <h1>正在加载项目数据...</h1>
-      <p>前端状态与后端接口正在初始化，请稍候。</p>
+      {#if lazyViewError}
+        <h1>页面加载失败</h1>
+        <p>{lazyViewError}</p>
+      {:else}
+        <h1>正在加载项目数据...</h1>
+        <p>前端状态与后端接口正在初始化，请稍候。</p>
+      {/if}
       <div class="app-splash-progress" aria-hidden="true">
         <div class="app-splash-progress-meta">
           <span>初始化数据</span>

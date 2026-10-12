@@ -58,6 +58,7 @@ This document records the current performance-sensitive behavior that should not
 ## Admin Loading
 
 - The Admin route itself is lazy-loaded from the main app.
+- First-screen JS (`index-*.js`) must not statically include rarely used views: `Install` / `Recover` load on demand (the boot splash covers the load), `BookmarkContextMenu` (with `CategoryTreeSelect`) loads on first open and is idle-preloaded only for cards that can open it, and home rendering reads preset colors from `themePresetRender.ts` while the full `themePresets.ts` stays in the settings chunk. Measured with `npm run build` on 2026-10-12: index chunk 312.88 kB (gzip 104.94 kB) → 279.01 kB (gzip 94.73 kB); index CSS 99.19 kB (gzip 16.67 kB) → 82.14 kB (gzip 13.99 kB).
 - Heavy secondary admin UI should remain lazy where practical:
   - `SettingsPanel` loads only when the settings tab is opened.
   - `CategoryEditModal` loads only when the category modal is opened.
