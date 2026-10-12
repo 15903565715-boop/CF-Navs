@@ -111,25 +111,25 @@ export function getMostVisitedBookmarks(items: PublicBookmark[], limit: number):
 
 // REQ-17：一级分类自身无直属书签时，聚合其整个子树的「常用」书签。
 // 频次优先（click_count 降序）取前 N；不足 N 时按 sort 回填，保证子树非空即非空。
-// 隐私口径与公开「经常访问」一致：剔除私密书签，并（传入时）按公开分类祖先可见集过滤。
+// 隐私口径：剔除私密书签（is_private），与公开「经常访问」一致。
+// 不再按匿名公开可见集(publicCategoryIds)过滤：入参 categoryBookmarks 已按当前视图过滤
+// —— 匿名由后端剔除私密分类及其整棵子树，管理员为全量。再套用匿名可见集会把管理员
+// 正在查看的私密一级分类旗下「公开子分类」的书签错误丢弃（Issue #31 复核：空私密一级聚合为空）。
 export function getCategoryHotBookmarks(
   root: CategoryNode<PublicCategory>,
   categoryBookmarks: ReadonlyMap<number, PublicBookmark[]>,
   limit: number,
-  options?: { publicCategoryIds?: ReadonlySet<number> },
 ): PublicBookmark[] {
   const n = Math.max(0, Math.floor(Number(limit) || 0))
   if (n === 0) return []
 
   const subtreeIds = [root.id, ...root.children.map((child) => child.id)]
-  const publicCategoryIds = options?.publicCategoryIds
   const pool: PublicBookmark[] = []
   for (const id of subtreeIds) {
     const bucket = categoryBookmarks.get(id)
     if (!bucket) continue
     for (const bookmark of bucket) {
       if (bookmark.is_private === true || bookmark.is_private === 1) continue
-      if (publicCategoryIds && !publicCategoryIds.has(bookmark.category_id)) continue
       pool.push(bookmark)
     }
   }

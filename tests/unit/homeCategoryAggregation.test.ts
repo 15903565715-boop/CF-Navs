@@ -70,3 +70,16 @@ it('一级自身有直属书签时不聚合，照常显示本分类书签且无�
   expect(panel.textContent).toContain('Root Direct')
   expect(panel.querySelector('.scope-hot-caption')).toBeNull()
 })
+
+it('空私密一级（管理员可见）聚合其公开子分类的常用书签（Issue #31 复核回归）', () => {
+  const privateRoot: PublicCategory = { id: 1, parent_id: null, title: 'PrivateRoot', icon: null, sort: 0, is_private: true }
+  const publicChild: PublicCategory = { id: 2, parent_id: 1, title: 'PublicChild', icon: null, sort: 0 }
+  const bookmarks = [bm(10, 2, 'Dashboard', 3)]
+  const { container } = render(Home, { props: { categories: [privateRoot, publicChild], bookmarks, isAuthenticated: true } })
+
+  const panel = container.querySelector('#home-category-panel-1') as HTMLElement
+  // 私密一级自身无直属书签，但其公开子分类的高频书签必须聚合显示，而不是因匿名可见集被丢弃
+  expect(panel.textContent).toContain('Dashboard')
+  expect(panel.querySelector('.scope-hot-caption')?.textContent).toBe('常用（来自 1 个子分类）')
+  expect(panel.querySelector('.bookmark-source')?.textContent).toBe('PublicChild')
+})

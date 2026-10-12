@@ -136,7 +136,7 @@ describe('home navigation helpers', () => {
     expect(getCategoryHotBookmarks(tree, bm, 0)).toEqual([])
   })
 
-  it('getCategoryHotBookmarks: 全零点击按 sort 回填非空；排除私密与非公开祖先', () => {
+  it('getCategoryHotBookmarks: 全零点击按 sort 回填非空；剔除私密书签但保留子树全部公开书签', () => {
     const tree = buildCategoryForest([
       { id: 20, parent_id: null, title: 'Root', icon: null, sort: 0 },
       { id: 21, parent_id: 20, title: 'A', icon: null, sort: 0 },
@@ -147,8 +147,8 @@ describe('home navigation helpers', () => {
       [21, [mk(201, 21), mk(202, 21, { is_private: true })]],
       [22, [mk(203, 22)]],
     ])
+    // 私密书签 202 被剔除；两个子分类的公开书签 201/203 都保留（不再按匿名可见集丢弃祖先私密的公开子分类）
     expect(getCategoryHotBookmarks(tree, bm, 5).map((b) => b.id)).toEqual([201, 203])
-    expect(getCategoryHotBookmarks(tree, bm, 5, { publicCategoryIds: new Set([20, 21]) }).map((b) => b.id)).toEqual([201])
   })
 
   it('getCategoryHotBookmarks: 不改入参桶', () => {

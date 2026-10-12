@@ -45,14 +45,13 @@ export function getCategoryHotBookmarks(
   root: CategoryNode<PublicCategory>,
   categoryBookmarks: ReadonlyMap<number, PublicBookmark[]>,
   limit: number,
-  options?: { publicCategoryIds?: ReadonlySet<number> },
 ): PublicBookmark[]
 ```
 
 算法（频次优先 + 回填）：
 1. `n = Math.max(0, Math.floor(Number(limit) || 0))`；`n === 0` → `[]`。
 2. 子树 id = `[root.id, ...root.children.map((c) => c.id)]`；收集这些桶的全部书签（一本书签只在自己的 `category_id` 桶，天然不重复）。
-3. **隐私过滤**（FR-17.6）：剔除 `is_private === true/1`；若传入 `options.publicCategoryIds`，仅保留 `publicCategoryIds.has(category_id)` 的书签（公开分类祖先可见性，口径与全局区对齐；比现有 `getMostVisitedBookmarks` 多这层，修 R17-1）。
+3. **隐私过滤**（FR-17.6，2026-10-12 复核修订）：仅剔除 `is_private === true/1`。**不再**按 `publicCategoryIds`/祖先可见集过滤——入参 `categoryBookmarks`（= `allCategoryBookmarks`）已按当前视图预过滤（匿名由后端剔除私密子树，管理员为全量），再套匿名可见集会把管理员查看的私密一级旗下公开子分类书签整体丢弃，使空私密一级聚合恒空。
 4. **频次段** `hot`：`click_count > 0`，按 `click_count desc, sort, id`。
 5. **回填段** `rest`：`click_count <= 0`（或 `== null`），按 `sort, id`。
 6. 返回 `[...hot, ...rest].slice(0, n)`：满 N 即止；子树过滤后非空时结果非空（A17-7 永不空区）；两段不相交，无需去重。
@@ -68,7 +67,7 @@ export function getCategoryHotBookmarks(
 const rootDirectEmpty = (allCategoryBookmarks.get(category.id)?.length ?? 0) === 0 && category.children.length > 0
 const showHot = rootDirectEmpty && selectedCategory.id === category.id   // 「本分类」被选中（默认或点标题回来）
 const hotBookmarks = showHot
-  ? getCategoryHotBookmarks(category, allCategoryBookmarks, settings?.most_visited_count ?? 8, { publicCategoryIds })
+  ? getCategoryHotBookmarks(category, allCategoryBookmarks, settings?.most_visited_count ?? 8)
   : null
 ```
 - `selectedCategory` 由 `getHomeCategoryGroups`→`resolveHomeCategoryForRoot` 决定；DEV-17-B 使空一级默认 `selectedCategory === root`，故默认 `showHot=true`。
@@ -98,7 +97,7 @@ const hotBookmarks = showHot
 ### 6.1 单元（纯函数 + jsdom）
 - `getCategoryHotBookmarks`：
   - 子树 = root 直属 + 各二级直属；只取子树内书签。
-  - `is_private` 书签剔除；传 `publicCategoryIds` 时剔除不在集合内的（私密祖先下书签）。
+  - `is_private` 书签剔除；**不按 `publicCategoryIds`/祖先可见集过滤**（入参数据已按视图预过滤）——私密一级旗下公开子分类书签必须保留。
   - 全部有点击 → 纯频次 `click_count desc, sort, id`；
   - 部分零点击 → 频次段在前、`sort` 回填段在后，补足到 N；
   - 全部零点击 → 全按 `sort` 回填、非空；
@@ -116,7 +115,7 @@ const hotBookmarks = showHot
 
 | 风险 | 对策 |
 | --- | --- |
-| R17-1 隐私/祖先 | `getCategoryHotBookmarks` 内置 `publicCategoryIds` 过滤 + `is_private` 剔除；§6.1 双态用例 + L2 匿名/登录对比 |
+| R17-1 隐私（2026-10-12 复核修订） | `getCategoryHotBookmarks` 仅剔除 `is_private`；匿名由后端预过滤私密子树，不再在客户端套 `publicCategoryIds`（否则空私密一级聚合恒空）；§6.1 私密书签剔除 + 私密一级保留公开子分类用例 |
 | 默认选择改动破坏现有 tab/scroll-spy | 只改空一级分支（非空一级默认仍 root，无变化）；更新 `homeNavigation` 用例；L2 验证 tab 切换与标题回选 |
 | R17-3 重复渲染/图标预算 | 允许重复（OQ-17.5）但 L3 `perf:audit` 复测；聚合复用 `CategorySection`/图标缓存口径，不新建渲染路径 |
 | R17-5 冷启动回填非频次 | 文案「常用」+ 回填为 `sort` 顺序；验收说明如实描述，不宣称冷启动即高频 |
