@@ -85,9 +85,9 @@ const hotBookmarks = showHot
 
 | 阶段 | 内容 | 验证门 |
 | --- | --- | --- |
-| **1 helper** | `getCategoryHotBookmarks` | L0；单测：子树收集、隐私+祖先过滤、`click_count` 排序、回填补足、封顶、`n=0`、空子树、不改入参、同票 tie-break |
+| **1 helper** | `getCategoryHotBookmarks` | L0；单测：子树收集、仅剔除 `is_private`（**不**按祖先/`publicCategoryIds` 过滤，私密一级旗下公开子分类书签保留）、`click_count` 排序、回填补足、封顶、`n=0`、空子树、不改入参、同票 tie-break |
 | **2 接线** | `resolveHomeCategoryForRoot` 默认改 root + 更新其单测；Home 触发/渲染/小标题；`CategorySection`/`BookmarkCard` 来源 chip | L0：更新后的 `homeNavigation` 用例；jsdom 渲染 `Home`（复用 `homeCategoryFocus.test.ts` 手法）断言「空一级（首个子分类为空、他子有书签）显示聚合而非空态」「点二级 tab 切回子分类」「点标题回聚合」「来源 chip 文案」 |
-| **3 真机 L2** | 150+ 书签 / 10 一级 / 6 二级规模 | 空一级显示聚合、零点击一级按 sort 回填非空、点击本页重排、二级 tab 切换、来源 chip 在最小卡片宽度不破版、匿名/登录态聚合构成一致、刷新一致、无横向溢出；控制台/4xx-5xx 为 0 |
+| **3 真机 L2** | 150+ 书签 / 10 一级 / 6 二级规模 | 空一级显示聚合、零点击一级按 sort 回填非空、点击本页重排、二级 tab 切换、来源 chip 在最小卡片宽度不破版、匿名态私密一级不渲染且管理员态私密一级旗下公开子分类书签正确聚合（两态构成不要求一致）、刷新一致、无横向溢出；控制台/4xx-5xx 为 0 |
 | **4 收尾** | BACKLOG/CHANGELOG 回写；`perf:audit` 复跑 | L3：图标请求/缓存预算不回归 #31 第 3 点（聚合会增重复卡片渲染，R17-3） |
 
 每阶段独立提交；`Home.svelte`/`homeData.ts` 若与 REQ-16 或其它模块同轮改**串行**。
