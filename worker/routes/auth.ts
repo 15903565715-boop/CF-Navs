@@ -16,6 +16,7 @@ import { createSession } from '../lib/session'
 import { revokeSession } from '../lib/sessionRevocation'
 import { hasSessionBinding } from '../lib/sessionStore'
 import type { HonoEnv } from '../types'
+import { serverError } from '../lib/routeHelpers'
 
 const ADMIN_PASSWORD_KEY = 'admin_password'
 const MIN_PASSWORD_LENGTH = 8
@@ -36,8 +37,8 @@ authPublicRoutes.post('/login', loginRateLimit, async (c) => {
   let credentials: AdminCredentials
   try {
     credentials = await ensureAdminBootstrap(c.env)
-  } catch {
-    return c.json(fail(ErrCode.SERVER_ERROR, 'admin bootstrap failed'))
+  } catch (error) {
+    return serverError(c, 'admin bootstrap failed', error)
   }
 
   let body: LoginReq
@@ -127,8 +128,8 @@ authProtectedRoutes.post('/password', authRequired, async (c) => {
   let credentials: AdminCredentials
   try {
     credentials = await ensureAdminBootstrap(c.env, { applyCredentialReset: false })
-  } catch {
-    return c.json(fail(ErrCode.SERVER_ERROR, 'admin bootstrap failed'))
+  } catch (error) {
+    return serverError(c, 'admin bootstrap failed', error)
   }
 
   const currentPasswordOk = await verifyPassword(body.current_password, credentials.passwordHash)
@@ -141,8 +142,8 @@ authProtectedRoutes.post('/password', authRequired, async (c) => {
     await clearAllSessions(c.env, [[ADMIN_PASSWORD_KEY, await hashPassword(body.new_password)]])
     clearAllCachedSessions()
     return c.json(ok(null))
-  } catch {
-    return c.json(fail(ErrCode.SERVER_ERROR, 'failed to update password'))
+  } catch (error) {
+    return serverError(c, 'failed to update password', error)
   }
 })
 

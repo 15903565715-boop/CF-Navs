@@ -4,7 +4,7 @@ import { getSettings, syncBrowserBookmarks } from '../lib/db'
 import { createMutationReceipt } from '../lib/db/mutation'
 import { mutationJson } from '../lib/mutationResponse'
 import { fail } from '../lib/response'
-import { badRequest, readJson } from '../lib/routeHelpers'
+import { badRequest, readJson, serverError } from '../lib/routeHelpers'
 import type { HonoEnv } from '../types'
 
 const MAX_BATCH_SIZE = 100
@@ -31,8 +31,8 @@ browserSyncRoutes.post('/bookmarks', async (c) => {
     const receipt = createMutationReceipt()
     const result = await syncBrowserBookmarks(c.env.DB, body.bookmarks, receipt)
     return mutationJson(c, result, receipt)
-  } catch {
-    return c.json(fail(ErrCode.SERVER_ERROR, 'failed to sync browser bookmarks'))
+  } catch (error) {
+    return serverError(c, 'failed to sync browser bookmarks', error)
   }
 })
 

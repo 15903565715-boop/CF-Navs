@@ -1,10 +1,9 @@
 import { Hono } from 'hono'
-import { ErrCode, type ImportReq, type ImportResp } from '../../shared/types'
+import { type ImportReq, type ImportResp } from '../../shared/types'
 import { getAdminData, getSettings, importData, listBookmarksWithIconBlobs, listCategories } from '../lib/db'
 import { mergeImportData } from '../lib/db/importMerge'
 import { validateImportPayload } from '../lib/importValidation'
-import { fail } from '../lib/response'
-import { badRequest, readJson } from '../lib/routeHelpers'
+import { badRequest, readJson, serverError } from '../lib/routeHelpers'
 import { createMutationReceipt } from '../lib/db/mutation'
 import { mutationJson } from '../lib/mutationResponse'
 import type { HonoEnv } from '../types'
@@ -40,8 +39,8 @@ dataRoutes.post('/import', async (c) => {
       // 合并模式跳过的重复链接，加上校验阶段因协议不合规被丢弃的条数。
       skipped_bookmarks: (merged?.skippedBookmarks ?? 0) + validation.droppedBookmarks,
     }, receipt, { siteConfig: true })
-  } catch {
-    return c.json(fail(ErrCode.SERVER_ERROR, 'failed to import data'))
+  } catch (error) {
+    return serverError(c, 'failed to import data', error)
   }
 })
 

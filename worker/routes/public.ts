@@ -212,6 +212,7 @@ function publicDataPayload(source: Awaited<ReturnType<typeof getPublicDataSource
 }
 
 import { getClientIp } from '../middleware/rateLimit'
+import { serverError } from '../lib/routeHelpers'
 
 publicRoutes.post('/public/bookmarks/:id/click', async (c) => {
   const id = Number(c.req.param('id'))
@@ -228,8 +229,8 @@ publicRoutes.post('/public/bookmarks/:id/click', async (c) => {
     // 点击计数不提升 data_version：每次点击都提升会让所有访客的公开数据缓存整体失效。
     // 后台「访问分析」在打开时强制拉取最新聚合数据，因此这里无需破坏缓存。
     return c.json(ok(null))
-  } catch {
-    return c.json(fail(ErrCode.SERVER_ERROR, 'failed to increment click count'), 500)
+  } catch (error) {
+    return serverError(c, 'failed to increment click count', error, 500)
   }
 })
 

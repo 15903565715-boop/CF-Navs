@@ -22,6 +22,7 @@ import {
   parseSortIds,
   readJson,
   type AppContext,
+  serverError,
 } from '../lib/routeHelpers'
 import type { HonoEnv } from '../types'
 
@@ -36,14 +37,14 @@ export const categoriesRoutes = new Hono<HonoEnv>()
 function categoryWriteError(c: AppContext, error: unknown, fallback: string) {
   if (error instanceof CategoryValidationError) return badRequest(c, error.message)
   if (error instanceof CategoryConflictError) return c.json(fail(ErrCode.CONFLICT, error.message))
-  return c.json(fail(ErrCode.SERVER_ERROR, fallback))
+  return serverError(c, fallback, error)
 }
 
 categoriesRoutes.get('/', async (c) => {
   try {
     return c.json(ok(await listCategories(c.env.DB)))
-  } catch {
-    return c.json(fail(ErrCode.SERVER_ERROR, 'failed to list categories'))
+  } catch (error) {
+    return serverError(c, 'failed to list categories', error)
   }
 })
 

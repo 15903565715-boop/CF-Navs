@@ -1,12 +1,12 @@
 import { Hono } from 'hono'
-import { BUILTIN_BACKGROUND_PRESET_IDS, ErrCode, type Settings, type SettingsUpdateReq } from '../../shared/types'
+import { BUILTIN_BACKGROUND_PRESET_IDS, type Settings, type SettingsUpdateReq } from '../../shared/types'
 import { SETTINGS_KEYS } from '../../shared/settings'
 import { normalizeCardIconSize, normalizeCardSizeSetting, normalizeCategoryDisplaySetting } from '../../shared/settings'
 import { ensureBrowserSyncCategoryStatement, ensureSchema, getSettings, settingsFromPatchDefaults, updateSettings, writeSettingsPatch } from '../lib/db'
 import { createMutationReceipt } from '../lib/db/mutation'
 import { mutationJson } from '../lib/mutationResponse'
-import { fail, ok } from '../lib/response'
-import { badRequest, readJson } from '../lib/routeHelpers'
+import { ok } from '../lib/response'
+import { badRequest, readJson, serverError } from '../lib/routeHelpers'
 import { findSettingsLengthError } from '../lib/settingsLimits'
 import type { HonoEnv } from '../types'
 
@@ -36,8 +36,8 @@ export const settingsRoutes = new Hono<HonoEnv>()
 settingsRoutes.get('/', async (c) => {
   try {
     return c.json(ok(await getSettings(c.env.DB)))
-  } catch {
-    return c.json(fail(ErrCode.SERVER_ERROR, 'failed to get settings'))
+  } catch (error) {
+    return serverError(c, 'failed to get settings', error)
   }
 })
 
@@ -206,8 +206,8 @@ settingsRoutes.put('/', async (c) => {
       settings = await updateSettings(c.env.DB, settingsPatch, writeOptions)
     }
     return mutationJson(c, settings, receipt, { siteConfig: true })
-  } catch {
-    return c.json(fail(ErrCode.SERVER_ERROR, 'failed to update settings'))
+  } catch (error) {
+    return serverError(c, 'failed to update settings', error)
   }
 })
 

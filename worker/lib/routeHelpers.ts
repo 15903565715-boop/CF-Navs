@@ -20,6 +20,15 @@ export function badRequest(c: AppContext, msg: string) {
   return c.json(fail(ErrCode.BAD_REQUEST, msg))
 }
 
+/**
+ * 路由 catch 的统一收尾：客户端只拿到通用的 `code=1500` + msg，原始错误写进 Workers 日志
+ * （`[api] <msg>: <error>`），避免「接口报 1500、日志里什么都没有」。
+ */
+export function serverError(c: AppContext, msg: string, error: unknown, status?: 500) {
+  console.error(`[api] ${msg}:`, error)
+  return status ? c.json(fail(ErrCode.SERVER_ERROR, msg), status) : c.json(fail(ErrCode.SERVER_ERROR, msg))
+}
+
 export async function readJson<T>(c: AppContext): Promise<T | null> {
   try {
     return await c.req.json<T>()

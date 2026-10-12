@@ -27,7 +27,7 @@ import { cacheBookmarkIconBlob } from '../lib/bookmarkIconCache'
 import { BlockedFetchTargetError, fetchFollowingSafeRedirects } from '../lib/pageMetadata'
 import { parseBookmarkUpsertPayload } from '../lib/bookmarkPayload'
 import { fail, ok } from '../lib/response'
-import { badRequest, parseBatchIds, parseId, parseSortIds, readJson } from '../lib/routeHelpers'
+import { badRequest, parseBatchIds, parseId, parseSortIds, readJson, serverError } from '../lib/routeHelpers'
 import type { HonoEnv } from '../types'
 
 const ICON_CACHE_REFRESH_TIMEOUT_MS = 1500
@@ -37,8 +37,8 @@ export const bookmarksRoutes = new Hono<HonoEnv>()
 bookmarksRoutes.get('/', async (c) => {
  try {
   return c.json(ok(await listBookmarks(c.env.DB)))
- } catch {
-  return c.json(fail(ErrCode.SERVER_ERROR, 'failed to list bookmarks'))
+ } catch (error) {
+  return serverError(c, 'failed to list bookmarks', error)
  }
 })
 
@@ -51,8 +51,8 @@ bookmarksRoutes.post('/', async (c) => {
   const bookmark = await createBookmark(c.env.DB, parsed.value, receipt)
   if (!bookmark) return c.json(fail(ErrCode.NOT_FOUND, 'category not found'))
   return mutationJson(c, bookmark, receipt)
- } catch {
-  return c.json(fail(ErrCode.SERVER_ERROR, 'failed to create bookmark'))
+ } catch (error) {
+  return serverError(c, 'failed to create bookmark', error)
  }
 })
 
@@ -68,8 +68,8 @@ bookmarksRoutes.put('/:id', async (c) => {
   const bookmark = await updateBookmark(c.env.DB, id, parsed.value, receipt)
   if (!bookmark) return c.json(fail(ErrCode.NOT_FOUND, 'bookmark or category not found'))
   return mutationJson(c, bookmark, receipt)
- } catch {
-  return c.json(fail(ErrCode.SERVER_ERROR, 'failed to update bookmark'))
+ } catch (error) {
+  return serverError(c, 'failed to update bookmark', error)
  }
 })
 
@@ -82,8 +82,8 @@ bookmarksRoutes.delete('/:id', async (c) => {
   const deleted = await deleteBookmark(c.env.DB, id, receipt)
   if (!deleted) return c.json(fail(ErrCode.NOT_FOUND, 'bookmark not found'))
   return mutationJson(c, null, receipt)
- } catch {
-  return c.json(fail(ErrCode.SERVER_ERROR, 'failed to delete bookmark'))
+ } catch (error) {
+  return serverError(c, 'failed to delete bookmark', error)
  }
 })
 
@@ -95,8 +95,8 @@ bookmarksRoutes.post('/batch-delete', async (c) => {
   const receipt = createMutationReceipt()
   const deleted = await batchDeleteBookmarks(c.env.DB, ids, receipt)
   return mutationJson(c, { deleted }, receipt)
- } catch {
-  return c.json(fail(ErrCode.SERVER_ERROR, 'failed to batch delete bookmarks'))
+ } catch (error) {
+  return serverError(c, 'failed to batch delete bookmarks', error)
  }
 })
 
@@ -152,7 +152,7 @@ bookmarksRoutes.post('/batch-move', async (c) => {
   if (error instanceof BookmarkReorganizeError) {
    return c.json(fail(ErrCode.CONFLICT, error.message))
   }
-  return c.json(fail(ErrCode.SERVER_ERROR, 'failed to batch move bookmarks'))
+  return serverError(c, 'failed to batch move bookmarks', error)
  }
 })
 
@@ -182,7 +182,7 @@ bookmarksRoutes.post('/reorganize', async (c) => {
   if (error instanceof BookmarkReorganizeError) {
    return c.json(fail(ErrCode.CONFLICT, error.message))
   }
-  return c.json(fail(ErrCode.SERVER_ERROR, 'failed to reorganize bookmarks'))
+  return serverError(c, 'failed to reorganize bookmarks', error)
  }
 })
 
@@ -197,8 +197,8 @@ bookmarksRoutes.post('/sort', async (c) => {
   const receipt = createMutationReceipt()
   await sortBookmarks(c.env.DB, ids, receipt)
   return mutationJson(c, null, receipt)
- } catch {
-  return c.json(fail(ErrCode.SERVER_ERROR, 'failed to sort bookmarks'))
+ } catch (error) {
+  return serverError(c, 'failed to sort bookmarks', error)
  }
 })
 
@@ -232,8 +232,8 @@ bookmarksRoutes.post('/:id/icon-cache/refresh', async (c) => {
     ? current.icon_revision === bookmark.icon_revision ? 'unchanged' : current.icon_blob ? 'updated' : 'cleared'
     : 'unavailable',
   }, receipt, { headers: { 'Cache-Control': 'private, no-store' } })
- } catch {
-  return c.json(fail(ErrCode.SERVER_ERROR, 'failed to refresh bookmark icon cache'))
+ } catch (error) {
+  return serverError(c, 'failed to refresh bookmark icon cache', error)
  }
 })
 
@@ -289,8 +289,8 @@ bookmarksRoutes.post('/check-health', async (c) => {
   )
 
   return c.json(ok(checkResult))
- } catch {
-  return c.json(fail(ErrCode.SERVER_ERROR, 'failed to perform health check'))
+ } catch (error) {
+  return serverError(c, 'failed to perform health check', error)
  }
 })
 

@@ -1,10 +1,10 @@
 import { extractBearerToken } from '../middleware/auth'
 import { iconAuthReceipt } from '../lib/iconCopyMetadata'
 import { Hono } from 'hono'
-import { ErrCode } from '../../shared/types'
 import { getAdminData } from '../lib/db'
-import { fail, ok } from '../lib/response'
+import { ok } from '../lib/response'
 import type { HonoEnv } from '../types'
+import { serverError } from '../lib/routeHelpers'
 
 export const adminRoutes = new Hono<HonoEnv>()
 
@@ -17,8 +17,8 @@ adminRoutes.get('/data', async (c) => {
     return c.json(ok({ ...data, auth_receipt: receipt }), 200, {
       'Cache-Control': 'no-store',
     })
-  } catch {
-    return c.json(fail(ErrCode.SERVER_ERROR, 'failed to load admin data'))
+  } catch (error) {
+    return serverError(c, 'failed to load admin data', error)
   }
 })
 
