@@ -16,7 +16,7 @@
 //   PERF_MAX_ADMIN_DATA_TRANSFER=60000
 //   PERF_MAX_CACHE_BYTES=5242880
 //   PERF_MIN_BOOKMARK_CARDS=300
-//   PERF_MAX_ICON_REQUESTS=260
+//   PERF_MAX_ICON_REQUESTS=270
 
 import { join as pathJoin } from 'node:path'
 import { CdpSession } from './lib/cdpSession.mjs'
@@ -31,7 +31,7 @@ const MAX_FAILED_REQUESTS = readIntegerEnv('PERF_MAX_FAILED_REQUESTS', 0)
 const MAX_ADMIN_DATA_TRANSFER = readIntegerEnv('PERF_MAX_ADMIN_DATA_TRANSFER', 60000)
 const MAX_CACHE_BYTES = readIntegerEnv('PERF_MAX_CACHE_BYTES', 5 * 1024 * 1024)
 const MIN_BOOKMARK_CARDS = readIntegerEnv('PERF_MIN_BOOKMARK_CARDS', 300)
-const MAX_ICON_REQUESTS = readIntegerEnv('PERF_MAX_ICON_REQUESTS', 260)
+const MAX_ICON_REQUESTS = readIntegerEnv('PERF_MAX_ICON_REQUESTS', 270)
 
 const TARGET_ORIGIN = new URL(BASE_URL).origin
 const TARGET_URL = `${TARGET_ORIGIN}/`

@@ -6,8 +6,7 @@
   import type { CardStyle, DescriptionDisplayMode, PublicBookmark } from '../../shared/types'
   import type { CategoryTreeOption } from '../lib/categorySelect'
   import BookmarkCardCompact from './BookmarkCardCompact.svelte'
-  import { publicStore } from '../lib/stores'
-  import { api } from '../lib/api'
+  import { recordBookmarkClick } from '../lib/dataService'
   import BookmarkCardInfo from './BookmarkCardInfo.svelte'
   import BookmarkContextMenu from './BookmarkContextMenu.svelte'
   import BookmarkLinkModal from './BookmarkLinkModal.svelte'
@@ -57,6 +56,8 @@
    */
   export let iconAccessKey = ''
   export let reuseCompletedObject = false
+  /** REQ-17 聚合区：卡片来源二级分类名；详情卡显示可见 chip，极简卡经 tooltip/ARIA 承载；空串不显示。 */
+  export let sourceCategoryTitle = ''
 
   let cachedIconFailed = false
   let fallbackFailed = false
@@ -357,9 +358,8 @@
       return
     }
 
-    // Register click both locally and on server
-    publicStore.incrementClick(bookmark.id)
-    void api.public.registerClick(bookmark.id)
+    // 本地乐观 +1 + 持久化本地快照 + 异步登记服务端（见 dataService.recordBookmarkClick）
+    recordBookmarkClick(bookmark.id)
 
     if (!shouldOpenBookmarkModal({ sortMode, openMethod: bookmark.open_method })) return
     event.preventDefault()
@@ -454,6 +454,7 @@
   {#if style === 'info'}
     <BookmarkCardInfo
       {bookmark}
+      {sourceCategoryTitle}
       {openInNewTab}
       {sortMode}
       {cardLinkStyle}
@@ -477,7 +478,7 @@
       {bookmark}
       {openInNewTab}
       {sortMode}
-      {tooltipText}
+      tooltipText={sourceCategoryTitle ? tooltipText + '\n来自：' + sourceCategoryTitle : tooltipText}
       {compactIconSize}
       {compactIconStyle}
       {showIconTitle}

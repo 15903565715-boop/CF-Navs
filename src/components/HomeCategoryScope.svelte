@@ -351,7 +351,7 @@
     flex: 0 1 auto;
     min-width: 0;
     max-width: 100%;
-    color: var(--home-text-color);
+    color: var(--category-root-title-color, var(--home-text-color));
     font-size: var(--category-root-font-size, 1.35rem);
     font-weight: 700;
     line-height: 1.15;
@@ -372,6 +372,7 @@
     font-weight: 600;
     font-variant-numeric: tabular-nums;
     opacity: var(--home-muted-opacity);
+    color: var(--home-text-color);
   }
   .scope-action {
     display: inline-flex;
@@ -501,7 +502,7 @@
 
 
   .scope-tabs button {
-    color: var(--home-text-color, currentColor);
+    color: var(--category-child-title-color, var(--home-text-color, currentColor));
     font: inherit;
     font-size: var(--category-child-font-size, 0.82rem);
     font-weight: 600;
@@ -547,7 +548,7 @@
 
   .scope-tabs small {
     min-width: 1.2rem;
-    color: inherit;
+    color: var(--home-text-color);
     font-size: 0.66rem;
     font-variant-numeric: tabular-nums;
     text-align: right;

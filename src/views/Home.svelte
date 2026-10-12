@@ -16,6 +16,8 @@
     clampTitleFontSize,
     createHomeDataMemo,
     getCategoryTreeBookmarkCount,
+    getCategoryHotBookmarks,
+    CATEGORY_HOT_LIMIT,
     getHomeCategoryGroups,
     getHomeScrollTarget,
     getHomeSections,
@@ -113,6 +115,7 @@
   $: normalizedSearchQuery = normalizeSearchQuery(deferredSearchQuery)
   $: hasSearchQuery = normalizedSearchQuery.length > 0
   $: categoryTitleById = homeData.getCategoryTitleMap(sortedCategories)
+  $: categoryLeafTitleById = new Map(sortedCategories.map((category) => [category.id, category.title]))
   $: searchTextByBookmarkId = homeData.getSearchIndex(sortedBookmarks, sortedCategories, categoryTitleById)
   $: visibleBookmarks = hasSearchQuery
     ? sortedBookmarks.filter((bookmark) => bookmarkMatchesSearch(bookmark, normalizedSearchQuery, searchTextByBookmarkId))
@@ -164,6 +167,8 @@
     `--category-root-icon-size-base: ${categoryDisplay.root_icon_size}px`,
     `--category-child-font-size-base: ${categoryDisplay.child_font_size}px`,
     `--category-child-icon-size-base: ${categoryDisplay.child_icon_size}px`,
+    categoryDisplay.root_title_color ? `--category-root-title-color: ${categoryDisplay.root_title_color}` : '',
+    categoryDisplay.child_title_color ? `--category-child-title-color: ${categoryDisplay.child_title_color}` : '',
     cardTextColor ? `--card-text-color: ${cardTextColor}` : '',
     topNavPadding ? `--top-nav-padding: ${topNavPadding}` : '',
   ].filter(Boolean).join('; ')
@@ -581,6 +586,10 @@
             {@const category = group.root}
             {@const selectedCategory = group.selected}
             {@const selectedBookmarks = displayCategoryBookmarks.get(selectedCategory.id) ?? []}
+            {@const rootDirectEmpty = (allCategoryBookmarks.get(category.id)?.length ?? 0) === 0 && category.children.length > 0}
+            {@const showHot = rootDirectEmpty && selectedCategory.id === category.id}
+            {@const hotBookmarks = showHot ? getCategoryHotBookmarks(category, allCategoryBookmarks, CATEGORY_HOT_LIMIT) : []}
+            {@const hotSourceCount = showHot ? new Set(hotBookmarks.map((bookmark) => bookmark.category_id)).size : 0}
             {@const panelId = `home-category-panel-${category.id}`}
             <section
               class="root-category-group"
@@ -659,9 +668,13 @@
                     />
                   {/each}
                 {:else}
+                  {#if showHot && hotBookmarks.length > 0}
+                    <p class="scope-hot-caption">常用（来自 {hotSourceCount} 个子分类）</p>
+                  {/if}
                   <CategorySection
                     category={selectedCategory}
-                    bookmarks={selectedBookmarks}
+                    bookmarks={showHot ? hotBookmarks : selectedBookmarks}
+                    sourceCategoryTitles={showHot ? categoryLeafTitleById : undefined}
                     level={2}
                     showHeading={false}
                     inlineActions={true}
@@ -831,6 +844,14 @@
     outline: none;
   }
 
+  .scope-hot-caption {
+    margin: 0 0 0.1rem;
+    color: var(--home-text-color, currentColor);
+    font-size: 0.78rem;
+    font-weight: 600;
+    opacity: var(--home-muted-opacity, 0.72);
+  }
+
   .scope-section-list:focus-visible {
     outline: 2px solid color-mix(in srgb, var(--home-accent-color) 46%, transparent);
     outline-offset: 6px;
@@ -864,14 +885,15 @@
     border-bottom: 1px solid color-mix(in srgb, var(--home-text-color) 14%, transparent);
   }
 
-  .search-group-header h2,
   .search-group-header span {
     margin: 0;
     color: var(--home-text-color);
   }
 
   .search-group-header h2 {
+    margin: 0;
     min-width: 0;
+    color: var(--category-root-title-color, var(--home-text-color));
     font-size: 1.28rem;
     line-height: 1.25;
     overflow-wrap: anywhere;

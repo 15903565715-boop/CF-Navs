@@ -24,6 +24,7 @@ This document records the current performance-sensitive behavior that should not
 ## Bookmark Icons
 
 - Normal home rendering may lazy-load bookmark icons, but changes must not increase same-origin Cloudflare Worker request counts for the same browsing scenario without a measured budget update.
+- `perf:audit` 的图标请求预算（`PERF_MAX_ICON_REQUESTS`）为 **270**（2026-10-12 由 260 上调）。原 260 是 #31 第 3 点的基线（~255）；REQ-17 的一级分类聚合「常用」区固定上限 `CATEGORY_HOT_LIMIT=12`（与全局 `most_visited_count` 解耦）会让每个「空一级 + 有子分类」各多渲染至多 4 张卡片/图标，实测全流程由 ~255 升到 ~262。这是对已请求功能的有界、经测量的预算上调；突发并发仍受 #31 第 3 点的有界调度器约束，上调的只是总请求数上限。
 - HTTP(S) bookmark icons may use same-origin proxy URLs only where the current runtime path already does so.
 - Icon rendering should keep native lazy loading, async decoding, fixed image dimensions, and low fetch priority for bookmark icons.
 - Failed icon handling should prefer stable fallback behavior over repeated retries in the same interaction path.

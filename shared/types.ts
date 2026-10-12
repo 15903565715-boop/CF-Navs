@@ -120,6 +120,8 @@ export interface CategoryDisplaySetting {
   root_icon_size: number // 一级分类图标尺寸 (14-36px)
   child_font_size: number // 二级分类标题字号 (11-24px)
   child_icon_size: number // 二级分类图标尺寸 (12-32px)
+  root_title_color: string // 一级分类标题颜色，空串=跟随主题
+  child_title_color: string // 二级分类标题颜色，空串=跟随主题
 }
 
 export interface ContentLayoutSetting {

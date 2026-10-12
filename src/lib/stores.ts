@@ -233,6 +233,15 @@ function createAdminStore() {
       update((state) => ({ ...state, data: { ...state.data, categories }, loaded: true, error: null })),
     setBookmarks: (bookmarks: Bookmark[]) =>
       update((state) => ({ ...state, data: { ...state.data, bookmarks }, loaded: true, error: null })),
+    incrementClick: (bookmarkId: number) =>
+      update((state) => ({
+        ...state,
+        data: {
+          ...state.data,
+          bookmarks: state.data.bookmarks.map((bm) =>
+            bm.id === bookmarkId ? { ...bm, click_count: (bm.click_count ?? 0) + 1 } : bm),
+        },
+      })),
     setSettings: (settings: Settings | null) =>
       update((state) => ({ ...state, data: { ...state.data, settings }, loaded: true, error: null })),
     replaceData: (data: AdminData) => set({ data, loading: false, loaded: true, error: null }),

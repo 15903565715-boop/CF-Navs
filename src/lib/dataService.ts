@@ -250,6 +250,23 @@ export async function refreshVisibleData(): Promise<void> {
   }
 }
 
+// 书签点击计数：本地乐观 +1，并把乐观值写回「当前版本」的本地快照，再异步登记到服务端。
+// 点击刻意不提升 data_version（避免公开聚合缓存整体失效，见 #31 第 3 点），因此仅靠内存乐观值
+// 不够：刷新 / 焦点恢复会先用旧快照覆盖内存，再因版本未变而短路、不重拉服务端新值，表现为
+// 「刷新多次都不更新，直到进后台强制重拉」。把乐观值持久化进同版本快照即可让本设备刷新保持一致。
+export function recordBookmarkClick(bookmarkId: number): void {
+  publicStore.incrementClick(bookmarkId)
+  if (isLoggedIn()) {
+    // 登录态首页数据由后台快照派生，必须同步后台 store 并持久化，否则刷新会被旧后台快照覆盖。
+    adminStore.incrementClick(bookmarkId)
+    void persistCurrentAdminData()
+  } else {
+    const data = get(publicStore).data
+    if (data) void writeCachedPublicData(data, currentDataVersion)
+  }
+  void api.public.registerClick(bookmarkId)
+}
+
 function updatePublicDataLocally(transform: (data: PublicData) => PublicData): boolean {
   const current = get(publicStore).data
   if (!current) return false

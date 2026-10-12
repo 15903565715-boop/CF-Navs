@@ -19,7 +19,7 @@ import { ErrCode } from '../../shared/types'
 const { api, publicCache, adminCache, dataHooks } = vi.hoisted(() => ({
   api: {
     data: { version: vi.fn() },
-    public: { getData: vi.fn() },
+    public: { getData: vi.fn(), registerClick: vi.fn() },
     admin: { getData: vi.fn() },
     bookmarks: { refreshIconCache: vi.fn() },
   },
@@ -74,6 +74,7 @@ import {
   isLoggedIn,
   refreshLoggedInData,
   readAdminDataForEdit,
+  recordBookmarkClick,
   refreshPublicData,
   refreshVisibleData,
 } from '../../src/lib/dataService'
@@ -103,7 +104,7 @@ const settings: Settings = {
   card_size: { width: 80, height: 60 },
   card_style: 'info',
   card_icon_size: 60,
-  category_display: { root_font_size: 16, root_icon_size: 20, child_font_size: 14, child_icon_size: 18 },
+  category_display: { root_font_size: 16, root_icon_size: 20, child_font_size: 14, child_icon_size: 18, root_title_color: '', child_title_color: '' },
   card_show_description: true,
   card_description_mode: 'always',
   card_background_color: '#ffffff',
@@ -265,6 +266,46 @@ describe('dataService.refreshPublicData', () => {
     expect(result).toBeNull()
     expect(api.public.getData).not.toHaveBeenCalled()
     expect(get(publicStore).data).toBeNull()
+  })
+})
+
+describe('dataService.recordBookmarkClick', () => {
+  it('persists the optimistic click into the same-version snapshot so a refresh keeps it (anonymous)', async () => {
+    const seeded: PublicData = { ...makePublicData('v1'), bookmarks: [{ ...makePublicBookmark(bookmark), click_count: 0 }] }
+    applyPublicData(seeded, 'v1')
+
+    recordBookmarkClick(bookmark.id)
+
+    // 内存乐观 +1
+    expect(get(publicStore).data?.bookmarks[0].click_count).toBe(1)
+    // 乐观值写回「当前版本」快照——否则刷新会用旧快照回退计数
+    const persisted = publicCache.writeCachedPublicData.mock.calls.at(-1)
+    expect(persisted?.[1]).toBe('v1')
+    expect(persisted?.[0].bookmarks[0].click_count).toBe(1)
+
+    // 用持久化快照模拟同版本刷新:计数必须保持,且因版本未变不重拉完整数据
+    publicStore.reset()
+    publicCache.readCachedPublicDataEntry.mockResolvedValueOnce({ data: persisted![0], version: 'v1' })
+    api.data.version.mockResolvedValueOnce({ version: 'v1', site_title: 'CF-Navs', public_mode: true })
+
+    await refreshPublicData()
+
+    expect(get(publicStore).data?.bookmarks[0].click_count).toBe(1)
+    expect(api.public.getData).not.toHaveBeenCalled()
+  })
+
+  it('increments and persists the admin snapshot when logged in', () => {
+    authStore.setSession(session)
+    adminStore.replaceData(makeAdminData('v1'))
+    applyPublicData({ ...makePublicData('v1'), bookmarks: [{ ...makePublicBookmark(bookmark), click_count: 0 }] }, 'v1')
+
+    recordBookmarkClick(bookmark.id)
+
+    expect(get(adminStore).data.bookmarks.find((b) => b.id === bookmark.id)?.click_count).toBe(1)
+    expect(get(publicStore).data?.bookmarks[0].click_count).toBe(1)
+    // 登录态持久化后台快照,不写公开快照
+    expect(adminCache.writeCachedAdminData).toHaveBeenCalled()
+    expect(publicCache.writeCachedPublicData).not.toHaveBeenCalled()
   })
 })
 
