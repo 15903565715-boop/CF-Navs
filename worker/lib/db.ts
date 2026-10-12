@@ -49,7 +49,6 @@ export {
   getSettingValues,
   setSettingValue,
   getDataVersion,
-  touchDataVersion,
   updateSettings,
   writeSettingsPatch,
 } from './db/settings'
@@ -57,7 +56,14 @@ export {
 export { importData } from './db/import'
 
 export {
+  Mutation,
+  commitMutation,
+  createMutationReceipt,
+  type MutationReceipt,
+} from './db/mutation'
+
+export {
   BROWSER_SYNC_CATEGORY_TITLE,
-  ensureBrowserSyncCategory,
+  ensureBrowserSyncCategoryStatement,
   syncBrowserBookmarks,
 } from './db/browserSync'

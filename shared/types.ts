@@ -184,6 +184,8 @@ export interface ApiResponse<T = unknown> {
   code: number // 0=成功，非0=错误
   msg: string
   data: T
+  /** 写接口确实提升了数据版本时附带的新版本号（附加字段，见 API_CONTRACT「通用约定」）。 */
+  data_version?: string
 }
 
 // 错误码约定

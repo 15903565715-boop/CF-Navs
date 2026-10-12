@@ -19,15 +19,14 @@ import {
  getBookmarkIconData,
  listBookmarks,
  sortBookmarks,
- touchDataVersion,
  updateBookmark,
 } from '../lib/db'
-import { invalidatePublicDataCache } from '../lib/cache'
+import { createMutationReceipt } from '../lib/db/mutation'
+import { mutationJson } from '../lib/mutationResponse'
 import { cacheBookmarkIconBlob } from '../lib/bookmarkIconCache'
 import { parseBookmarkUpsertPayload } from '../lib/bookmarkPayload'
 import { fail, ok } from '../lib/response'
 import { badRequest, parseBatchIds, parseId, parseSortIds, readJson } from '../lib/routeHelpers'
-import { invalidateRuntimeDataCache } from '../lib/runtimeCache'
 import type { HonoEnv } from '../types'
 
 const ICON_CACHE_REFRESH_TIMEOUT_MS = 1500
@@ -47,13 +46,10 @@ bookmarksRoutes.post('/', async (c) => {
  if (!parsed.ok) return badRequest(c, parsed.message)
 
  try {
-  const bookmark = await createBookmark(c.env.DB, parsed.value)
+  const receipt = createMutationReceipt()
+  const bookmark = await createBookmark(c.env.DB, parsed.value, receipt)
   if (!bookmark) return c.json(fail(ErrCode.NOT_FOUND, 'category not found'))
-
-  await touchDataVersion(c.env.DB)
-  invalidateRuntimeDataCache()
-  invalidatePublicDataCache(c, c.req.url)
-  return c.json(ok(bookmark))
+  return mutationJson(c, bookmark, receipt)
  } catch {
   return c.json(fail(ErrCode.SERVER_ERROR, 'failed to create bookmark'))
  }
@@ -67,13 +63,10 @@ bookmarksRoutes.put('/:id', async (c) => {
  if (!parsed.ok) return badRequest(c, parsed.message)
 
  try {
-  const bookmark = await updateBookmark(c.env.DB, id, parsed.value)
+  const receipt = createMutationReceipt()
+  const bookmark = await updateBookmark(c.env.DB, id, parsed.value, receipt)
   if (!bookmark) return c.json(fail(ErrCode.NOT_FOUND, 'bookmark or category not found'))
-
-  await touchDataVersion(c.env.DB)
-  invalidateRuntimeDataCache()
-  invalidatePublicDataCache(c, c.req.url)
-  return c.json(ok(bookmark))
+  return mutationJson(c, bookmark, receipt)
  } catch {
   return c.json(fail(ErrCode.SERVER_ERROR, 'failed to update bookmark'))
  }
@@ -84,12 +77,10 @@ bookmarksRoutes.delete('/:id', async (c) => {
  if (id == null) return badRequest(c, 'invalid bookmark id')
 
  try {
-  const deleted = await deleteBookmark(c.env.DB, id)
+  const receipt = createMutationReceipt()
+  const deleted = await deleteBookmark(c.env.DB, id, receipt)
   if (!deleted) return c.json(fail(ErrCode.NOT_FOUND, 'bookmark not found'))
-  await touchDataVersion(c.env.DB)
-  invalidateRuntimeDataCache()
-  invalidatePublicDataCache(c, c.req.url)
-  return c.json(ok(null))
+  return mutationJson(c, null, receipt)
  } catch {
   return c.json(fail(ErrCode.SERVER_ERROR, 'failed to delete bookmark'))
  }
@@ -100,13 +91,9 @@ bookmarksRoutes.post('/batch-delete', async (c) => {
  const ids = parseBatchIds(body?.ids)
  if (!ids) return badRequest(c, 'invalid batch delete payload')
  try {
-  const deleted = await batchDeleteBookmarks(c.env.DB, ids)
-  if (deleted > 0) {
-   await touchDataVersion(c.env.DB)
-   invalidateRuntimeDataCache()
-   invalidatePublicDataCache(c, c.req.url)
-  }
-  return c.json(ok({ deleted }))
+  const receipt = createMutationReceipt()
+  const deleted = await batchDeleteBookmarks(c.env.DB, ids, receipt)
+  return mutationJson(c, { deleted }, receipt)
  } catch {
   return c.json(fail(ErrCode.SERVER_ERROR, 'failed to batch delete bookmarks'))
  }
@@ -152,16 +139,14 @@ bookmarksRoutes.post('/batch-move', async (c) => {
  }
 
  try {
-  const moved = await batchMoveBookmarks(c.env.DB, payload)
-  await touchDataVersion(c.env.DB)
-  invalidateRuntimeDataCache()
-  invalidatePublicDataCache(c, c.req.url)
+  const receipt = createMutationReceipt()
+  const moved = await batchMoveBookmarks(c.env.DB, payload, receipt)
   const response: BookmarkBatchMoveResp = {
    moved,
    category_id: categoryId,
    position,
   }
-  return c.json(ok(response))
+  return mutationJson(c, response, receipt)
  } catch (error) {
   if (error instanceof BookmarkReorganizeError) {
    return c.json(fail(ErrCode.CONFLICT, error.message))
@@ -187,11 +172,9 @@ bookmarksRoutes.post('/reorganize', async (c) => {
  }
 
  try {
-  await reorganizeBookmarks(c.env.DB, categoryOrders)
-  await touchDataVersion(c.env.DB)
-  invalidateRuntimeDataCache()
-  invalidatePublicDataCache(c, c.req.url)
-  return c.json(ok(null))
+  const receipt = createMutationReceipt()
+  await reorganizeBookmarks(c.env.DB, categoryOrders, receipt)
+  return mutationJson(c, null, receipt)
  } catch (error) {
   // 请求集合与库中状态不一致（分类被删、书签集合过期）属于状态冲突，
   // 客户端应刷新后重试，不能笼统报成服务端错误。
@@ -210,11 +193,9 @@ bookmarksRoutes.post('/sort', async (c) => {
  }
 
  try {
-  await sortBookmarks(c.env.DB, ids)
-  await touchDataVersion(c.env.DB)
-  invalidateRuntimeDataCache()
-  invalidatePublicDataCache(c, c.req.url)
-  return c.json(ok(null))
+  const receipt = createMutationReceipt()
+  await sortBookmarks(c.env.DB, ids, receipt)
+  return mutationJson(c, null, receipt)
  } catch {
   return c.json(fail(ErrCode.SERVER_ERROR, 'failed to sort bookmarks'))
  }
@@ -228,28 +209,28 @@ bookmarksRoutes.post('/:id/icon-cache/refresh', async (c) => {
   const bookmark = await getBookmarkIconData(c.env.DB, id)
   if (!bookmark) return c.json(fail(ErrCode.NOT_FOUND, 'bookmark not found'))
 
+  // 显式刷新若改变了可观察的图标身份（摘要或是否有正文），在同一 batch 里提升
+  // data_version，其它设备的版本校验才能发现；同字节重写不提升。
+  const receipt = createMutationReceipt()
   const iconCache = await cacheBookmarkIconBlob(
    c.env.DB,
    id,
    bookmark.icon,
    bookmark.icon_source,
    ICON_CACHE_REFRESH_TIMEOUT_MS,
+   receipt,
   )
 
   // Re-read after asynchronous work; a newer edit/refresh may have won the conditional write.
   const current = await getBookmarkIconData(c.env.DB, id)
   if (!current) return c.json(fail(ErrCode.NOT_FOUND, 'bookmark not found'))
-  if (iconCache.wrote && current.icon_revision !== bookmark.icon_revision) {
-   invalidateRuntimeDataCache()
-   invalidatePublicDataCache(c, c.req.url)
-  }
-  return c.json(ok({
+  return mutationJson(c, {
    icon_blob: current.icon_blob,
    icon_descriptor: bookmarkIconDescriptor(id, current),
    icon_update: iconCache.wrote
     ? current.icon_revision === bookmark.icon_revision ? 'unchanged' : current.icon_blob ? 'updated' : 'cleared'
     : 'unavailable',
-  }), 200, { 'Cache-Control': 'private, no-store' })
+  }, receipt, { headers: { 'Cache-Control': 'private, no-store' } })
  } catch {
   return c.json(fail(ErrCode.SERVER_ERROR, 'failed to refresh bookmark icon cache'))
  }

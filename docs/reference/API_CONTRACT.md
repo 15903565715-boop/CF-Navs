@@ -9,6 +9,7 @@
 - 业务错误通常仍返回 HTTP 200，用 `code` 区分；认证中间件拦截返回 HTTP 401 且 `code=1001`。
 - 受保护的写操作使用 `Authorization: Bearer <token>` 鉴权；安装接口使用一次性的 `X-Setup-Token`，公开点击计数接口不要求登录。
 - 时间戳使用毫秒数，即 `Date.now()`。
+- **写响应的 `data_version`（附加字段）**：改变聚合数据的受保护写接口（分类/书签增删改、批量删除/移动、排序、整理、设置保存、导入、浏览器同步、显式图标刷新）成功且确实提升了数据版本时，包络额外携带 `data_version: string`，值即本次提交后的 `/api/data/version` 版本号：`{ code: 0, msg, data, data_version }`。业务写入与版本提升在**同一个 D1 batch（同一事务）**中提交（`worker/lib/db/mutation.ts` 的 `Mutation` / `commitMutation`），不会出现「数据已变、版本未变」或对外先后变化两次。未写入任何数据（404、批量集合全部不存在、空设置补丁）时不提升版本、不失效缓存，也不带该字段。该字段只在包络层出现，`data` 形状不变；旧客户端忽略即可，客户端也不应依赖它一定存在。
 
 ## 鉴权规则
 
@@ -317,7 +318,7 @@ HTTP(S) 图标抓取成功后，代理会直接返回图片字节并写入 Cloud
 - 传输使用 private/no-store、CDN no-store；只有已知协议的成功应用数据可在本机许可内物化，不克隆原 HTTP 响应。普通对象代理 no-store 拒收与 SW 不接管策略不变。
 - 聚合和版本响应在迁移完成后附 dataset_epoch 与 icon_local_copy_protocol=1。已鉴权响应的 auth_receipt 含 cache_scope、checked_at、expires_at（毫秒）；cache_scope 是非凭据会话标识，不能独立授权。图片下载不续租，图标 key 不续租；回执遵循原有会话撤销缓存窗口。
 - 书签轻量字段 icon_revision/icon_write_epoch 与聚合数据的 version、dataset_epoch 同批读取。内部数据集代次不进入用户 Settings 或可信备份输入；导入重建表时原子更换代次，返回带新身份的聚合数据。当前 merge 也通过重建/重映射实现，因此同样更换代次。
-- setIconBlob 条件提交保护数据集、源、代次和预期正文/版本；legacy SQL 改正文时摘要失效，改源时同时清旧正文。已发布内容变化与 data_version 在同一数据库更新边界发布；仅补充未知摘要不逐图触发全量刷新。
+- setIconBlob 条件提交保护数据集、源、代次和预期正文/版本；legacy SQL 改正文时摘要失效，改源时同时清旧正文。已发布内容变化与 data_version 在同一数据库更新边界发布；匿名图标代理与可信副本协议仅补充未知摘要时不逐图触发全量刷新。管理员显式调用 `POST /api/bookmarks/:id/icon-cache/refresh` 时，只要可观察的图标身份（`icon_revision` 或是否有正文 `icon_cached`）发生变化（包括「未知摘要 → 已知摘要」），就在同一 batch 里提升 data_version 并随响应返回 `data_version`；同一字节的不同编码不提升。
 
 ## HTML 入口响应策略
 

@@ -9,7 +9,8 @@ import {
   settingsFromRawMap,
 } from '../settingsData'
 import { SETTINGS_LIST_SQL, DATA_VERSION_KEY } from './sql'
-import { createDataVersion, buildSettingsPatchParams } from './settingsHelpers'
+import { buildSettingsPatchParams } from './settingsHelpers'
+import { Mutation, commitMutation, type MutationReceipt } from './mutation'
 
 async function readRawSettings(db: D1Database): Promise<Map<string, unknown>> {
   const { results } = await db.prepare(SETTINGS_LIST_SQL).all<{ key: string; value: string | null }>()
@@ -130,12 +131,6 @@ export function dataVersionFromValue(raw: string | null): string {
   return '0'
 }
 
-export async function touchDataVersion(db: D1Database): Promise<string> {
-  const version = createDataVersion()
-  await setSettingValue(db, DATA_VERSION_KEY, version)
-  return version
-}
-
 export function settingsPatchStatement(db: D1Database, patch: Partial<Settings>): D1PreparedStatement | null {
   const built = buildSettingsPatchParams(patch)
   if (!built) return null
@@ -146,15 +141,36 @@ export function settingsPatchStatement(db: D1Database, patch: Partial<Settings>)
     .bind(...built.params)
 }
 
-// 部分更新 Settings（只更新传入的 key），batch 提交后返回全量
+export interface SettingsWriteOptions {
+  /** 同一 batch 里幂等创建「浏览器新增收藏」根分类（开启浏览器同步时）。 */
+  extraStatements?: D1PreparedStatement[]
+  receipt?: MutationReceipt
+}
+
+// 部分更新 Settings（只更新传入的 key）：写入、data_version 提升与回读全量放在同一个 batch。
 export async function updateSettings(
   db: D1Database,
   patch: Partial<Settings>,
+  options: SettingsWriteOptions = {},
 ): Promise<Settings> {
-  await settingsPatchStatement(db, patch)?.run()
-  return await getSettings(db)
+  const mutation = new Mutation(db).add(...writeStatements(db, patch, options))
+  if (!mutation.hasWrites) return await getSettings(db)
+  const results = await mutation.bump().add(db.prepare(SETTINGS_LIST_SQL)).commit(options.receipt)
+  const rows = (results.at(-1)?.results ?? []) as Array<{ key: string; value: string | null }>
+  return settingsFromRawMap(readRawSettingsRows(rows))
 }
 
-export async function writeSettingsPatch(db: D1Database, patch: Partial<Settings>): Promise<void> {
-  await settingsPatchStatement(db, patch)?.run()
+export async function writeSettingsPatch(
+  db: D1Database,
+  patch: Partial<Settings>,
+  options: SettingsWriteOptions = {},
+): Promise<void> {
+  const statements = writeStatements(db, patch, options)
+  if (statements.length === 0) return
+  await commitMutation(db, statements, options.receipt)
+}
+
+function writeStatements(db: D1Database, patch: Partial<Settings>, options: SettingsWriteOptions): D1PreparedStatement[] {
+  const statement = settingsPatchStatement(db, patch)
+  return [...(options.extraStatements ?? []), ...(statement ? [statement] : [])]
 }

@@ -8,10 +8,10 @@ import {
   batchDeleteCategories,
   listCategories,
   sortCategories,
-  touchDataVersion,
   updateCategory,
 } from '../lib/db'
-import { invalidatePublicDataCache } from '../lib/cache'
+import { createMutationReceipt } from '../lib/db/mutation'
+import { mutationJson } from '../lib/mutationResponse'
 import { fail, ok } from '../lib/response'
 import {
   badRequest,
@@ -23,7 +23,6 @@ import {
   readJson,
   type AppContext,
 } from '../lib/routeHelpers'
-import { invalidateRuntimeDataCache } from '../lib/runtimeCache'
 import type { HonoEnv } from '../types'
 
 function parseParentId(value: unknown): number | null | undefined {
@@ -58,16 +57,14 @@ categoriesRoutes.post('/', async (c) => {
   }
 
   try {
+    const receipt = createMutationReceipt()
     const category = await createCategory(c.env.DB, {
       title: body.title.trim(),
       icon: body.icon ?? null,
       parent_id: parentId ?? null,
       is_private: body.is_private === true,
-    })
-    await touchDataVersion(c.env.DB)
-    invalidateRuntimeDataCache()
-    invalidatePublicDataCache(c, c.req.url)
-    return c.json(ok(category))
+    }, receipt)
+    return mutationJson(c, category, receipt)
   } catch (error) {
     return categoryWriteError(c, error, 'failed to create category')
   }
@@ -86,17 +83,15 @@ categoriesRoutes.put('/:id', async (c) => {
   }
 
   try {
+    const receipt = createMutationReceipt()
     const category = await updateCategory(c.env.DB, id, {
       title: body.title.trim(),
       icon: body.icon ?? null,
       parent_id: body.parent_id === undefined ? undefined : parentId,
       is_private: body.is_private,
-    })
+    }, receipt)
     if (!category) return c.json(fail(ErrCode.NOT_FOUND, 'category not found'))
-    await touchDataVersion(c.env.DB)
-    invalidateRuntimeDataCache()
-    invalidatePublicDataCache(c, c.req.url)
-    return c.json(ok(category))
+    return mutationJson(c, category, receipt)
   } catch (error) {
     return categoryWriteError(c, error, 'failed to update category')
   }
@@ -107,12 +102,10 @@ categoriesRoutes.delete('/:id', async (c) => {
   if (id == null) return badRequest(c, 'invalid category id')
 
   try {
-    const deleted = await deleteCategory(c.env.DB, id)
+    const receipt = createMutationReceipt()
+    const deleted = await deleteCategory(c.env.DB, id, receipt)
     if (!deleted) return c.json(fail(ErrCode.NOT_FOUND, 'category not found'))
-    await touchDataVersion(c.env.DB)
-    invalidateRuntimeDataCache()
-    invalidatePublicDataCache(c, c.req.url)
-    return c.json(ok(null))
+    return mutationJson(c, null, receipt)
   } catch (error) {
     return categoryWriteError(c, error, 'failed to delete category')
   }
@@ -123,13 +116,9 @@ categoriesRoutes.post('/batch-delete', async (c) => {
   const ids = parseBatchIds(body?.ids)
   if (!ids) return badRequest(c, 'invalid batch delete payload')
   try {
-    const result = await batchDeleteCategories(c.env.DB, ids)
-    if (result.deleted > 0 || result.deleted_bookmarks > 0) {
-      await touchDataVersion(c.env.DB)
-      invalidateRuntimeDataCache()
-      invalidatePublicDataCache(c, c.req.url)
-    }
-    return c.json(ok(result))
+    const receipt = createMutationReceipt()
+    const result = await batchDeleteCategories(c.env.DB, ids, receipt)
+    return mutationJson(c, result, receipt)
   } catch (error) {
     return categoryWriteError(c, error, 'failed to batch delete categories')
   }
@@ -144,11 +133,9 @@ categoriesRoutes.post('/sort', async (c) => {
   }
 
   try {
-    await sortCategories(c.env.DB, { parent_id: parentId, ids })
-    await touchDataVersion(c.env.DB)
-    invalidateRuntimeDataCache()
-    invalidatePublicDataCache(c, c.req.url)
-    return c.json(ok(null))
+    const receipt = createMutationReceipt()
+    await sortCategories(c.env.DB, { parent_id: parentId, ids }, receipt)
+    return mutationJson(c, null, receipt)
   } catch (error) {
     return categoryWriteError(c, error, 'failed to sort categories')
   }

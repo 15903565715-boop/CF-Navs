@@ -9,6 +9,8 @@
 
 ### 修复
 
+- **写操作统一提交，data_version 与业务写入同事务**（代码审查第 1 项）：新增 `worker/lib/db/mutation.ts`（`Mutation` / `commitMutation`），分类、书签、排序、整理、批量移动/删除、设置、导入、浏览器同步的业务写入与 `data_version` 提升放进同一个 D1 batch，取代各路由约 15 处「写入后再单独 `touchDataVersion` + 两次失效」的重复代码；路由统一经 `worker/lib/mutationResponse.ts` 的 `mutationJson` 收尾（按收据失效缓存）。修复：两步之间失败会留下「数据已变、版本未变」；改图标时触发器与路由先后两次对外提升版本（现折叠为同事务内一次，响应版本即库中版本）；显式图标刷新（`POST /api/bookmarks/:id/icon-cache/refresh`）改变图标身份时漏提升版本；404 / 集合全部不存在时不再白白提升版本、打穿缓存。浏览器同步改为单 batch 写入（原逐条往返），开启同步时创建同步分类与设置写入同 batch。写响应包络新增附加字段 `data_version`（见 API_CONTRACT），`data` 形状不变。新增 `tests/unit/mutationCommit.test.ts`（13 项，真实 SQLite：同事务回滚、守卫不提升、触发器折叠、分块删除、显式/匿名图标刷新差异、设置回读、响应字段与失效），并更新受影响的 mock 测试。
+
 - **JWT 签名密钥跨 isolate 失效**（代码审查 P0）：`worker/lib/jwt.ts` 的密钥内存缓存原先永不过期，改密码 / 凭据重置 / `/recover` 触发的 `rotateJwtSecret` 只更新当前 isolate，其它 isolate 会一直接受旧 token、并对新 token 随机返回 401。现缓存 TTL 为 `JWT_SECRET_CACHE_TTL_MS`（15 秒，与 session 内存缓存对齐）；会话校验与图标访问授权在校验失败时经 `refreshJwtSecretAfterVerifyFailure` 按需重读一次 D1（同一 isolate 至少间隔 1 秒，防止伪造 token 放大 D1 读）。新增 4 项单测覆盖 TTL 过期、跨 isolate 轮换、失败重读与限频。
 
 ## v0.8.3 — 2026-10-12
