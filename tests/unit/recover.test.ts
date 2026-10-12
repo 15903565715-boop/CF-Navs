@@ -29,6 +29,8 @@ class FakeStatement {
 }
 
 class FakeDb {
+  failSettingsWrite = false
+  settingsWriteStatements = 0
   readonly settings: Map<string, string>
   readonly rateLimits = new Map<string, RateRow>()
 
@@ -58,8 +60,10 @@ class FakeDb {
       return { success: true, meta: { changes: 1 } }
     }
     if (sql.includes('INSERT INTO settings')) {
-      const [key, value] = args as [string, string]
-      this.settings.set(key, value)
+      if (this.failSettingsWrite) throw new Error('D1 write failed')
+      // setSettingValues writes several (key, value) pairs in one statement.
+      for (let index = 0; index < args.length; index += 2) this.settings.set(args[index] as string, args[index + 1] as string)
+      this.settingsWriteStatements += 1
       return { success: true, meta: { changes: 1 } }
     }
     throw new Error(`unhandled exec sql: ${sql}`)
@@ -190,6 +194,25 @@ describe('POST /api/recover', () => {
     expect(JSON.parse(db.settings.get('admin_bootstrap_username')!)).toBe('admin')
     // jwt secret 已轮换
     expect(JSON.parse(db.settings.get('jwt_secret')!)).not.toBe('old-secret')
+  })
+
+  it('writes the new password and the rotated jwt secret in one statement', async () => {
+    const db = new FakeDb(installedSeed())
+    const env = createEnv(db, createKv())
+    const res = await post(env, { password: 'abcd1234' })
+    expect(res.status).toBe(200)
+    // jwt_secret + admin_password in the same upsert; a later session write may add jwt reads only.
+    expect(db.settingsWriteStatements).toBe(1)
+  })
+
+  it('leaves both the password and the session secret untouched when the atomic write fails', async () => {
+    const db = new FakeDb(installedSeed())
+    db.failSettingsWrite = true
+    const env = createEnv(db, createKv())
+    const res = await post(env, { password: 'abcd1234' })
+    expect((await res.json<any>()).msg).toBe('failed to reset password')
+    expect(JSON.parse(db.settings.get('admin_password')!)).toBe('oldsalt:oldhash')
+    expect(JSON.parse(db.settings.get('jwt_secret')!)).toBe('old-secret')
   })
 
   it('ignores a username field in the body', async () => {

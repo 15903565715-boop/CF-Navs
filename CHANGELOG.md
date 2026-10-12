@@ -9,6 +9,13 @@
 
 ### 修复
 
+- **后端小修**（代码审查第 5 项）：
+  - `fetchIcon`（图标代理 / 显式刷新 / 可信副本 / Iconify）补 SSRF 防护：入口复用 `parseTargetUrl`（`isBlockedFetchHostname`），重定向改为手动跟随、每跳重新过滤、最多 5 跳，并剥离 URL 内嵌凭据。
+  - 管理员凭据引导 `ensureAdminBootstrap` 的多次并发 `setSettingValue` 改为一条多行 upsert（新增 `setSettingValues`），各键同时生效。
+  - 改密码 / `/recover`：新密码与轮换后的 JWT 密钥同一条语句写入（`rotateJwtSecret(db, alsoWrite)`），写入失败两者都不变。
+  - `GET /api/bookmarks` 不再读取 `icon_blob` 正文（`icon_blob: null` + `icon_cached`，与聚合一致）；合并导入改用 `listBookmarksWithIconBlobs`，保证重建表时已缓存图标不丢。批量删除分块 `IN (...)` 已随第 1 项落地。
+  - 删除死代码：`PUBLIC_DATA_SETTINGS_WITHOUT_SITE_CONFIG_LIST_SQL`、无调用方的 `getDataVersion`、`tslib` 直接开发依赖（仅作为 `@emnapi/runtime` 的可选传递依赖保留在锁文件中；锁文件根版本号顺带同步为 0.8.3）。`getPublicDataSource` 的 `_siteConfig` 形参已随第 2 项删除。`click_count` 仍保留在公开数据中（REQ-17 依赖）。
+  - 新增 `tests/unit/backendHardening.test.ts`（9 项）及 bootstrap / recover 原子写入用例。
 - **路由鉴权按构造保证**（代码审查第 4 项）：`worker/index.ts` 原先每个受保护前缀都要手写「精确路径 + 通配路径」两行 `authRequired`，注释也承认漏一行接口就静默公开。现拆为公开子应用 `publicApi`（唯一公开清单，只允许直接返回的处理器与调用 `next()` 的透传中间件）与 `use('*', authRequired)` 的受保护子应用 `protectedApi`，后者在全部公开处理器之后挂载：新增接口默认受保护、漏注册方向变为 fail-closed。`auth.ts` 拆出 `authPublicRoutes` / `authProtectedRoutes`，`icon.ts` 拆出 `iconProtectedRoutes`（`/icon-access`、`/iconify-search`），`iconLocalCopy` 的 no-store 头中间件与 browser-sync CORS 在鉴权前执行（401 同样带头）；`authRequired` 改为请求内幂等，保留的逐路由守卫不再重复校验。未登录访问未知 `/api/*` 路径现返回 401 而非 not found。新增 `tests/unit/routeAuth.test.ts`（7 项：枚举全部受保护路由无 token / 伪造 token 均 401、公开路由快照、透传头），删除 `siteMetaRouteWiring` 中 3 条针对旧注册方式的源码文本断言。
 - **点击计数限流改用 D1**（代码审查第 3 项）：原实现每次点击 KV get + put，KV 免费额度每天 1000 次写入，用完即整体 fail-open。现限流与计数放进同一个 D1 batch（一次往返），新表 `click_rate_limits`（`schema.sql` 新增；旧库由 `migrateSchema` 幂等补建，缺表时 `withSchemaRetry` 自动迁移）：只为存在且公开的书签建计数行、计数在上限 +1 处饱和（超限点击 0 写入）、过期行按 `reset_at` 索引清理；语义保持每 IP + 书签 10 分钟 3 次、超限仍返回成功。限流 batch 失败时退回单条计数。点击接口不再依赖 `SESSION` 绑定。新增 `tests/unit/clickRateLimit.test.ts`（6 项）。
 - **公开数据 edge cache 按版本生效**（代码审查第 2 项）：前端匿名请求一律带 no-cache、服务端见 no-cache 就绕过 edge cache，Cache API 路径实际上是死的，任何人都能用请求头强制读 D1。现在匿名请求忽略 no-cache；前端在确认远端版本后请求 `/api/public/data?v=<data_version>`，服务端按 `v` 建键缓存，过期或伪造的 `v` 只花一条单行版本查询并以当前版本缓存副本（`no-store`）回应，绝不把内容写进不匹配的版本键；无版本旧客户端照常可用。删除从未被命中的后台 3 秒运行时聚合缓存（`worker/lib/runtimeCache.ts`）；`/api/public/data` 处理器拆成「带 token / 匿名」两条清晰路径，去掉 `getPublicDataSource` 无用的 `_siteConfig` 形参；`cache.ts` 的 `waitUntil` 在无 ExecutionContext 时不再抛错。新增 `tests/unit/publicDataEdgeCache.test.ts`（9 项）与 `dataService` 版本化请求用例，API_CONTRACT / PERFORMANCE_CONTRACT 已同步。

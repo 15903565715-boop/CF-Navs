@@ -17,7 +17,7 @@
 - **路由鉴权按构造保证**：`worker/index.ts` 把 API 拆成公开子应用 `publicApi`（唯一的公开清单，见下方「公开接口」「安装接口」与 `/login`、`/recover`、图标代理）和受保护子应用 `protectedApi`（`use('*', authRequired)`，在全部公开处理器之后挂载）。新增接口默认受保护；未登录访问未知的 `/api/*` 路径或公开路径的未定义方法时返回 401 / `code=1001`（此前为 `code=1004` not found），登录后仍返回 not found。`tests/unit/routeAuth.test.ts` 枚举受保护子应用的全部路由断言无 token / 伪造 token 均为 401，并对公开路由清单做快照。
 - 会话是无状态 JWT，payload 为 `{ username, exp, jti }`。`jti` 保证同一毫秒内的两次登录也会签出不同 token，否则「退出这台设备」会连带撤销另一台。
 - `POST /api/logout` 把当前 token 的 SHA-256 摘要写入 KV `revoked:<sha256>`，TTL 为 `max(60 秒, token 剩余寿命)`，以满足 KV `expirationTtl` 的下限。用摘要而不是 token 本身做 key，避免 KV 被 dump 时泄露仍在有效期内的 token。其它 isolate 上最多 15 秒后才感知到撤销，这是内存缓存换来的固定窗口。撤销名单是「退出登录」的**全部实质**，写不进去就等于没退，因此该接口用 `LogoutResp` 把结果显式告知调用方，不再一律返回纯成功——三种结果见「认证接口」小节。
-- 修改密码和凭据重置走 `rotateJwtSecret`，一次性作废全部会话。
+- 修改密码和凭据重置走 `rotateJwtSecret`，一次性作废全部会话；新密码哈希与新的 JWT 签名密钥写在**同一条** settings upsert 里（`POST /api/password`、`POST /api/recover`），不会出现「密码已改、旧 token 仍有效」的中间态。
 - KV `SESSION` 绑定当前只用于登录限流（`rl:login:*`）和会话撤销名单（`revoked:*`），不再存储会话本身。点击计数限流已改用 D1 表 `click_rate_limits`（见下文点击计数说明），不再读写 KV。
 - **缺 `SESSION` 绑定时的行为按「正确性是否依赖它」分两类**（判定统一在 `worker/lib/sessionStore.ts` 的 `hasSessionBinding`，要求 `get`/`put`/`delete` 三个方法都存在）：
   - **鉴权与登录 fail-closed**：`validateSession` 拒绝会话（受保护端点因此 401 / `code=1001`），`POST /api/login` 返回 `code=1500` + `required SESSION binding is unavailable`。撤销名单不可用时不能静默放行——那等于「撤销名单不存在」而调用方无从得知。缺绑定是确定性的配置错误，`/install` 本来就以 `bindings_missing` 拒绝安装。
@@ -133,7 +133,7 @@
 
 `POST /api/bookmarks/:id/icon-cache/refresh` 在当前源/写入代次下显式刷新成功图标，支持 data URI 及 HTTP(S)（含 Iconify），失败不覆盖最近成功正文。响应保留 `icon_blob`，并附 `icon_descriptor` 与 `icon_update`（updated/unchanged/cleared/unavailable）；并发保存获胜时返回重新读取的当前结果，不能返回旧源抓取结果。相同字节保持内容版本不变。响应为 `private, no-store`。浏览器能否保存仍须通过可信设备、当前会话与统一存储策略，不能因接口返回了 data URI 自动认领权限。
 
-批量删除请求最多包含 500 个正整数 ID；排序请求的 `ids` 最多 5000 个；服务端会去重并忽略已不存在的记录。书签 `url` 必须是 `http(s)` 地址，其它协议返回 `code=1002`；后台表单会先把缺协议的写法（`example.com`）补成 `https://` 再提交，补不了的原样送出由服务端拒绝。书签写入可携带 `description_mode: "always" | "hover" | "hidden" | null`；更新时省略该字段会保留原覆盖值，显式 `null` 会恢复跟随全局设置。
+`GET /api/bookmarks` 的列表口径与聚合一致：`icon_blob` 恒为 `null`，以 `icon_cached` 表示 D1 中是否已有图标正文，不再把每个书签的 base64 正文读进 Worker 再下发（当前前端不调用该接口；需要正文的合并导入在服务端内部单独读取）。批量删除按 D1 参数上限分块执行 `DELETE ... WHERE id IN (...)`。批量删除请求最多包含 500 个正整数 ID；排序请求的 `ids` 最多 5000 个；服务端会去重并忽略已不存在的记录。书签 `url` 必须是 `http(s)` 地址，其它协议返回 `code=1002`；后台表单会先把缺协议的写法（`example.com`）补成 `https://` 再提交，补不了的原样送出由服务端拒绝。书签写入可携带 `description_mode: "always" | "hover" | "hidden" | null`；更新时省略该字段会保留原覆盖值，显式 `null` 会恢复跟随全局设置。
 `POST /api/bookmarks/batch-move` 用于管理员批量移动书签，不改变 `/api/bookmarks/reorganize` 的完整排序契约。请求为 `{ ids: number[], category_id: number, position: 'end' | 'start', expected: { id: number, category_id: number, sort: number }[] }`；`ids` 最多 500 个且不得重复，`expected` 必须与 `ids` 一一对应，用于拒绝过期集合。`position='end'` 追加到目标分类现有书签末尾，`position='start'` 插入目标分类开头；默认由前端传 `end`。服务端必须在一次原子操作中更新选中书签的 `category_id` 和受影响书签的全局 `sort`，校验失败不得部分成功。选中集合、快照、目标分类或权限不一致返回 `code=1006`（`ErrCode.CONFLICT`）；其它服务端故障返回 `code=1500`。成功返回 `{ moved, category_id, position }`。
 `POST /api/bookmarks/reorganize` 是首页跨分类整理会话的保存通道。请求为 `{ category_orders: Array<{ category_id: number, ids: number[] }> }`，`category_id` 与全部 `ids` 必须是正整数，否则返回 `code=1002`。服务端按分类提交的完整顺序一次性重写受影响书签的 `category_id` 与全局 `sort`（单个 `db.batch`，不拆多批）。**payload 必须覆盖库中每一个书签**：数量不符或有书签未出现在任何 `category_orders` 里都会失败；同一 `category_id` 重复出现、同一书签 id 出现在多个分类里、`category_id` 指向不存在的分类，同样失败。以上都归为状态冲突。请求集合与库中状态不一致（分类被删、书签集合过期）时返回 `code=1006`（`ErrCode.CONFLICT`），前端据此提示「数据已变化，请刷新后重试」并重新拉取；其它故障返回 `code=1500`。`batch-move` 沿用同一 `BookmarkReorganizeError` → `CONFLICT` 判定。
 
@@ -157,7 +157,7 @@
 
 解析成功的结果会写入 Cloudflare edge cache（6 小时，按目标地址建合成缓存键，不含 `Authorization`），重复解析同一地址直接命中缓存。**域名兜底的结果不写缓存**，避免一次抓取失败或被拦截后，用户重试时长时间拿到同一个坏结果。
 
-出网目标过滤：`/api/fetch-site-meta` 与 `/api/fetch-favicon` 共用 `parseTargetUrl`，拒绝指向环回、私有、链路本地（含云元数据 `169.254.169.254`）、运营商级 NAT、组播保留段的 IPv4/IPv6 字面量，以及 `localhost`、`*.local`、`*.internal`、`metadata.google.internal` 等内部主机名，被拒绝时返回 `code=1002`。`favicon` 解析出的 `<link rel="icon">` 候选来自第三方页面，同样经过该过滤，避免恶意页面绕过入口检查。该防线只检查地址字面量：`new URL()` 会先把 `2130706433`、`0x7f.0.0.1` 一类写法归一成点分形式，因此常见进制绕过已被拉平，但它**挡不住 DNS 重绑定**（合法域名解析到内网），Workers 没有可插手的解析钩子。
+出网目标过滤：`/api/fetch-site-meta` 与 `/api/fetch-favicon` 共用 `parseTargetUrl`，拒绝指向环回、私有、链路本地（含云元数据 `169.254.169.254`）、运营商级 NAT、组播保留段的 IPv4/IPv6 字面量，以及 `localhost`、`*.local`、`*.internal`、`metadata.google.internal` 等内部主机名，被拒绝时返回 `code=1002`。`favicon` 解析出的 `<link rel="icon">` 候选来自第三方页面，同样经过该过滤，避免恶意页面绕过入口检查。图标抓取（`/api/icon/:id`、`/api/category-icon/:id` 的 cache miss、显式图标刷新、可信副本、Iconify 代理共用的 `fetchIcon`）同样经过该过滤：入口地址被拒绝时不发请求；重定向改为手动跟随（`redirect: 'manual'`），**每一跳**的 `Location` 都重新过滤，最多 5 跳，超出或命中内部地址按永久失败（`missing`）处理。该防线只检查地址字面量：`new URL()` 会先把 `2130706433`、`0x7f.0.0.1` 一类写法归一成点分形式，因此常见进制绕过已被拉平，但它**挡不住 DNS 重绑定**（合法域名解析到内网），Workers 没有可插手的解析钩子。
 
 前端只在**新增**书签、书签标题为空、且网址输入框失焦时调用该接口；返回后会再次确认标题仍为空才写入，请求在途期间用户已输入标题则丢弃结果。写入表单前按字素簇截断到 20 个字符（复用 `src/lib/truncateUnicodeText.ts`，与后台列表一致），超长时以 `…` 结尾，避免标题输入框内容超出可视范围不便修改；接口本身仍返回最长 80 个字符的完整结果。
 

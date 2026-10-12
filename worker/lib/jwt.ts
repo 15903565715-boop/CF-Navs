@@ -1,4 +1,4 @@
-import { getSettingValues, setSettingValue } from './db/settings'
+import { getSettingValues, setSettingValue, setSettingValues } from './db/settings'
 
 const JWT_SECRET_KEY = 'jwt_secret'
 
@@ -82,14 +82,22 @@ export async function refreshJwtSecretAfterVerifyFailure(db: D1Database): Promis
 }
 
 // Rotate the JWT secret to invalidate all active JWT sessions globally
-export async function rotateJwtSecret(db: D1Database): Promise<string> {
+/**
+ * 轮换签名密钥（作废全部会话）。`alsoWrite` 中的设置与新密钥写在**同一条** upsert 里：
+ * 改密码 / 凭据恢复必须「新密码生效」与「旧会话作废」同生共死——之前分两次写，
+ * 第二步失败会留下「密码已改、旧 token 仍然有效」的状态。
+ */
+export async function rotateJwtSecret(
+  db: D1Database,
+  alsoWrite: ReadonlyArray<readonly [key: string, value: unknown]> = [],
+): Promise<string> {
   const buffer = new Uint8Array(32)
   crypto.getRandomValues(buffer)
   const secret = Array.from(buffer)
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('')
 
-  await setSettingValue(db, JWT_SECRET_KEY, secret)
+  await setSettingValues(db, [[JWT_SECRET_KEY, secret], ...alsoWrite])
   return cacheSecret(secret)
 }
 

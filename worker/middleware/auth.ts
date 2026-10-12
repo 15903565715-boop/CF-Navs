@@ -59,8 +59,11 @@ export function clearAllCachedSessions(): void {
   sessionMemoryCache.clear()
 }
 
-export async function clearAllSessions(env: Env): Promise<void> {
-  await rotateJwtSecret(env.DB)
+export async function clearAllSessions(
+  env: Env,
+  alsoWrite: ReadonlyArray<readonly [key: string, value: unknown]> = [],
+): Promise<void> {
+  await rotateJwtSecret(env.DB, alsoWrite)
 }
 
 export async function validateSession(env: Env, token: string): Promise<SessionValue | null> {

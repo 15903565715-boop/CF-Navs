@@ -52,7 +52,6 @@
     "jsdom": "^26.1.0",
     "svelte": "^5.57.0",
     "svelte-check": "^4.7.6",
-    "tslib": "^2.7.0",
     "typescript": "^5.5.4",
     "vite": "^7.3.6",
     "vitest": "^4.1.11",

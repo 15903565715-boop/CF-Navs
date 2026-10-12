@@ -102,19 +102,23 @@ export async function getSettingValues<T = unknown>(
 
 // 写入任意单个内部 key（value 会被 JSON.stringify）
 export async function setSettingValue(db: D1Database, key: string, value: unknown): Promise<void> {
-  await db
-    .prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
-    .bind(key, JSON.stringify(value))
-    .run()
+  await setSettingValues(db, [[key, value]])
 }
 
-export async function getDataVersion(db: D1Database): Promise<string> {
-  const row = await db
-    .prepare('SELECT value FROM settings WHERE key = ?')
-    .bind(DATA_VERSION_KEY)
-    .first<{ value: string | null }>()
-
-  return dataVersionFromValue(row?.value ?? null)
+/**
+ * 一条多行 upsert 写入多个内部 key：单条语句天然原子，且只有一次 D1 往返。
+ * 用于管理员凭据引导（多键同时生效）和「改密码 + 轮换 JWT 密钥」这类必须同生共死的写入。
+ */
+export async function setSettingValues(
+  db: D1Database,
+  entries: ReadonlyArray<readonly [key: string, value: unknown]>,
+): Promise<void> {
+  if (entries.length === 0) return
+  await db
+    .prepare(`INSERT INTO settings (key, value) VALUES ${entries.map(() => '(?, ?)').join(', ')}
+      ON CONFLICT(key) DO UPDATE SET value = excluded.value`)
+    .bind(...entries.flatMap(([key, value]) => [key, JSON.stringify(value)]))
+    .run()
 }
 
 export function dataVersionFromValue(raw: string | null): string {

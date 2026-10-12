@@ -11,7 +11,6 @@ import {
 import { clearLoginFailures, getClientIp, loginRateLimit, recordLoginFailure } from '../middleware/rateLimit'
 import { ensureAdminBootstrap, type AdminCredentials } from '../lib/bootstrap'
 import { hashPassword, verifyPassword } from '../lib/crypto'
-import { setSettingValue } from '../lib/db'
 import { fail, ok } from '../lib/response'
 import { createSession } from '../lib/session'
 import { revokeSession } from '../lib/sessionRevocation'
@@ -138,8 +137,8 @@ authProtectedRoutes.post('/password', authRequired, async (c) => {
   }
 
   try {
-    await setSettingValue(c.env.DB, ADMIN_PASSWORD_KEY, await hashPassword(body.new_password))
-    await clearAllSessions(c.env)
+    // 新密码与新的 JWT 签名密钥同一条语句写入：要么都生效，要么都不生效。
+    await clearAllSessions(c.env, [[ADMIN_PASSWORD_KEY, await hashPassword(body.new_password)]])
     clearAllCachedSessions()
     return c.json(ok(null))
   } catch {

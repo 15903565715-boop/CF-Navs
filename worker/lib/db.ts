@@ -20,6 +20,7 @@ export {
 
 export {
   listBookmarks,
+  listBookmarksWithIconBlobs,
   getBookmarkIconData,
   isBookmarkIconAnonymouslyVisibleById,
   createBookmark,
@@ -48,7 +49,7 @@ export {
   getSiteConfigWithDataVersion,
   getSettingValues,
   setSettingValue,
-  getDataVersion,
+  setSettingValues,
   updateSettings,
   writeSettingsPatch,
 } from './db/settings'

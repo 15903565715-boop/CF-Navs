@@ -7,7 +7,7 @@ import {
   INSTALL_MARKER_KEY,
 } from '../lib/bootstrap'
 import { hashPassword } from '../lib/crypto'
-import { getSettingValues, setSettingValue } from '../lib/db'
+import { getSettingValues } from '../lib/db'
 import { fail, ok } from '../lib/response'
 import { createSession } from '../lib/session'
 import { hasSessionBinding } from '../lib/sessionStore'
@@ -158,12 +158,12 @@ recoverRoutes.post('/recover', async (c) => {
     // 它是「上次 INIT_ADMIN_* 应用值」的快照，ensureAdminBootstrap 用它对比 INIT 是否变化
     // （仅非 web-install 实例、!webInstalled 时）。若把它改成新哈希，会让它与未变的
     // INIT_ADMIN_PASSWORD 不再匹配，下次登录被判定为「INIT 变了」而回滚掉本次重置。
-    await setSettingValue(c.env.DB, ADMIN_PASSWORD_KEY, await hashPassword(body.password))
+    // 与 JWT 密钥轮换同一条语句写入，密码生效与旧会话作废同生共死。
+    await clearAllSessions(c.env, [[ADMIN_PASSWORD_KEY, await hashPassword(body.password)]])
   } catch {
     return noStore(c.json(fail(ErrCode.SERVER_ERROR, 'failed to reset password')))
   }
 
-  await clearAllSessions(c.env)
   clearAllCachedSessions()
   await clearInstallFailures(c.env.DB, getRateLimitKey(ip))
 

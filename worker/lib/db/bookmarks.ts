@@ -1,13 +1,26 @@
 // 书签 CRUD、批量排序、图标数据读取与 icon_blob 写入
 
 import { type Bookmark, type BookmarkBatchMoveReq, type BookmarkUpsertReq } from '../../../shared/types'
-import { BOOKMARK_LIST_SQL } from './sql'
+import { BOOKMARK_AGGREGATE_LIST_SQL, BOOKMARK_LIST_SQL } from './sql'
 import { withSchemaRetry } from './schema'
 import { decodeVersionedIcon, iconContentRevision } from '../iconRevision'
 import { buildColumnUpdateChunks, runUpdateChunks, sortRowsByIds, type RowUpdateEntry } from './sort'
 import { Mutation, chunkIds, placeholders, type MutationReceipt } from './mutation'
 
+// 列表口径与聚合一致：icon_blob 恒为 null，以 icon_cached 表示 D1 中是否已有正文，
+// 不把每个书签的 base64 图标正文读进 Worker 再下发（GET /api/bookmarks）。
 export async function listBookmarks(db: D1Database): Promise<Bookmark[]> {
+ return await withSchemaRetry(db, async () => {
+  const { results } = await db
+   .prepare(BOOKMARK_AGGREGATE_LIST_SQL)
+   .all<Bookmark>()
+  return results ?? []
+ })
+}
+
+// 合并导入要用 importData 重建整张表，现有书签的 icon_blob 必须原样带过去，
+// 否则一次合并导入会清空全部已缓存图标——只有这条路径需要读正文。
+export async function listBookmarksWithIconBlobs(db: D1Database): Promise<Bookmark[]> {
  return await withSchemaRetry(db, async () => {
   const { results } = await db
    .prepare(BOOKMARK_LIST_SQL)

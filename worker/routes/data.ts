@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { ErrCode, type ImportReq, type ImportResp } from '../../shared/types'
-import { getAdminData, getSettings, importData, listBookmarks, listCategories } from '../lib/db'
+import { getAdminData, getSettings, importData, listBookmarksWithIconBlobs, listCategories } from '../lib/db'
 import { mergeImportData } from '../lib/db/importMerge'
 import { validateImportPayload } from '../lib/importValidation'
 import { fail } from '../lib/response'
@@ -19,7 +19,7 @@ dataRoutes.post('/import', async (c) => {
 
   try {
     const current = payload.mode === 'merge'
-      ? await Promise.all([listCategories(c.env.DB), listBookmarks(c.env.DB), getSettings(c.env.DB)]).then(([categories, bookmarks, settings]) => ({ categories, bookmarks, settings }))
+      ? await Promise.all([listCategories(c.env.DB), listBookmarksWithIconBlobs(c.env.DB), getSettings(c.env.DB)]).then(([categories, bookmarks, settings]) => ({ categories, bookmarks, settings }))
       : null
     const merged = current ? mergeImportData(current, payload) : null
     const receipt = createMutationReceipt()
