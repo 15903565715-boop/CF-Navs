@@ -9,6 +9,7 @@
 
 ### 修复
 
+- **其余出网请求补 SSRF 重定向防护**（代码审查二轮第 1 项）：ee657d7 只修了 `fetchIcon`，`fetch-site-meta` / `fetch-favicon` 的页面抓取（`fetchPageHtml`）、manifest 抓取（`fetchManifestJson`）、favicon 候选 HEAD/GET 探测（`fetchWithTimeout`）与 `POST /api/bookmarks/check-health` 仍 `redirect: 'follow'`，公网地址 302 到内网 / 元数据地址即可绕过入口检查。现把手动跟随逻辑抽成共享助手 `fetchFollowingSafeRedirects`（`worker/lib/pageMetadata.ts`：入口与每跳 `Location` 经 `parseTargetUrl` 过滤、最多 5 跳、303 下 GET/HEAD 保持、剥离内嵌凭据，被拒抛 `BlockedFetchTargetError`），`fetchIcon` 与上述调用方全部改用它；`fetchPageHtml` 的 `finalUrl` 改为助手跟踪的真实落点（手动跟随下 `response.url` 不可靠）。健康检查对内部地址不发请求，返回新状态值 `blocked`（API_CONTRACT 已同步），并在只取状态码后取消响应体释放连接。新增 `tests/unit/outboundRedirects.test.ts`（13 项）。
 - **后端小修**（代码审查第 5 项）：
   - `fetchIcon`（图标代理 / 显式刷新 / 可信副本 / Iconify）补 SSRF 防护：入口复用 `parseTargetUrl`（`isBlockedFetchHostname`），重定向改为手动跟随、每跳重新过滤、最多 5 跳，并剥离 URL 内嵌凭据。
   - 管理员凭据引导 `ensureAdminBootstrap` 的多次并发 `setSettingValue` 改为一条多行 upsert（新增 `setSettingValues`），各键同时生效。

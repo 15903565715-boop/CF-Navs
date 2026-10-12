@@ -72,18 +72,20 @@ export type PageFetchResult = {
   finalUrl: string
 }
 
-// 带超时的 fetch：避免某个上游连接挂起导致整个请求长时间卡住。
+// 带超时的出网 fetch：避免某个上游连接挂起导致整个请求长时间卡住。
 // 注意 fetch 在响应头到达时就 resolve，所以这个超时不覆盖读 body 的过程；
 // 调用方需要自己再套一层整体 deadline。
+// 重定向一律经 fetchFollowingSafeRedirects 手动跟随并逐跳过滤（SSRF）；
+// 目标被拒绝时抛 BlockedFetchTargetError，调用方的既有 catch 按失败处理。
 export async function fetchWithTimeout(
   url: string,
   init: RequestInit,
   timeoutMs = FETCH_TIMEOUT_MS,
-): Promise<Response> {
+): Promise<SafeFetchResult> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
-    return await fetch(url, { ...init, signal: controller.signal })
+    return await fetchFollowingSafeRedirects(url, { ...init, signal: controller.signal })
   } finally {
     clearTimeout(timer)
   }
@@ -164,6 +166,66 @@ export function parseTargetUrl(raw: string | null): URL | null {
     return url
   } catch {
     return null
+  }
+}
+
+// ========== 安全重定向跟随 ==========
+// fetch 的 redirect: 'follow' 会让公网地址 302 到内网 / 元数据地址而绕过入口检查。
+// 所有出网抓取（图标、页面元信息、manifest、favicon 探测、健康检查）共用这个助手：
+// 入口与每一跳 Location 都经 parseTargetUrl 过滤，最多 MAX_SAFE_REDIRECTS 跳。
+
+export const MAX_SAFE_REDIRECTS = 5
+
+export class BlockedFetchTargetError extends Error {
+  constructor(message = 'blocked outbound fetch target') {
+    super(message)
+    this.name = 'BlockedFetchTargetError'
+  }
+}
+
+export type SafeFetchResult = {
+  response: Response
+  // 实际返回响应的地址（手动跟随时 response.url 不可靠）。
+  finalUrl: string
+}
+
+export function isRedirectStatus(status: number): boolean {
+  return status === 301 || status === 302 || status === 303 || status === 307 || status === 308
+}
+
+/**
+ * 手动跟随重定向的 fetch。入口地址、每一跳的 Location 都重新过滤；
+ * 被拒绝、Location 无法解析或超过跳数上限时抛 BlockedFetchTargetError。
+ * 网络错误 / 中止照常抛出原错误。只用于 GET / HEAD（不转发请求体）。
+ */
+export async function fetchFollowingSafeRedirects(
+  url: string,
+  init: RequestInit = {},
+  maxRedirects = MAX_SAFE_REDIRECTS,
+): Promise<SafeFetchResult> {
+  let target = parseTargetUrl(url)
+  if (!target) throw new BlockedFetchTargetError()
+  let method = (init.method ?? 'GET').toUpperCase()
+
+  for (let hop = 0; ; hop++) {
+    const response = await fetch(target.toString(), { ...init, method, redirect: 'manual' })
+    const location = isRedirectStatus(response.status) ? response.headers.get('Location') : null
+    if (!location) return { response, finalUrl: target.toString() }
+
+    // 丢弃重定向响应体；取消失败（流已关闭等）不影响后续判断。
+    await response.body?.cancel().catch(() => undefined)
+    if (hop >= maxRedirects) throw new BlockedFetchTargetError('too many redirects')
+
+    let next: URL | null = null
+    try {
+      next = parseTargetUrl(new URL(location, target).toString())
+    } catch {
+      next = null
+    }
+    if (!next) throw new BlockedFetchTargetError()
+    // 303 按规范把非 HEAD 请求改为 GET（这里本就只有 GET / HEAD）。
+    if (response.status === 303 && method !== 'HEAD') method = 'GET'
+    target = next
   }
 }
 
@@ -304,8 +366,7 @@ export function decodeHtmlBytes(input: ArrayBuffer | Uint8Array, contentType: st
 
 export async function fetchPageHtml(url: string): Promise<PageFetchResult | null> {
   try {
-    const response = await fetchWithTimeout(url, {
-      redirect: 'follow',
+    const { response, finalUrl } = await fetchWithTimeout(url, {
       headers: {
         Accept: HTML_ACCEPT,
         // Workers 默认不带 UA，部分站点直接 403，会同时拖低图标和标题命中率。
@@ -314,7 +375,6 @@ export async function fetchPageHtml(url: string): Promise<PageFetchResult | null
       },
     })
 
-    const finalUrl = response.url || url
     if (!response.ok) {
       return { html: null, finalUrl }
     }

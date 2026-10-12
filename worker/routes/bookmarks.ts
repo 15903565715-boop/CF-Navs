@@ -24,6 +24,7 @@ import {
 import { createMutationReceipt } from '../lib/db/mutation'
 import { mutationJson } from '../lib/mutationResponse'
 import { cacheBookmarkIconBlob } from '../lib/bookmarkIconCache'
+import { BlockedFetchTargetError, fetchFollowingSafeRedirects } from '../lib/pageMetadata'
 import { parseBookmarkUpsertPayload } from '../lib/bookmarkPayload'
 import { fail, ok } from '../lib/response'
 import { badRequest, parseBatchIds, parseId, parseSortIds, readJson } from '../lib/routeHelpers'
@@ -258,29 +259,28 @@ bookmarksRoutes.post('/check-health', async (c) => {
 
   const checkResult = await Promise.all(
    results.map(async (bm) => {
+    // 重定向手动跟随并逐跳过滤（SSRF）：书签地址或其重定向指向内网 / 元数据地址时不发请求，
+    // 返回 status 'blocked'（Workers 本就到不了这些地址，结果对用户也更真实）。
+    const probe = (method: 'HEAD' | 'GET') => fetchFollowingSafeRedirects(bm.url, {
+     method,
+     headers: {
+      'User-Agent': 'Mozilla/5.0 (compatible; CF-Navs-HealthCheck/1.0)',
+     },
+     signal: AbortSignal.timeout(3000),
+    })
     try {
-     let res = await fetch(bm.url, {
-      method: 'HEAD',
-      redirect: 'follow',
-      headers: {
-       'User-Agent': 'Mozilla/5.0 (compatible; CF-Navs-HealthCheck/1.0)',
-      },
-      signal: AbortSignal.timeout(3000),
-     })
+     let { response: res } = await probe('HEAD')
 
      if (!res.ok && (res.status === 405 || res.status === 403 || res.status === 400)) {
-      res = await fetch(bm.url, {
-       method: 'GET',
-       redirect: 'follow',
-       headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; CF-Navs-HealthCheck/1.0)',
-       },
-       signal: AbortSignal.timeout(3000),
-      })
+      void res.body?.cancel().catch(() => undefined)
+      ;({ response: res } = await probe('GET'))
      }
+     // 只要状态码：不读正文，立即释放连接。
+     void res.body?.cancel().catch(() => undefined)
 
      return { id: bm.id, status: res.status, ok: res.ok }
     } catch (err) {
+     if (err instanceof BlockedFetchTargetError) return { id: bm.id, status: 'blocked', ok: false }
      const isTimeout = err instanceof Error && err.name === 'TimeoutError'
      return { id: bm.id, status: isTimeout ? 'timeout' : 'error', ok: false }
     }

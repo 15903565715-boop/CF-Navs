@@ -1,7 +1,7 @@
 import { decodeIconDataUri } from '../../shared/iconDataUri'
 import { readBoundedBody } from './boundedBody'
 import type { IconSource } from '../../shared/types'
-import { parseTargetUrl } from './pageMetadata'
+import { BlockedFetchTargetError, MAX_SAFE_REDIRECTS, fetchFollowingSafeRedirects, parseTargetUrl } from './pageMetadata'
 
 export interface FetchedIcon {
   bytes: Uint8Array
@@ -125,11 +125,7 @@ export type IconFetchOutcome =
   | { ok: false; failure: IconFetchFailure }
 
 // 重定向最多跟随的跳数；超出按永久失败处理（重定向环 / 刻意拖延）。
-export const MAX_ICON_REDIRECTS = 5
-
-function isRedirectStatus(status: number): boolean {
-  return status === 301 || status === 302 || status === 303 || status === 307 || status === 308
-}
+export const MAX_ICON_REDIRECTS = MAX_SAFE_REDIRECTS
 
 // 纯函数，便于单测：null 表示网络错误或超时。
 export function classifyIconFailure(status: number | null): IconFetchFailure {
@@ -144,38 +140,26 @@ export function classifyIconFailure(status: number | null): IconFetchFailure {
  * 下一个请求（下一次页面加载、下一次渲染）拿到的就是真图标。
  */
 export async function fetchIcon(iconUrl: string, timeoutMs = CACHE_TIMEOUT_MS, maxBytes = MAX_ICON_SIZE): Promise<IconFetchOutcome> {
-  // 出网目标过滤（SSRF）：入口地址与每一跳重定向都复用 parseTargetUrl / isBlockedFetchHostname，
+  // 出网目标过滤（SSRF）：入口地址与每一跳重定向都经 fetchFollowingSafeRedirects 过滤，
   // 与 fetch-site-meta / fetch-favicon 同一口径。被拒绝的地址按「不存在」处理（永久失败）。
-  let target = parseTargetUrl(iconUrl)
-  if (!target) return { ok: false, failure: 'missing' }
+  if (!parseTargetUrl(iconUrl)) return { ok: false, failure: 'missing' }
 
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
 
   try {
     let response: Response
-    for (let hop = 0; ; hop++) {
-      response = await fetch(target.toString(), {
+    try {
+      ({ response } = await fetchFollowingSafeRedirects(iconUrl, {
         signal: controller.signal,
-        // 手动跟随：自动跟随会让公网地址 302 到内网 / 元数据地址而绕过入口检查。
-        redirect: 'manual',
         headers: {
           Accept: ICON_ACCEPT,
           'User-Agent': 'Mozilla/5.0 (compatible; CF-Navs/1.0)',
         },
-      })
-      const location = isRedirectStatus(response.status) ? response.headers.get('Location') : null
-      if (!location) break
-      await response.body?.cancel().catch(() => undefined)
-      if (hop >= MAX_ICON_REDIRECTS) return { ok: false, failure: 'missing' }
-      let next: URL | null = null
-      try {
-        next = parseTargetUrl(new URL(location, target).toString())
-      } catch {
-        next = null
-      }
-      if (!next) return { ok: false, failure: 'missing' }
-      target = next
+      }, MAX_ICON_REDIRECTS))
+    } catch (error) {
+      if (error instanceof BlockedFetchTargetError) return { ok: false, failure: 'missing' }
+      throw error
     }
 
     if (!response.ok) return { ok: false, failure: classifyIconFailure(response.status) }
