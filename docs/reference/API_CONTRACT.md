@@ -17,10 +17,10 @@
 - 会话是无状态 JWT，payload 为 `{ username, exp, jti }`。`jti` 保证同一毫秒内的两次登录也会签出不同 token，否则「退出这台设备」会连带撤销另一台。
 - `POST /api/logout` 把当前 token 的 SHA-256 摘要写入 KV `revoked:<sha256>`，TTL 为 `max(60 秒, token 剩余寿命)`，以满足 KV `expirationTtl` 的下限。用摘要而不是 token 本身做 key，避免 KV 被 dump 时泄露仍在有效期内的 token。其它 isolate 上最多 15 秒后才感知到撤销，这是内存缓存换来的固定窗口。撤销名单是「退出登录」的**全部实质**，写不进去就等于没退，因此该接口用 `LogoutResp` 把结果显式告知调用方，不再一律返回纯成功——三种结果见「认证接口」小节。
 - 修改密码和凭据重置走 `rotateJwtSecret`，一次性作废全部会话。
-- KV `SESSION` 绑定当前只用于登录限流（`rl:login:*`）、点击计数限流（`rl:click:*`）和会话撤销名单（`revoked:*`），不再存储会话本身。
+- KV `SESSION` 绑定当前只用于登录限流（`rl:login:*`）和会话撤销名单（`revoked:*`），不再存储会话本身。点击计数限流已改用 D1 表 `click_rate_limits`（见下文点击计数说明），不再读写 KV。
 - **缺 `SESSION` 绑定时的行为按「正确性是否依赖它」分两类**（判定统一在 `worker/lib/sessionStore.ts` 的 `hasSessionBinding`，要求 `get`/`put`/`delete` 三个方法都存在）：
   - **鉴权与登录 fail-closed**：`validateSession` 拒绝会话（受保护端点因此 401 / `code=1001`），`POST /api/login` 返回 `code=1500` + `required SESSION binding is unavailable`。撤销名单不可用时不能静默放行——那等于「撤销名单不存在」而调用方无从得知。缺绑定是确定性的配置错误，`/install` 本来就以 `bindings_missing` 拒绝安装。
-  - **best-effort 降级继续**：`POST /api/public/bookmarks/:id/click` 的点击计数限流在缺绑定或 KV 抛错时跳过限流但**仍然计数**。限流失效只是计数偏高，拒绝匿名点击会让公开首页的正常功能坏掉。
+  - `POST /api/public/bookmarks/:id/click` 不依赖 `SESSION` 绑定：其限流存于 D1，限流语句失败时仍按 best-effort 跳过限流**继续计数**（限流失效只是计数偏高，拒绝匿名点击会让公开首页的正常功能坏掉）。
 - `/api/public/data`：**匿名请求一律先查公开数据 edge cache，且忽略客户端的 `Cache-Control: no-cache / no-store / max-age=0` 与 `Pragma: no-cache`**——否则任何人用一个请求头就能强制读 D1。新鲜度改由版本化 URL 保证：
   - `GET /api/public/data?v=<data_version>`（`v` 取自 `/api/data/version`，格式 `[A-Za-z0-9_-]{1,64}`，不合格式视为未带版本）。缓存键为路径 + 规范化的 `v`，与版本一一对应；版本前进即换键，旧键自然不可达，不依赖 Cache API 只作用于当前 colo 的 `delete`。
   - 带版本未命中时，服务端先用一条轻量 settings 查询（与 `/api/data/version` 同一条）确认 `v` 是否仍是当前版本：是则读一次聚合 batch 并缓存到该键；否（过期或伪造的 `v`）则优先用**当前版本**键的缓存副本回应，响应改为 `Cache-Control: no-store`，正文是当前版本的数据（`data.version` 为当前版本），不重定向、也不把内容写进过期键；当前版本键也未命中时才读聚合 batch。因此过期或随机 `v` 最多只引发这条单行查询。
@@ -45,7 +45,7 @@
 
 `/api/error-report` 接收前端运行时错误上报，payload 为 `{ errors: ErrorReportEntry[] }` 或单个 `ErrorReportEntry`。该接口不要求登录，但限制请求体为 16 KB、单批最多 10 条，并对消息、分类、URL 和行列字段做类型与长度归一化；有效请求通过 D1 原子计数按来源 IP 限制为每分钟 12 次，已封禁来源可由当前 Worker isolate 内存快速拒绝。超大请求返回 HTTP 413，高频请求返回 HTTP 429，无效 JSON 或无有效条目返回 HTTP 400。Worker 只把有限字段写入 `console.error`，响应中的 `received` 表示实际接收条数；前端会对同一错误做 60 秒去重，且上报失败不得影响页面主流程。
 
-`POST /api/public/bookmarks/:id/click` 由首页在打开书签时调用，成功后将对应 `click_count` 加一。每个 IP 与书签 ID 组合在 10 分钟内最多计数 3 次，超过后仍返回成功但不重复增加计数；点击计数不会提升 `data_version`，后台访问分析打开时会强制刷新后台聚合数据。
+`POST /api/public/bookmarks/:id/click` 由首页在打开书签时调用，成功后将对应 `click_count` 加一。每个 IP 与书签 ID 组合在 10 分钟内最多计数 3 次，超过后仍返回成功但不重复增加计数；书签不存在或为私密书签返回 HTTP 404。点击计数不会提升 `data_version`，后台访问分析打开时会强制刷新后台聚合数据。限流计数存于 D1 表 `click_rate_limits`（`schema.sql` 安装时创建，旧库由 `migrateSchema` 补建，缺表时经 schema 重试自动迁移），与计数更新放在**同一个 D1 batch**：只为存在且公开的书签建计数行；计数在上限 +1 处饱和，超限后的重复点击不再产生写入；过期行在每次 batch 开头按 `reset_at` 索引清理。限流 batch 因其它原因失败时退回为不限流的单条计数。
 
 ## 安装接口
 

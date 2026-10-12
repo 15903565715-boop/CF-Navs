@@ -17,11 +17,11 @@ import {
   matchSiteConfigCache,
   parsePublicDataVersion,
 } from '../lib/cache'
-import { getPublicDataSource, getSiteConfig, getSiteConfigWithDataVersion, incrementBookmarkClick } from '../lib/db'
+import { getPublicDataSource, getSiteConfig, getSiteConfigWithDataVersion } from '../lib/db'
+import { recordBookmarkClick } from '../lib/clickRateLimit'
 import { shouldBypassRequestCache } from '../lib/requestCache'
 import { fail } from '../lib/response'
 import { ok } from '../lib/response'
-import { hasSessionBinding } from '../lib/sessionStore'
 import { extractBearerToken, validateSession } from '../middleware/auth'
 import type { HonoEnv } from '../types'
 
@@ -219,37 +219,10 @@ publicRoutes.post('/public/bookmarks/:id/click', async (c) => {
     return c.json(fail(ErrCode.BAD_REQUEST, 'invalid id'), 400)
   }
 
-  // 点击计数限流（每 IP + 书签 10 分钟最多 3 次）。这是 best-effort：缺 `SESSION` 绑定或
-  // KV 抛错时**继续计数**，不像鉴权路径那样 fail-closed——限流失效只是计数偏高，而拒绝
-  // 匿名点击会让公开首页的正常功能坏掉（PROB-31 的口径区分）。
-  if (hasSessionBinding(c.env)) {
-    try {
-      const ip = getClientIp(c)
-      const rateLimitKey = `rl:click:${ip}:${id}`
-      const now = Date.now()
-      const raw = await c.env.SESSION.get(rateLimitKey)
-      let state = raw ? JSON.parse(raw) : null
-
-      if (state && state.resetAt > now) {
-        if (state.count >= 3) {
-          // Silent ignore, return success
-          return c.json(ok(null))
-        }
-        state.count++
-      } else {
-        state = { count: 1, resetAt: now + 600000 }
-      }
-
-      const ttl = Math.max(1, Math.ceil((state.resetAt - now) / 1000))
-      await c.env.SESSION.put(rateLimitKey, JSON.stringify(state), { expirationTtl: ttl })
-    } catch (err) {
-      console.error('Failed to apply click count rate limiting:', err)
-    }
-  }
-
+  // 限流（每 IP + 书签 10 分钟最多 3 次）与计数在同一个 D1 batch；超限仍返回成功但不计数。
   try {
-    const success = await incrementBookmarkClick(c.env.DB, id)
-    if (!success) {
+    const outcome = await recordBookmarkClick(c.env.DB, id, getClientIp(c))
+    if (outcome === 'not_found') {
       return c.json(fail(ErrCode.NOT_FOUND, 'bookmark not found'), 404)
     }
     // 点击计数不提升 data_version：每次点击都提升会让所有访客的公开数据缓存整体失效。

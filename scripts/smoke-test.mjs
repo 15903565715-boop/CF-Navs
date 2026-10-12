@@ -329,6 +329,20 @@ async function main() {
     check('public settings 含 search_engine', !!d?.settings?.search_engine)
   }
 
+  // 9b. 公开点击计数：D1 限流（每 IP + 书签 10 分钟 3 次），与计数同 batch
+  section('点击计数限流')
+  {
+    const clickOnce = () => call(`/api/public/bookmarks/${bm1.id}/click`, { method: 'POST', headers: { 'cf-connecting-ip': '203.0.113.50' } })
+    const statuses = []
+    for (let i = 0; i < 4; i++) statuses.push((await clickOnce()).status)
+    check('点击 4 次均返回 200', statuses.every((status) => status === 200), statuses.join(','))
+    const bms = (await call('/api/bookmarks', { token })).json?.data || []
+    const clicked = bms.find((b) => b.id === bm1.id)
+    check('同一 IP + 书签只计数 3 次', clicked?.click_count === 3, `click_count=${clicked?.click_count}`)
+    const missing = await call('/api/public/bookmarks/999999/click', { method: 'POST' })
+    check('不存在的书签点击 → 404', missing.status === 404, `status=${missing.status}`)
+  }
+
   // 10. 公开模式关闭 → 未登录被拒
   section('公开模式开关')
   {

@@ -1,3 +1,4 @@
+import { CLICK_RATE_LIMIT_SCHEMA } from './clickRateLimitSchema'
 import { BOOKMARK_ICON_TRIGGERS, CATEGORY_ICON_TRIGGERS, INITIALIZE_ICON_DATASET_SQL } from './iconSchema'
 
 // schema 迁移（幂等，仅缺列时添加）与旧库缺列时的重试封装
@@ -7,7 +8,9 @@ function isRecoverableSchemaError(error: unknown): boolean {
   const normalized = message.toLowerCase()
   return (
     normalized.includes('no such column') ||
-    normalized.includes('has no column named')
+    normalized.includes('has no column named') ||
+    // 迁移新增的辅助表（如 click_rate_limits）在旧库上缺失。
+    normalized.includes('no such table: click_rate_limits')
   )
 }
 
@@ -88,6 +91,8 @@ async function migrateSchema(db: D1Database): Promise<void> {
   stmts.push(db.prepare("CREATE INDEX IF NOT EXISTS idx_bookmarks_sort_global ON bookmarks(sort, id)"))
   stmts.push(db.prepare("CREATE INDEX IF NOT EXISTS idx_categories_sort_id ON categories(sort, id)"))
   stmts.push(db.prepare("CREATE INDEX IF NOT EXISTS idx_categories_parent_sort_id ON categories(parent_id, sort, id)"))
+
+  stmts.push(...CLICK_RATE_LIMIT_SCHEMA.map((sql) => db.prepare(sql)))
 
   stmts.push(db.prepare(INITIALIZE_ICON_DATASET_SQL), ...BOOKMARK_ICON_TRIGGERS.map((sql) => db.prepare(sql)), ...CATEGORY_ICON_TRIGGERS.map((sql) => db.prepare(sql)))
   await db.batch(stmts)

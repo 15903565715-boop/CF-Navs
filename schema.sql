@@ -41,6 +41,14 @@ CREATE TABLE IF NOT EXISTS error_report_rate_limits (
   reset_at INTEGER NOT NULL
 );
 
+-- 公开点击计数限流（每 IP + 书签 10 分钟最多 3 次）；与 worker/lib/clickRateLimit.ts 保持一致。
+CREATE TABLE IF NOT EXISTS click_rate_limits (
+  client_key TEXT PRIMARY KEY,
+  count INTEGER NOT NULL DEFAULT 0,
+  reset_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_click_rate_limits_reset ON click_rate_limits(reset_at);
+
 CREATE INDEX IF NOT EXISTS idx_bookmarks_category ON bookmarks(category_id);
 CREATE INDEX IF NOT EXISTS idx_bookmarks_sort ON bookmarks(category_id, sort);
 CREATE INDEX IF NOT EXISTS idx_bookmarks_sort_global ON bookmarks(sort, id);
