@@ -7,6 +7,10 @@
 
 ## [Unreleased]
 
+### 修复
+
+- **JWT 签名密钥跨 isolate 失效**（代码审查 P0）：`worker/lib/jwt.ts` 的密钥内存缓存原先永不过期，改密码 / 凭据重置 / `/recover` 触发的 `rotateJwtSecret` 只更新当前 isolate，其它 isolate 会一直接受旧 token、并对新 token 随机返回 401。现缓存 TTL 为 `JWT_SECRET_CACHE_TTL_MS`（15 秒，与 session 内存缓存对齐）；会话校验与图标访问授权在校验失败时经 `refreshJwtSecretAfterVerifyFailure` 按需重读一次 D1（同一 isolate 至少间隔 1 秒，防止伪造 token 放大 D1 读）。新增 4 项单测覆盖 TTL 过期、跨 isolate 轮换、失败重读与限频。
+
 ## v0.8.3 — 2026-10-12
 
 - **后台高级颜色选择器**：`ColorAlphaInput` 改为紧凑输入框 + 棋盘格预览 + 浮动 HSV 面板，支持色相、饱和度/明度、透明度拖拽与键盘调节，点击外部或 Escape 关闭；保留原有 `value` / `alpha` 双绑定语义，并支持 `rgba(...)`、三位/六位/八位 Hex 手动输入与反向联动。

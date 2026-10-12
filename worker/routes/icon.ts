@@ -31,7 +31,7 @@ import {
   transientIconErrorResponse,
 } from '../lib/iconResponses'
 import { createIconAccessGrant, verifyIconAccessGrant } from '../lib/iconSignature'
-import { getJwtSecret } from '../lib/jwt'
+import { getJwtSecret, refreshJwtSecretAfterVerifyFailure } from '../lib/jwt'
 import { decodeVersionedIcon } from '../lib/iconRevision'
 import { fail, ok } from '../lib/response'
 import type { HonoEnv } from '../types'
@@ -137,7 +137,13 @@ async function resolveIconAccess(
   // 非法或过期的 key 一律退回匿名路径。缓存键归一化会丢掉 `key`，所以伪造的 key 既不会
   // 让缓存条目碎片化，也拿不到与匿名不同的响应。
   if (!key) return ANONYMOUS_ACCESS(c.req.raw)
-  if (!(await verifyIconAccessGrant(await getJwtSecret(c.env.DB), key))) return ANONYMOUS_ACCESS(c.req.raw)
+  let granted = await verifyIconAccessGrant(await getJwtSecret(c.env.DB), key)
+  if (!granted) {
+    // 与会话校验相同：另一 isolate 轮换密钥后本地缓存可能过期，按需重读一次。
+    const refreshed = await refreshJwtSecretAfterVerifyFailure(c.env.DB)
+    if (refreshed) granted = await verifyIconAccessGrant(refreshed, key)
+  }
+  if (!granted) return ANONYMOUS_ACCESS(c.req.raw)
 
   return {
     authorized: true,

@@ -2,7 +2,7 @@ import type { MiddlewareHandler } from 'hono'
 import { ErrCode } from '../../shared/types'
 import { fail } from '../lib/response'
 import type { Env, HonoEnv, SessionValue } from '../types'
-import { getJwtSecret, verifyJwt, rotateJwtSecret } from '../lib/jwt'
+import { getJwtSecret, verifyJwt, rotateJwtSecret, refreshJwtSecretAfterVerifyFailure } from '../lib/jwt'
 import { isSessionRevoked } from '../lib/sessionRevocation'
 import { hasSessionBinding } from '../lib/sessionStore'
 
@@ -74,7 +74,12 @@ export async function validateSession(env: Env, token: string): Promise<SessionV
   }
 
   const secret = await getJwtSecret(env.DB)
-  const payload = await verifyJwt(token, secret)
+  let payload = await verifyJwt(token, secret)
+  if (!payload) {
+    // 另一 isolate 刚轮换过密钥时，本 isolate 的缓存可能还是旧值：按需重读一次再校验。
+    const refreshed = await refreshJwtSecretAfterVerifyFailure(env.DB)
+    if (refreshed) payload = await verifyJwt(token, refreshed)
+  }
   if (!payload) {
     sessionMemoryCache.delete(token)
     return null
