@@ -1,6 +1,7 @@
 <script lang="ts">
   import { observeIconVisibility } from '../lib/iconVisibility'
   import { createTrustedIconView, emptyTrustedIcon } from '../lib/trustedIconView'
+  import { applyIconDisplayOverride, bookmarkIconDisplay } from '../lib/iconDisplayStore'
   let trustedImage = emptyTrustedIcon
   const trustedView = createTrustedIconView(value => { trustedImage = value })
   let anchor: HTMLSpanElement
@@ -38,9 +39,12 @@
   let stateKey = ''
   const requestSequence = { current: 0 }
 
-  $: trimmedIcon = icon.trim()
-  $: trimmedIconBlob = iconBlob.trim()
-  $: trustedView.set({ id: Number(id), icon: trimmedIcon, icon_blob: trimmedIconBlob, icon_revision: iconRevision, icon_cached: iconCached, icon_write_epoch: iconWriteEpoch, icon_display: iconDisplay, visible: inView, online_url: src })
+  // 图标显示状态来自独立的按 id 订阅表（可信图标描述符回写），与结构化书签数据分离。
+  $: iconDisplayOverride = bookmarkIconDisplay.watch(Number(id))
+  $: iconRow = applyIconDisplayOverride({ icon: icon.trim(), icon_blob: iconBlob.trim(), icon_revision: iconRevision, icon_cached: iconCached, icon_write_epoch: iconWriteEpoch, icon_display: iconDisplay }, $iconDisplayOverride)
+  $: trimmedIcon = iconRow.icon ?? ''
+  $: trimmedIconBlob = iconRow.icon_blob ?? ''
+  $: trustedView.set({ ...iconRow, id: Number(id), icon: trimmedIcon, icon_blob: trimmedIconBlob, visible: inView, online_url: src })
   $: cacheKey = createBookmarkIconCacheKey({
     id,
     icon: trimmedIcon,

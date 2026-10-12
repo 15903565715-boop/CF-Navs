@@ -1,6 +1,7 @@
 import { objectIconLoader } from './objectIconLoader'
 import type { IconDescriptor } from '../../shared/iconLocalCopy'
 import { iconDevice } from './iconDeviceState'
+import { applyIconDisplayOverride, bookmarkIconDisplay } from './iconDisplayStore'
 import { getAuthToken } from './api'
 // 前端数据编排层：公开/后台聚合数据的获取、版本确认、本地增量更新与浏览器快照持久化。
 // 只操作 store、API、缓存与本地图标缓存，不持有任何视图状态；需要向界面反馈的错误
@@ -77,6 +78,7 @@ authStore.subscribe(({ session }) => {
   currentDataVersion = null
   adminStore.reset()
   publicStore.reset()
+  bookmarkIconDisplay.clear()
 })
 
 type IsCurrent = () => boolean
@@ -443,6 +445,7 @@ export function applyLoggedInData(data: AdminData, version = getDataVersion(data
   if (!currentAdminState.loaded || mergedAdminData !== currentAdminState.data) {
     adminStore.replaceData(mergedAdminData)
   }
+  pruneBookmarkIconDisplay(mergedAdminData.dataset_epoch, mergedAdminData.bookmarks)
 
   const settings = mergedAdminData.settings
   if (!settings) {
@@ -454,7 +457,10 @@ export function applyLoggedInData(data: AdminData, version = getDataVersion(data
 }
 
 export async function persistCurrentAdminData(isCurrent: IsCurrent = captureSession()): Promise<void> {
-  const data = get(adminStore).data
+  const stored = get(adminStore).data
+  // 快照里带上图标显示覆盖，下次启动直接拿到已验证的图标身份。
+  const bookmarks = bookmarkIconDisplay.applyTo(stored.bookmarks)
+  const data = bookmarks === stored.bookmarks ? stored : { ...stored, bookmarks }
   if (isCurrent() && isLoggedIn() && data.settings) {
     await writeCachedAdminData(data, currentDataVersion, isCurrent)
   }
@@ -527,7 +533,8 @@ function scheduleIconSnapshot(): void {
   const valid = captureSession()
   iconSnapshotTimer = setTimeout(() => { iconSnapshotTimer = null; void persistCurrentAdminData(valid).catch(error => hooks.onRootError(getErrorMessage(error), error)) }, 250)
 }
-function applyIconDescriptor(next: IconDescriptor, expected?: IconDescriptor): void {
+// 导出仅供测试与 refreshBookmarkIconCache；运行时由 objectIconLoader.configure 回调驱动。
+export function applyIconDescriptor(next: IconDescriptor, expected?: IconDescriptor): void {
   if (get(adminStore).data.dataset_epoch !== next.dataset_epoch) return
   if (next.object_type === 'category') {
     const patch = <T extends Omit<Category, 'created_at'>>(rows: T[]): T[] => rows.map(row => {
@@ -547,19 +554,35 @@ function applyIconDescriptor(next: IconDescriptor, expected?: IconDescriptor): v
     }
     return
   }
-  const patch = <T extends Bookmark>(rows: T[]): T[] => rows.map(row => {
-    if (row.id !== next.object_id || (row.icon_write_epoch ?? 0) > next.write_epoch || expected && (row.icon_write_epoch ?? 0) !== expected.write_epoch && row.icon_revision !== next.content_revision) return row
-    const display = next.state === 'ready' || next.state === 'unknown' ? 'image' : next.state
-    if (row.icon_revision === next.content_revision && row.icon_write_epoch === next.write_epoch && row.icon_display === display) return row
-    return { ...row, icon_revision: next.content_revision, icon_write_epoch: next.write_epoch, icon_display: display, icon_cached: display === 'image',
-      ...(display === 'empty' ? { icon: null, icon_blob: null, icon_cached: false } : {}) }
-  })
-  const before = get(adminStore).data.bookmarks
-  const after = patch(before)
-  if (after.every((row, index) => row === before[index])) return
-  adminStore.setBookmarks(after)
-  const visible = get(publicStore).data
-  if (visible) publicStore.setData({ ...visible, bookmarks: patch(visible.bookmarks as Bookmark[]) })
+  // 书签：只写独立的图标显示表，不重建 bookmarks 数组（见 iconDisplayStore.ts）。
+  const row = bookmarkRowIndex(get(adminStore).data.bookmarks).get(next.object_id)
+  if (!row) return
+  const current = applyIconDisplayOverride(row, bookmarkIconDisplay.get(row.id))
+  if ((current.icon_write_epoch ?? 0) > next.write_epoch || expected && (current.icon_write_epoch ?? 0) !== expected.write_epoch && current.icon_revision !== next.content_revision) return
+  const display = next.state === 'ready' || next.state === 'unknown' ? 'image' : next.state
+  if (current.icon_revision === next.content_revision && current.icon_write_epoch === next.write_epoch && current.icon_display === display) return
+  bookmarkIconDisplay.set(row.id, { dataset_epoch: next.dataset_epoch, icon_revision: next.content_revision, icon_write_epoch: next.write_epoch, icon_display: display })
   scheduleIconSnapshot()
+}
+
+// 按数组身份缓存 id 索引：图标描述符逐个到达时不必每次线性查找。
+let bookmarkRowIndexSource: Bookmark[] | null = null
+let bookmarkRowIndexMemo = new Map<number, Bookmark>()
+function bookmarkRowIndex(rows: Bookmark[]): Map<number, Bookmark> {
+  if (rows !== bookmarkRowIndexSource) {
+    bookmarkRowIndexSource = rows
+    bookmarkRowIndexMemo = new Map(rows.map(row => [row.id, row]))
+  }
+  return bookmarkRowIndexMemo
+}
+
+// 结构数据替换后，丢弃不再适用的图标显示覆盖：换数据集、书签已删除、服务端已有更新的写入。
+function pruneBookmarkIconDisplay(datasetEpoch: string | undefined, bookmarks: Bookmark[]): void {
+  if (bookmarkIconDisplay.size === 0) return
+  const index = bookmarkRowIndex(bookmarks)
+  bookmarkIconDisplay.prune((id, value) => {
+    const row = index.get(id)
+    return value.dataset_epoch === datasetEpoch && Boolean(row) && (row!.icon_write_epoch ?? 0) <= value.icon_write_epoch
+  })
 }
 objectIconLoader.configure((next, expected) => applyIconDescriptor(next, expected))

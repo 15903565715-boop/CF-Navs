@@ -144,10 +144,10 @@ describe('app wiring', () => {
     expect(source).toContain('$: customScriptController?.apply(publicData?.settings?.custom_js)')
 
     const themeBlock = source.slice(
-      source.indexOf("$: if (typeof document !== 'undefined')"),
+      source.indexOf('$: rootStyleWriter?.applyTheme'),
       source.indexOf('$: customScriptController?.apply'),
     )
-    expect(themeBlock).toContain('custom-css-inject')
+    expect(themeBlock).toContain('rootStyleWriter?.applyCustomCss(customCss)')
     expect(themeBlock).not.toContain('custom-js-inject')
   })
 

@@ -69,7 +69,9 @@ import {
   applyLocalCategoryUpsert,
   applyPublicData,
   applyLoggedInData,
+  applyIconDescriptor,
   configureDataService,
+  persistCurrentAdminData,
   getCurrentDataVersion,
   isLoggedIn,
   refreshLoggedInData,
@@ -79,6 +81,8 @@ import {
   refreshVisibleData,
 } from '../../src/lib/dataService'
 import { adminStore, authStore, configStore, publicStore } from '../../src/lib/stores'
+import { bookmarkIconDisplay } from '../../src/lib/iconDisplayStore'
+import { createHomeDataMemo } from '../../src/lib/homeData'
 
 const settings: Settings = {
   site_title: 'CF-Navs',
@@ -779,5 +783,86 @@ describe('warm public snapshot rendering', () => {
       expect(get(publicStore).data?.bookmarks.some(item=>item.id===150)).toBe(false)
       expect(getCurrentDataVersion()).toBe('replacement')
     } finally { vi.useRealTimers() }
+  })
+})
+
+describe('dataService icon descriptor state split', () => {
+  const epoch = 'a'.repeat(32)
+  const revision = 'sha256-' + 'b'.repeat(64)
+  const descriptor = (patch: Record<string, unknown> = {}) => ({
+    object_type: 'bookmark' as const, object_id: bookmark.id, dataset_epoch: epoch, write_epoch: 3, state: 'ready' as const, content_revision: revision, ...patch,
+  })
+  function loggedIn(rows: Bookmark[] = [bookmark]) {
+    authStore.setSession(session)
+    applyLoggedInData({ ...makeAdminData('v1'), bookmarks: rows, dataset_epoch: epoch } as AdminData)
+  }
+
+  it('records an icon update without replacing the bookmark arrays or Home derived data', () => {
+    loggedIn([bookmark, { ...bookmark, id: 11, sort: 1 }])
+    const admin = get(adminStore).data
+    const visible = get(publicStore).data!
+    const memo = createHomeDataMemo()
+    const sorted = memo.getSortedBookmarks(visible.bookmarks)
+    const index = memo.getSearchIndex(sorted, visible.categories, memo.getCategoryTitleMap(visible.categories))
+
+    applyIconDescriptor(descriptor())
+
+    expect(get(adminStore).data).toBe(admin)
+    expect(get(publicStore).data).toBe(visible)
+    const after = get(publicStore).data!
+    expect(memo.getSortedBookmarks(after.bookmarks)).toBe(sorted)
+    expect(memo.getSearchIndex(sorted, after.categories, memo.getCategoryTitleMap(after.categories))).toBe(index)
+    expect(bookmarkIconDisplay.get(bookmark.id)).toEqual({ dataset_epoch: epoch, icon_revision: revision, icon_write_epoch: 3, icon_display: 'image' })
+    expect(bookmarkIconDisplay.get(11)).toBeUndefined()
+  })
+
+  it('notifies only the updated bookmark id', () => {
+    loggedIn([bookmark, { ...bookmark, id: 11, sort: 1 }])
+    const seen10: unknown[] = []
+    const seen11: unknown[] = []
+    const stop10 = bookmarkIconDisplay.watch(10).subscribe((value) => seen10.push(value))
+    const stop11 = bookmarkIconDisplay.watch(11).subscribe((value) => seen11.push(value))
+    applyIconDescriptor(descriptor())
+    applyIconDescriptor(descriptor()) // 重复描述符不重复通知
+    stop10(); stop11()
+    expect(seen10).toHaveLength(2)
+    expect(seen11).toEqual([undefined])
+  })
+
+  it('keeps the previous fencing rules against the effective icon state', () => {
+    loggedIn([{ ...bookmark, icon_write_epoch: 5 }])
+    applyIconDescriptor(descriptor({ write_epoch: 4 }))
+    expect(bookmarkIconDisplay.get(bookmark.id)).toBeUndefined()
+    applyIconDescriptor(descriptor({ write_epoch: 6 }))
+    expect(bookmarkIconDisplay.get(bookmark.id)?.icon_write_epoch).toBe(6)
+    // 有效状态已是 write_epoch 6：更旧的写入不能回退它。
+    applyIconDescriptor(descriptor({ write_epoch: 5, state: 'empty', content_revision: null }))
+    expect(bookmarkIconDisplay.get(bookmark.id)?.icon_display).toBe('image')
+    // 其它数据集的描述符被忽略。
+    applyIconDescriptor(descriptor({ dataset_epoch: 'c'.repeat(32), write_epoch: 9 }))
+    expect(bookmarkIconDisplay.get(bookmark.id)?.icon_write_epoch).toBe(6)
+  })
+
+  it('persists snapshots with the icon state merged back into the rows', async () => {
+    loggedIn()
+    applyIconDescriptor(descriptor({ state: 'empty', content_revision: null }))
+    adminCache.writeCachedAdminData.mockClear()
+    await persistCurrentAdminData()
+    const written = adminCache.writeCachedAdminData.mock.calls[0][0] as AdminData
+    expect(written.bookmarks[0]).toMatchObject({ id: bookmark.id, icon_display: 'empty', icon_write_epoch: 3, icon: null, icon_blob: null, icon_cached: false })
+    expect(get(adminStore).data.bookmarks[0].icon_display).toBeUndefined()
+  })
+
+  it('drops stale icon state on newer server writes, deletions and identity changes', () => {
+    loggedIn([bookmark, { ...bookmark, id: 11, sort: 1 }])
+    applyIconDescriptor(descriptor())
+    applyIconDescriptor(descriptor({ object_id: 11 }))
+    applyLoggedInData({ ...makeAdminData('v2'), bookmarks: [{ ...bookmark, icon_write_epoch: 4 }], dataset_epoch: epoch } as AdminData)
+    expect(bookmarkIconDisplay.get(10)).toBeUndefined()
+    expect(bookmarkIconDisplay.get(11)).toBeUndefined()
+    applyIconDescriptor(descriptor({ write_epoch: 4 }))
+    expect(bookmarkIconDisplay.size).toBe(1)
+    authStore.setSession(null)
+    expect(bookmarkIconDisplay.size).toBe(0)
   })
 })

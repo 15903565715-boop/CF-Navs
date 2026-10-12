@@ -31,6 +31,9 @@ This document records the current performance-sensitive behavior that should not
 - Failed icon handling should prefer stable fallback behavior over repeated retries in the same interaction path.
 - Anonymous icon proxies must perform the current public-visibility metadata gate **before every shared edge-cache lookup**. Cache hits now pay the gate's targeted metadata read; this is intentional for privacy revocation and must be measured by `perf:audit` rather than removed to recover the old hit count. The gate must fail closed.
 
+- Per-bookmark icon display state published by trusted-device icon loads (`icon_revision` / `icon_write_epoch` / `icon_display`) lives in the per-id store `src/lib/iconDisplayStore.ts` (`bookmarkIconDisplay`), consumed by the icon-rendering components (`BookmarkCard`, `SpotlightBookmarkIcon`, `CachedBookmarkIcon`). A single icon load must not replace the `adminStore` / `publicStore` bookmark arrays, so Home's sorted/grouped/search-index memos keep their identity; the overrides are merged back only when persisting the admin snapshot. Category icons still use the array patch path (few objects).
+- App root theme/background variables and the injected custom CSS are written through `src/lib/rootStyleWriter.ts` as two independent reactive writes that skip unchanged content; unrelated data changes (clicks, icon state, bookmark edits) must not rewrite `<style id="custom-css-inject">`.
+
 ## Trusted Device Icon Copies
 
 - Persistent object-icon copies are an explicit device opt-in and require a current authenticated receipt. Standard mode and anonymous visitors continue to use the ordinary `no-store` proxy path; ordinary proxy responses are never persisted.

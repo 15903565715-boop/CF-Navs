@@ -103,13 +103,10 @@
     refreshPublicData,
     refreshVisibleData,
   } from './lib/dataService'
+  import { createRootStyleWriter } from './lib/rootStyleWriter'
 
   type SettingsSubset = SettingsFormValue
-  const ROOT_HOME_BACKGROUND_PROPERTIES = [
-    '--home-background',
-    '--home-background-mask',
-    '--home-background-mask-color',
-  ]
+  const rootStyleWriter = typeof document !== 'undefined' ? createRootStyleWriter(document) : null
 
   let booting = true
   let installState: InstallScreenState = { type: 'checking' }
@@ -301,26 +298,12 @@
 
   $: homeBackgroundStyle = buildHomeBackground(publicData?.settings ?? null, activeTheme)
 
-  $: if (typeof document !== 'undefined') {
-    document.documentElement.dataset.theme = activeTheme
-    document.documentElement.dataset.backgroundPreset = publicData?.settings.background_preset_id ?? 'custom'
-
-    // Mobile overscroll exposes the root canvas outside the fixed homepage layers.
-    const parsedHomeBackground = document.createElement('div').style
-    parsedHomeBackground.cssText = homeBackgroundStyle
-    for (const property of ROOT_HOME_BACKGROUND_PROPERTIES) {
-      document.documentElement.style.setProperty(property, parsedHomeBackground.getPropertyValue(property))
-    }
-
-    // OD-01: Custom CSS injection
-    let styleTag = document.getElementById('custom-css-inject');
-    if (!styleTag) {
-      styleTag = document.createElement('style');
-      styleTag.id = 'custom-css-inject';
-      document.head.appendChild(styleTag);
-    }
-    styleTag.textContent = publicData?.settings?.custom_css ?? '';
-  }
+  // 主题 / 背景变量与自定义 CSS 分成两条响应式语句，只依赖各自的原始值（字符串相等即不重跑），
+  // 写入口内部再按内容去重：书签、点击计数、图标状态变化不再重写全局样式。
+  $: rootBackgroundPresetId = publicData?.settings.background_preset_id ?? 'custom'
+  $: customCss = publicData?.settings?.custom_css ?? ''
+  $: rootStyleWriter?.applyTheme({ theme: activeTheme, backgroundPresetId: rootBackgroundPresetId, backgroundStyle: homeBackgroundStyle })
+  $: rootStyleWriter?.applyCustomCss(customCss)
 
   // 自定义 JS 单独走一条响应式语句：上面那个块还依赖 activeTheme 和
   // homeBackgroundStyle，写在里面的话切个主题就会把用户脚本重跑一遍。

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { createTrustedIconView, emptyTrustedIcon } from '../lib/trustedIconView'
+  import { applyIconDisplayOverride, bookmarkIconDisplay } from '../lib/iconDisplayStore'
   let trustedImage = emptyTrustedIcon
   const trustedView = createTrustedIconView(value => { trustedImage = value })
   import { onDestroy } from 'svelte'
@@ -39,9 +40,11 @@
   let iconStateKey = ''
   const localCacheRequest = { current: 0 }
 
-  $: trustedView.set({ ...bookmark, visible: true, online_url: iconBaseState.proxiedHttpIconUrl })
+  $: iconDisplayOverride = bookmarkIconDisplay.watch(bookmark.id)
+  $: iconBookmark = applyIconDisplayOverride(bookmark, $iconDisplayOverride)
+  $: trustedView.set({ ...iconBookmark, visible: true, online_url: iconBaseState.proxiedHttpIconUrl })
   $: iconBaseState = deriveBookmarkCardIconBase({
-    bookmark,
+    bookmark: iconBookmark,
     iconInView: true,
     shouldWaitForLocalIconCache: true,
     iconAccessKey,
@@ -50,7 +53,7 @@
   $: localCacheKey = iconBaseState.localCacheKey
   $: syncLocalCachedIconUrl = readCachedBookmarkIconDataUri(localCacheKey) ?? ''
   $: iconUrlState = deriveBookmarkCardIconUrl({
-    bookmark,
+    bookmark: iconBookmark,
     baseState: iconBaseState,
     cachedIconFailed,
     fallbackFailed,

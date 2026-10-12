@@ -1,5 +1,6 @@
 <script lang="ts">
   import { createTrustedIconView, emptyTrustedIcon } from '../lib/trustedIconView'
+  import { applyIconDisplayOverride, bookmarkIconDisplay } from '../lib/iconDisplayStore'
   let trustedImage = emptyTrustedIcon
   const trustedView = createTrustedIconView(value => { trustedImage = value })
   import { onDestroy, onMount } from 'svelte'
@@ -87,9 +88,12 @@
   const LONG_PRESS_MS = 500
 
   $: openInNewTab = bookmark.open_method === 1
-  $: trustedView.set({ ...bookmark, visible: iconInView, preview, online_url: iconBaseState.proxiedHttpIconUrl })
+  // 图标显示状态来自独立的按 id 订阅表：图标更新只重算这张卡片，不触发首页结构数据重建。
+  $: iconDisplayOverride = bookmarkIconDisplay.watch(bookmark.id)
+  $: iconBookmark = applyIconDisplayOverride(bookmark, $iconDisplayOverride)
+  $: trustedView.set({ ...iconBookmark, visible: iconInView, preview, online_url: iconBaseState.proxiedHttpIconUrl })
   $: iconBaseState = deriveBookmarkCardIconBase({
-    bookmark,
+    bookmark: iconBookmark,
     iconInView,
     shouldWaitForLocalIconCache: true,
     iconAccessKey,
@@ -103,7 +107,7 @@
     ? readCachedBookmarkIconDataUri(localCacheKey) ?? ''
     : ''
   $: iconUrlState = deriveBookmarkCardIconUrl({
-    bookmark,
+    bookmark: iconBookmark,
     baseState: iconBaseState,
     cachedIconFailed,
     fallbackFailed,
