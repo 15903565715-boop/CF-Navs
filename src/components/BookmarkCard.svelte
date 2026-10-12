@@ -6,8 +6,7 @@
   import type { CardStyle, DescriptionDisplayMode, PublicBookmark } from '../../shared/types'
   import type { CategoryTreeOption } from '../lib/categorySelect'
   import BookmarkCardCompact from './BookmarkCardCompact.svelte'
-  import { publicStore } from '../lib/stores'
-  import { api } from '../lib/api'
+  import { recordBookmarkClick } from '../lib/dataService'
   import BookmarkCardInfo from './BookmarkCardInfo.svelte'
   import BookmarkContextMenu from './BookmarkContextMenu.svelte'
   import BookmarkLinkModal from './BookmarkLinkModal.svelte'
@@ -359,9 +358,8 @@
       return
     }
 
-    // Register click both locally and on server
-    publicStore.incrementClick(bookmark.id)
-    void api.public.registerClick(bookmark.id)
+    // 本地乐观 +1 + 持久化本地快照 + 异步登记服务端（见 dataService.recordBookmarkClick）
+    recordBookmarkClick(bookmark.id)
 
     if (!shouldOpenBookmarkModal({ sortMode, openMethod: bookmark.open_method })) return
     event.preventDefault()
