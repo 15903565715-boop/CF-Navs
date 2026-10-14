@@ -14,6 +14,23 @@ describe('first-screen chunk wiring', () => {
     expect(app).toContain("import('./views/Recover.svelte')")
   })
 
+  it('keeps every lazily registered component as a literal dynamic import', () => {
+    // 代码审查三轮第 11 项：懒加载注册表只接收函数，路径必须仍以字面量 import() 写在 App 里，
+    // 不能改成静态导入或拼接路径，否则 Vite 分包会变化。
+    for (const path of [
+      './views/Admin.svelte',
+      './components/LoginModal.svelte',
+      './components/BookmarkEditModal.svelte',
+      './components/CategoryEditModal.svelte',
+      './components/SearchSpotlight.svelte',
+      './views/Install.svelte',
+      './views/Recover.svelte',
+    ]) {
+      expect(app).toContain(`import('${path}')`)
+      expect(app).not.toMatch(new RegExp(`import\\s+\\w+\\s+from\\s+'${path.replace(/\./g, '\\.')}'`))
+    }
+  })
+
   it('keeps the context menu and full theme presets out of the home path', () => {
     expect(card).not.toMatch(/import\s+BookmarkContextMenu\s+from/)
     expect(appData).not.toContain("from './themePresets'")

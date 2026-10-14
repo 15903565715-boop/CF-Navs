@@ -36,7 +36,7 @@
 2. **媒体查询订阅**（H、P 中的 `prefers-color-scheme` / `prefers-reduced-motion`）→ `src/lib/appMediaPreferences.ts`：`subscribeSystemDark(onChange) → stop`、`readReducedMotion()`，onMount/onDestroy 只调用。✅ 已完成（代码审查三轮第 8 项）。
 3. **Splash 模板去重**（Q）→ `src/components/AppSplash.svelte`（`title` / `message` / `progress` / 渐变 id 前缀）。纯模板，需快照/渲染测试确认 DOM 不变；注意首屏体积。✅ 已完成（代码审查三轮第 9 项；实际 props 为 `gradientId` / `title` / `message` / `loading` / `progress`）。
 4. **确认对话框控制器**（I）→ 在 `appConfirmDialog.ts` 增加 `createConfirmController(onChange)`（request / close，单 resolver 语义），App 订阅状态。✅ 已完成（代码审查三轮第 10 项；另有 `getState()`，用普通闭包控制器而非 store，App 在 `onChange` 中赋值 `confirmDialog`）。
-5. **懒加载组件注册表**（C）→ 用一个 store 化的注册表替代 7 个 `let XxxComponent` + loader；注意必须保持 `import()` 字面量以免破坏分包（`firstScreenChunks` 测试兜底）。
+5. **懒加载组件注册表**（C）→ 用一个 store 化的注册表替代 7 个 `let XxxComponent` + loader；注意必须保持 `import()` 字面量以免破坏分包（`firstScreenChunks` 测试兜底）。✅ 已完成（代码审查三轮第 11 项；`createLazyComponentRegistry`，每个组件一个只读 store，`import()` 字面量仍留在 App，chunk 列表不变）。
 6. **启动 / 安装流程**（K、O）→ `appBootController.ts`（依赖注入 api / storage / 回调），这是逻辑最重、测试价值最高的一步，放在模式成熟后做。
 7. **认证与 CRUD 用例**（L、M、N）→ 按领域拆 `appCategoryUseCases.ts` / `appBookmarkUseCases.ts`，保存/错误标志收进各自 store；分多次提交。
 8. **（后续阶段）Svelte 5 runes 迁移**：以上步骤完成、App 变薄后，再逐组件开启 runes（`<svelte:options runes />`），`$:` → `$derived` / `$effect`，`on:` → 事件属性，`<svelte:component>` → 动态组件。不与拆分混在同一提交。

@@ -47,7 +47,7 @@
     toSettingsForm,
     type SettingsFormValue,
   } from './lib/appData'
-  import { createLazyComponentLoader } from './lib/appLazyComponent'
+  import { createLazyComponentRegistry } from './lib/appLazyComponent'
   import {
     createBrowserCustomScriptHost,
     createCustomScriptController,
@@ -121,83 +121,42 @@
     if (typeof window === 'undefined') return false
     return window.location.pathname === '/admin' || window.location.pathname === '/admin/'
   }
-  let AdminComponent: typeof import('./views/Admin.svelte').default | null = null
-  let LoginModalComponent: typeof import('./components/LoginModal.svelte').default | null = null
-  let BookmarkEditModalComponent: typeof import('./components/BookmarkEditModal.svelte').default | null = null
-  let CategoryEditModalComponent: typeof import('./components/CategoryEditModal.svelte').default | null = null
-  let SearchSpotlightComponent: typeof import('./components/SearchSpotlight.svelte').default | null = null
+  // 7 个按需加载的视图 / 模态。保持 `import()` 字面量，Vite 才会按原样分包（firstScreenChunks 测试兜底）。
   // 安装 / 找回密码视图只在首次部署或忘记密码时出现，不进首屏 chunk（代码审查二轮第 4 项）。
-  let InstallComponent: typeof import('./views/Install.svelte').default | null = null
-  let RecoverComponent: typeof import('./views/Recover.svelte').default | null = null
+  const lazyComponents = createLazyComponentRegistry({
+    Admin: () => import('./views/Admin.svelte'),
+    LoginModal: () => import('./components/LoginModal.svelte'),
+    BookmarkEditModal: () => import('./components/BookmarkEditModal.svelte'),
+    CategoryEditModal: () => import('./components/CategoryEditModal.svelte'),
+    SearchSpotlight: () => import('./components/SearchSpotlight.svelte'),
+    Install: () => import('./views/Install.svelte'),
+    Recover: () => import('./views/Recover.svelte'),
+  })
+  const {
+    Admin: AdminComponent,
+    LoginModal: LoginModalComponent,
+    BookmarkEditModal: BookmarkEditModalComponent,
+    CategoryEditModal: CategoryEditModalComponent,
+    SearchSpotlight: SearchSpotlightComponent,
+    Install: InstallComponent,
+    Recover: RecoverComponent,
+  } = lazyComponents.components
   let lazyViewError = ''
   let confirmDialog: ConfirmDialogState | null = null
   const confirmController = createConfirmController((next) => {
     confirmDialog = next
   })
 
-  const ensureAdminComponent = createLazyComponentLoader({
-    load: () => import('./views/Admin.svelte'),
-    getCurrent: () => AdminComponent,
-    setCurrent: (component) => {
-      AdminComponent = component
-    },
-  })
-
-  const ensureLoginModalComponent = createLazyComponentLoader({
-    load: () => import('./components/LoginModal.svelte'),
-    getCurrent: () => LoginModalComponent,
-    setCurrent: (component) => {
-      LoginModalComponent = component
-    },
-  })
-
-  const ensureBookmarkEditModalComponent = createLazyComponentLoader({
-    load: () => import('./components/BookmarkEditModal.svelte'),
-    getCurrent: () => BookmarkEditModalComponent,
-    setCurrent: (component) => {
-      BookmarkEditModalComponent = component
-    },
-  })
-  const ensureCategoryEditModalComponent = createLazyComponentLoader({
-    load: () => import('./components/CategoryEditModal.svelte'),
-    getCurrent: () => CategoryEditModalComponent,
-    setCurrent: (component) => {
-      CategoryEditModalComponent = component
-    },
-  })
-
-  const ensureSearchSpotlightComponent = createLazyComponentLoader({
-    load: () => import('./components/SearchSpotlight.svelte'),
-    getCurrent: () => SearchSpotlightComponent,
-    setCurrent: (component) => {
-      SearchSpotlightComponent = component
-    },
-  })
-
-  const ensureInstallComponent = createLazyComponentLoader({
-    load: () => import('./views/Install.svelte'),
-    getCurrent: () => InstallComponent,
-    setCurrent: (component) => {
-      InstallComponent = component
-    },
-  })
-  const ensureRecoverComponent = createLazyComponentLoader({
-    load: () => import('./views/Recover.svelte'),
-    getCurrent: () => RecoverComponent,
-    setCurrent: (component) => {
-      RecoverComponent = component
-    },
-  })
-  function loadLazyView(ensure: () => Promise<void>): void {
+  function loadLazyView(name: 'Install' | 'Recover'): void {
     lazyViewError = ''
-    void ensure().catch((error) => {
+    void lazyComponents.ensure(name).catch((error) => {
       console.warn('[CF-Navs] failed to load view chunk', error)
       lazyViewError = '页面资源加载失败，请检查网络后刷新重试。'
     })
   }
   // 加载期间沿用启动 splash；失败时在 splash 上给出可读提示而不是一直转圈。
-  $: if (recoverActive && !RecoverComponent) loadLazyView(ensureRecoverComponent)
-  $: if (!recoverActive && installView && !InstallComponent) loadLazyView(ensureInstallComponent)
+  $: if (recoverActive && !$RecoverComponent) loadLazyView('Recover')
+  $: if (!recoverActive && installView && !$InstallComponent) loadLazyView('Install')
 
   const authViewIntent = createAuthViewIntent()
   let loginModalOpen = false
@@ -215,7 +174,7 @@
   async function openSpotlight(): Promise<void> {
     if (spotlightOpen || anyBlockingModalOpen()) return
     if (currentView !== 'home' || !canSeeHome) return
-    await ensureSearchSpotlightComponent()
+    await lazyComponents.ensure('SearchSpotlight')
     // 懒加载是异步的：其间可能开了模态或切了视图/登出。加载完成后重新校验，
     // 否则会与刚打开的模态并发出现，破坏 D-e 模态互斥与单槽滚动锁。
     if (spotlightOpen || anyBlockingModalOpen()) return
@@ -295,7 +254,7 @@
   $: settingsValue = toSettingsForm(adminData.settings)
 
   $: if (shouldOpenLoginGate({ booting, currentView, canSeeHome })) {
-    void ensureLoginModalComponent()
+    void lazyComponents.ensure('LoginModal')
     loginModalOpen = true
     currentView = 'login'
   }
@@ -537,11 +496,11 @@
       authenticated: isLoggedIn(),
     })
     if (homeGate.loginModalOpen) {
-      await ensureLoginModalComponent()
+      await lazyComponents.ensure('LoginModal')
     }
     loginModalOpen = homeGate.loginModalOpen
     if (isAdminPath() && isLoggedIn()) {
-      await ensureAdminComponent()
+      await lazyComponents.ensure('Admin')
       currentView = 'admin'
       loginModalOpen = false
     } else {
@@ -594,7 +553,7 @@
     authViewIntent.invalidate()
     rootError = ''
     authStore.resetError()
-    await ensureLoginModalComponent()
+    await lazyComponents.ensure('LoginModal')
     loginModalOpen = true
     if (!canSeeHome) currentView = 'login'
   }
@@ -625,7 +584,7 @@
     rootError = ''
     await refreshLoggedInData(true)
     if (isAdminPath()) {
-      await ensureAdminComponent()
+      await lazyComponents.ensure('Admin')
       currentView = 'admin'
       return
     }
@@ -668,7 +627,7 @@
         authenticated: false,
       })
       if (viewIsCurrent() && !isLoggedIn()) {
-        if (homeGate.loginModalOpen) await ensureLoginModalComponent()
+        if (homeGate.loginModalOpen) await lazyComponents.ensure('LoginModal')
         // Lazy loading can yield to another login/recovery action as well.
         if (viewIsCurrent() && !isLoggedIn()) {
           loginModalOpen = homeGate.loginModalOpen
@@ -694,7 +653,7 @@
       return
     }
 
-    await ensureAdminComponent()
+    await lazyComponents.ensure('Admin')
     replaceBrowserPath('/admin')
     currentView = 'admin'
   }
@@ -709,8 +668,8 @@
       return false
     }
 
-    if (returnToHome) await ensureCategoryEditModalComponent()
-    else await ensureAdminComponent()
+    if (returnToHome) await lazyComponents.ensure('CategoryEditModal')
+    else await lazyComponents.ensure('Admin')
     return true
   }
   async function handleOpenCreateCategory(parentId: string | number | null = null, returnToHomeOverride: boolean | undefined = undefined): Promise<void> {
@@ -832,7 +791,7 @@
       return
     }
     const fallbackCategoryId = categoryId ?? get(adminStore).data.categories[0]?.id
-    await ensureBookmarkEditModalComponent()
+    await lazyComponents.ensure('BookmarkEditModal')
     bookmarkModalMode = 'create'
     activeBookmark = createBookmarkDraft(fallbackCategoryId)
     bookmarkModalOpen = true
@@ -851,7 +810,7 @@
       if (!data || intent !== editIntent) return
       const current = data.bookmarks.find(item => item.id === Number(bookmark.id))
       if (!current) throw new Error('书签已不存在，请刷新后重试。')
-      await ensureBookmarkEditModalComponent()
+      await lazyComponents.ensure('BookmarkEditModal')
       if (!isLoggedIn() || get(authStore).session !== editSession || intent !== editIntent) return
       bookmarkModalMode = 'edit'
       activeBookmark = toBookmarkForm(current)
@@ -1001,7 +960,7 @@
     adminStore.reset()
     await clearCachedAdminData()
     rootError = '管理员密码已更新，请使用新密码重新登录。'
-    await ensureLoginModalComponent()
+    await lazyComponents.ensure('LoginModal')
     loginModalOpen = true
     currentView = 'login'
   }
@@ -1126,16 +1085,16 @@
 
 <svelte:window on:keydown={handleGlobalKeyDown} />
 
-{#if recoverActive && RecoverComponent}
+{#if recoverActive && $RecoverComponent}
   <svelte:component
-    this={RecoverComponent}
+    this={$RecoverComponent}
     onRecovered={handleRecovered}
     onGoInstall={handleGoInstall}
     onCancel={handleRecoverCancel}
   />
-{:else if !recoverActive && installView && InstallComponent}
+{:else if !recoverActive && installView && $InstallComponent}
   <svelte:component
-    this={InstallComponent}
+    this={$InstallComponent}
     mode={installView.mode}
     missingBindings={installView.missingBindings}
     schemaVersion={installView.schemaVersion}
@@ -1189,9 +1148,9 @@
         title="请先登录管理员账号"
         message="当前站点未公开，登录后再加载后台管理界面。"
       />
-    {:else if AdminComponent}
+    {:else if $AdminComponent}
       <svelte:component
-        this={AdminComponent}
+        this={$AdminComponent}
         isAuthenticated={$isAuthenticated}
         authLoading={$authStore.loading}
         categories={adminCategories}
@@ -1247,9 +1206,9 @@
       />
     {/if}
 
-    {#if LoginModalComponent}
+    {#if $LoginModalComponent}
       <svelte:component
-        this={LoginModalComponent}
+        this={$LoginModalComponent}
         open={loginModalOpen}
         loading={$authStore.loading}
         error={$authStore.error ?? ''}
@@ -1259,9 +1218,9 @@
       />
     {/if}
 
-    {#if BookmarkEditModalComponent}
+    {#if $BookmarkEditModalComponent}
       <svelte:component
-        this={BookmarkEditModalComponent}
+        this={$BookmarkEditModalComponent}
         open={bookmarkModalOpen}
         loading={savingBookmark}
         error={bookmarkError}
@@ -1275,9 +1234,9 @@
         imageHostUrl={adminData.settings?.image_host_url ?? ''}
       />
     {/if}
-    {#if CategoryEditModalComponent && categoryCreateReturnToHome}
+    {#if $CategoryEditModalComponent && categoryCreateReturnToHome}
       <svelte:component
-        this={CategoryEditModalComponent}
+        this={$CategoryEditModalComponent}
         open={categoryModalOpen}
         loading={savingCategory}
         error={categoryError}
@@ -1289,9 +1248,9 @@
         imageHostUrl={adminData.settings?.image_host_url ?? ''}
       />
     {/if}
-    {#if SearchSpotlightComponent}
+    {#if $SearchSpotlightComponent}
       <svelte:component
-        this={SearchSpotlightComponent}
+        this={$SearchSpotlightComponent}
         open={spotlightOpen}
         bookmarks={publicData?.bookmarks ?? []}
         categories={publicData?.categories ?? []}
