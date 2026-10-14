@@ -13,6 +13,7 @@
     type Settings,
     type ThemeMode,
   } from '../shared/types'
+  import AppSplash from './components/AppSplash.svelte'
   import ConfirmDialog from './components/ConfirmDialog.svelte'
   import Toast from './components/Toast.svelte'
   import Home from './views/Home.svelte'
@@ -1154,40 +1155,13 @@
     onRetryStatus={initializeApp}
   />
 {:else if booting || recoverActive || installView}
-  <div class="app-splash">
-    <div class="app-splash-card app-splash-card--loading" role="status" aria-live="polite" aria-busy="true">
-      <div class="app-splash-mark" aria-hidden="true">
-        <svg class="app-splash-spinner" viewBox="0 0 50 50">
-          <circle class="ring" cx="25" cy="25" r="20" fill="none" stroke="url(#splash-spinner-grad-boot)" stroke-width="3.5"></circle>
-          <circle class="dot" cx="25" cy="25" r="4.5" fill="#2dd4bf"></circle>
-          <defs>
-            <linearGradient id="splash-spinner-grad-boot" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stop-color="#38bdf8"></stop>
-              <stop offset="60%" stop-color="#2dd4bf"></stop>
-              <stop offset="100%" stop-color="#bef264"></stop>
-            </linearGradient>
-          </defs>
-        </svg>
-      </div>
-      <p class="eyebrow">CF-Navs</p>
-      {#if lazyViewError}
-        <h1>页面加载失败</h1>
-        <p>{lazyViewError}</p>
-      {:else}
-        <h1>正在加载项目数据...</h1>
-        <p>前端状态与后端接口正在初始化，请稍候。</p>
-      {/if}
-      <div class="app-splash-progress" aria-hidden="true">
-        <div class="app-splash-progress-meta">
-          <span>初始化数据</span>
-          <span>同步中</span>
-        </div>
-        <div class="app-splash-track">
-          <span class="app-splash-bar"></span>
-        </div>
-      </div>
-    </div>
-  </div>
+  <AppSplash
+    gradientId="splash-spinner-grad-boot"
+    loading
+    title={lazyViewError ? '页面加载失败' : '正在加载项目数据...'}
+    message={lazyViewError ? lazyViewError : '前端状态与后端接口正在初始化，请稍候。'}
+    progress={{ label: '初始化数据', status: '同步中' }}
+  />
 {:else}
   <div class="app-shell" in:fade={{ duration: prefersReducedMotion ? 0 : 260, delay: prefersReducedMotion ? 0 : 60 }}>
     <Toast />
@@ -1220,26 +1194,11 @@
         />
       </div>
     {:else if currentView === 'login'}
-      <div class="app-splash">
-        <div class="app-splash-card">
-          <div class="app-splash-mark" aria-hidden="true">
-            <svg class="app-splash-spinner" viewBox="0 0 50 50">
-              <circle class="ring" cx="25" cy="25" r="20" fill="none" stroke="url(#splash-spinner-grad-login)" stroke-width="3.5"></circle>
-              <circle class="dot" cx="25" cy="25" r="4.5" fill="#2dd4bf"></circle>
-              <defs>
-                <linearGradient id="splash-spinner-grad-login" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stop-color="#38bdf8"></stop>
-                  <stop offset="60%" stop-color="#2dd4bf"></stop>
-                  <stop offset="100%" stop-color="#bef264"></stop>
-                </linearGradient>
-              </defs>
-            </svg>
-          </div>
-          <p class="eyebrow">CF-Navs</p>
-          <h1>请先登录管理员账号</h1>
-          <p>当前站点未公开，登录后再加载后台管理界面。</p>
-        </div>
-      </div>
+      <AppSplash
+        gradientId="splash-spinner-grad-login"
+        title="请先登录管理员账号"
+        message="当前站点未公开，登录后再加载后台管理界面。"
+      />
     {:else if AdminComponent}
       <svelte:component
         this={AdminComponent}
@@ -1289,35 +1248,13 @@
         onImportData={handleImportData}
       />
     {:else}
-      <div class="app-splash">
-        <div class="app-splash-card app-splash-card--loading" role="status" aria-live="polite" aria-busy="true">
-          <div class="app-splash-mark" aria-hidden="true">
-            <svg class="app-splash-spinner" viewBox="0 0 50 50">
-              <circle class="ring" cx="25" cy="25" r="20" fill="none" stroke="url(#splash-spinner-grad-admin)" stroke-width="3.5"></circle>
-              <circle class="dot" cx="25" cy="25" r="4.5" fill="#2dd4bf"></circle>
-              <defs>
-                <linearGradient id="splash-spinner-grad-admin" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stop-color="#38bdf8"></stop>
-                  <stop offset="60%" stop-color="#2dd4bf"></stop>
-                  <stop offset="100%" stop-color="#bef264"></stop>
-                </linearGradient>
-              </defs>
-            </svg>
-          </div>
-          <p class="eyebrow">CF-Navs</p>
-          <h1>正在加载后台...</h1>
-          <p>管理界面分包正在按需载入。</p>
-          <div class="app-splash-progress" aria-hidden="true">
-            <div class="app-splash-progress-meta">
-              <span>载入模块</span>
-              <span>请稍候</span>
-            </div>
-            <div class="app-splash-track">
-              <span class="app-splash-bar"></span>
-            </div>
-          </div>
-        </div>
-      </div>
+      <AppSplash
+        gradientId="splash-spinner-grad-admin"
+        loading
+        title="正在加载后台..."
+        message="管理界面分包正在按需载入。"
+        progress={{ label: '载入模块', status: '请稍候' }}
+      />
     {/if}
 
     {#if LoginModalComponent}
