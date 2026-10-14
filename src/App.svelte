@@ -67,6 +67,7 @@
     toInstallScreenState,
     type InstallScreenState,
   } from './lib/appInstall'
+  import { readReducedMotion, subscribeSystemDark } from './lib/appMediaPreferences'
   import { createBookmarkDraft, createCategoryDraft } from './lib/appModalState'
   import {
     canSeeHomeView,
@@ -297,8 +298,7 @@
   }
 
   let systemPrefersDark = false
-  let mediaQuery: MediaQueryList | null = null
-  let handleSystemThemeChange: ((event: MediaQueryListEvent) => void) | null = null
+  let stopSystemDark: (() => void) | null = null
   let stopPublicDataFocusRefresh: (() => void) | null = null
 
   $: resolvedThemeState = resolveAppThemeState({
@@ -1108,15 +1108,10 @@
     preferredThemeMode = readPreferredThemeMode()
     customScriptController = createCustomScriptController(createBrowserCustomScriptHost())
 
-    if (typeof window !== 'undefined' && window.matchMedia) {
-      prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-      mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
-      systemPrefersDark = mediaQuery.matches
-      handleSystemThemeChange = (event: MediaQueryListEvent) => {
-        systemPrefersDark = event.matches
-      }
-      mediaQuery.addEventListener('change', handleSystemThemeChange)
-    }
+    prefersReducedMotion = readReducedMotion()
+    stopSystemDark = subscribeSystemDark((prefersDark) => {
+      systemPrefersDark = prefersDark
+    })
 
     if (typeof window !== 'undefined' && isRecoverPath(window.location.pathname)) {
       recoverActive = true
@@ -1131,9 +1126,7 @@
 
   onDestroy(() => {
     stopIconDevice?.()
-    if (mediaQuery && handleSystemThemeChange) {
-      mediaQuery.removeEventListener('change', handleSystemThemeChange)
-    }
+    stopSystemDark?.()
     // 不 revoke 的话每次重建都会漏一个 blob URL。
     customScriptController?.destroy()
     stopPublicDataFocusRefresh?.()
