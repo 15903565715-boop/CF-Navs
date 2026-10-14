@@ -75,6 +75,7 @@
     shouldRevealHomeFromLocalSnapshot,
     type AppView,
   } from './lib/appNavigation'
+  import { resolveGlobalShortcut } from './lib/appShortcuts'
   import { createOptimisticSortState, runOptimisticSort } from './lib/appSortQueue'
   import { getAdminBookmarkCategoryOptions } from './lib/adminListState'
   import { getNextThemePreference, resolveAppThemeState } from './lib/appThemeState'
@@ -230,29 +231,14 @@
     viewBookmark = null
   }
 
-  // 全局快捷键集中在 App：Ctrl+K / Cmd+K / 「/」 唤起 Spotlight，Esc 关闭。
-  // 排除输入态与 IME；仅首页可见时生效；模态互斥由 openSpotlight 内部把关。
+  // 全局快捷键集中在 App：决策逻辑见 lib/appShortcuts（Ctrl+K / Cmd+K / 「/」 唤起 Spotlight，Esc 关闭）；
+  // 模态互斥由 openSpotlight 内部把关。
   function handleGlobalKeyDown(event: KeyboardEvent): void {
-    const target = event.target as HTMLElement | null
-    const typing = Boolean(target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable))
-    if (event.isComposing || event.key === 'Process' || typing) return
-    if (currentView !== 'home' || !canSeeHome) return
-
-    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
-      event.preventDefault()
-      if (spotlightOpen) closeSpotlight()
-      else void openSpotlight()
-      return
-    }
-    if (event.key === '/' && !spotlightOpen) {
-      event.preventDefault()
-      void openSpotlight()
-      return
-    }
-    if (event.key === 'Escape' && spotlightOpen) {
-      event.preventDefault()
-      closeSpotlight()
-    }
+    const action = resolveGlobalShortcut(event, { homeActive: currentView === 'home' && canSeeHome, spotlightOpen })
+    if (!action) return
+    event.preventDefault()
+    if (action === 'close-spotlight') closeSpotlight()
+    else void openSpotlight()
   }
 
   let categoryModalMode: 'create' | 'edit' = 'create'
