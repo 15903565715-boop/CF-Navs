@@ -500,7 +500,7 @@
                     {#if category.icon || category.icon_display === 'image'}
                       <CategoryIcon category={category} size="var(--category-root-icon-size, 38px)" className="search-category-icon" iconAccessKey={publicCategoryIds.has(Number(category.id)) ? '' : visibleIconAccessKey} />
                     {/if}
-                    <h2 id={`search-category-${category.id}`} style={`font-size: var(--category-root-font-size, 1.28rem)`}>{category.title}</h2>
+                    <h2 id={`search-category-${category.id}`} style="font-size: var(--category-root-font-size, 1.28rem)">{category.title}</h2>
                   </div>
                   <span>{getCategoryTreeBookmarkCount(category, visibleCategoryBookmarks)} 个匹配站点</span>
                 </header>
@@ -735,6 +735,8 @@
 
   {#if settings?.footer_html}
     <footer class="home-footer">
+      <!-- 页脚 HTML 由管理员在后台设置中填写，按设计原样渲染（可信输入）。 -->
+      <!-- eslint-disable-next-line svelte/no-at-html-tags -->
       {@html settings.footer_html}
     </footer>
   {/if}

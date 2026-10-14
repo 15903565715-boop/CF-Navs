@@ -22,7 +22,7 @@ function decodeTextPrefix(bytes: Uint8Array, limit = 2048): string {
 }
 
 function looksLikeSvg(bytes: Uint8Array): boolean {
-  const head = decodeTextPrefix(bytes).replace(/^﻿/, '').trim().toLowerCase()
+  const head = decodeTextPrefix(bytes).replace(/^\uFEFF/, '').trim().toLowerCase()
   if (!head || head.startsWith('<!doctype html') || head.startsWith('<html')) {
     return false
   }
@@ -91,7 +91,7 @@ export function sniffImageContentType(bytes: Uint8Array, declaredType: string | 
   // signature, while still rejecting auth walls / error pages.
   const declared = declaredType?.split(';')[0]?.trim().toLowerCase() || ''
   if (declared.startsWith('image/') && declared !== 'image/svg+xml') {
-    const head = decodeTextPrefix(b, 512).replace(/^﻿/, '').trim().toLowerCase()
+    const head = decodeTextPrefix(b, 512).replace(/^\uFEFF/, '').trim().toLowerCase()
     const looksLikeHtml =
       head.startsWith('<!doctype html') || head.startsWith('<html') || head.startsWith('<head')
     if (!looksLikeHtml) return declared

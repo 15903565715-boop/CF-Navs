@@ -182,7 +182,7 @@ try {
   await api('/settings', { navigation: { position: 'top', always_expanded: false } }, 'PUT')
   let fixtureTitle = 'Local trusted icon'
   const bookmark = await api('/bookmarks', { category_id: category.id, title: fixtureTitle, url: 'https://example.com', icon: acceptanceFixtures.bookmark.uri, icon_source: 'custom', is_private: false })
-  const childBookmark = await api('/bookmarks', { category_id: childCategory.id, title: 'Local child category icon fixture', url: 'https://example.org', icon, icon_source: 'custom', is_private: false })
+  await api('/bookmarks', { category_id: childCategory.id, title: 'Local child category icon fixture', url: 'https://example.org', icon, icon_source: 'custom', is_private: false })
   await api(`/public/bookmarks/${bookmark.id}/click`)
   await cdp.start(); report.ownership.pid = cdp.chromeProcess.pid; report.ownership.browserStartedByTest = cdp.startedByTest
   await writeFile(output + '.ownership.json', JSON.stringify(report.ownership, null, 2))
@@ -431,7 +431,7 @@ try {
     try {
       const tx = db.transaction(['entries', 'bodies'], 'readonly')
       const read = (store, key) => new Promise((resolve, reject) => { const item = tx.objectStore(store).get(key); item.onsuccess = () => resolve(item.result); item.onerror = () => reject(item.error) })
-      const [entry, body, bookmarkEntry] = await Promise.all([read('entries', 'category:' + id), read('bodies', 'category:' + id), read('entries', 'bookmark:' + id)])
+      const [entry, body] = await Promise.all([read('entries', 'category:' + id), read('bodies', 'category:' + id), read('entries', 'bookmark:' + id)])
       return { type: entry?.descriptor?.object_type, id: entry?.descriptor?.object_id, key: entry?.key, ready: entry?.descriptor?.state === 'ready',
         bodyBytes: body?.size ?? 0 }
     } finally { db.close() }

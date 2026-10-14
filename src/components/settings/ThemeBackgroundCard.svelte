@@ -28,7 +28,7 @@
   $: isLight = theme === 'light'
   $: title = isLight ? '浅色模式背景' : '深色模式背景'
   $: badge = isLight ? 'Light' : 'Dark'
-  $: imagePlaceholder = '请输入图片 URL 或点击右侧上传'
+  const imagePlaceholder = '请输入图片 URL 或点击右侧上传'
   $: colorPlaceholder = isLight ? '#f8fafc' : '#0f172a'
   $: imageInputLabel = isLight ? '浅色背景图片地址' : '深色背景图片地址'
   $: gradientDefaults = isLight ? defaultLightGradient : defaultDarkGradient

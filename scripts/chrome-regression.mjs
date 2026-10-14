@@ -615,13 +615,6 @@ async function runAdminChecks() {
     const buttonByText = (text) =>
       Array.from(document.querySelectorAll('button'))
         .find((button) => button.textContent?.includes(text))
-    const click = async (selector) => {
-      const button = document.querySelector(selector)
-      if (!button) return false
-      button.click()
-      await delay(450)
-      return true
-    }
     const clickTab = async (testIdSelector, text) => {
       const button = document.querySelector(testIdSelector) || buttonByText(text)
       if (!button) return false

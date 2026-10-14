@@ -1,4 +1,6 @@
 // Local-only native IndexedDB integration checks. Never reads a production target or credentials.
+// 以下名字由页面内 setup（globalThis.*）与 IIFE bundle 注入，只在 b.call 传入的页面函数中使用。
+/* global CFNavsIconStorage, store:writable, lease:writable, allow, image, descriptor, reset, metrics */
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
 import net from 'node:net'

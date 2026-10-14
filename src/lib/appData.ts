@@ -253,7 +253,7 @@ export function buildHomeBackground(settings: PublicSettings | null, theme: 'lig
 
   const background = settings.backgrounds?.[theme] ?? settings.background
   const blur = Math.min(40, Math.max(0, Number(background.blur) || 0))
-  const mask = Math.min(1, Math.max(0, Number(background.mask) ?? 0.3))
+  const mask = Math.min(1, Math.max(0, Number(background.mask)))
   const maskColor = background.maskColor?.trim() || '#000000'
 
   let layer = background.value

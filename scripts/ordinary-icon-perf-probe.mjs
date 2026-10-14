@@ -458,7 +458,7 @@ async function coldReset(cdp) {
       if (typeof caches !== 'undefined') {
         for (const name of await caches.keys()) await caches.delete(name)
       }
-    } catch (e) { /* opaque origin or unavailable */ }
+    } catch { /* opaque origin or unavailable */ }
     return true
   })
 }
@@ -487,7 +487,7 @@ async function readObjectUrlProbe(cdp) {
   return cdp.call(function read() {
     try {
       return window.__iconPerformanceProbe ? window.__iconPerformanceProbe.read() : null
-    } catch (e) {
+    } catch {
       return null
     }
   })

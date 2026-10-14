@@ -9,9 +9,10 @@
     select: ThemeGradientPreset
   }>()
 
-  $: glassPresets = gradientPresets.filter((preset) => preset.surface === 'glass')
-  $: flatPresets = gradientPresets.filter((preset) => preset.surface === 'flat')
-  $: presetGroups = [
+  // 预设是模块常量，分组只需算一次（原 `$:` 无可追踪依赖，本就只执行一次）。
+  const glassPresets = gradientPresets.filter((preset) => preset.surface === 'glass')
+  const flatPresets = gradientPresets.filter((preset) => preset.surface === 'flat')
+  const presetGroups = [
     { label: '毛玻璃', hint: '渐变背景、半透明卡片与柔和光晕', items: glassPresets },
     { label: '护眼纯色', hint: '低饱和纯色背景与不透明卡片', items: flatPresets },
   ]

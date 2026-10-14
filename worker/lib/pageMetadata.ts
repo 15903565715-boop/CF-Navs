@@ -407,6 +407,7 @@ export function normalizeTitleText(raw: string | null | undefined): string {
 
   const cleaned = decodeHtmlEntities(raw)
     .replace(/[\t\n\r\f\v]+/g, ' ')
+    // eslint-disable-next-line no-control-regex -- 本行的目的就是剔除 C0 / C1 控制字符
     .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/g, '')
     // 零宽字符和双向控制符：站点标题是第三方文本，U+202E 能把后台列表整段翻转。
     .replace(/[\u200b-\u200f\u202a-\u202e\u2060-\u2064\ufeff]/g, '')

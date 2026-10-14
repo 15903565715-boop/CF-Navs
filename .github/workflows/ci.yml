@@ -29,6 +29,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # ESLint（eslint.config.js）：worker/、src/、shared/、tests/、scripts/，不含格式化规则。
+      - name: Lint
+        run: npm run lint
+
       # 含 type-check:tests（tsconfig.tests.json），tests/ 与源码一同做类型检查。
       - name: Type check
         run: npm run type-check

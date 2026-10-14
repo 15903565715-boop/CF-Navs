@@ -424,7 +424,7 @@ async function coldReset(cdp) {
       if (typeof caches !== 'undefined') {
         for (const name of await caches.keys()) await caches.delete(name)
       }
-    } catch (e) { /* opaque origin or unavailable */ }
+    } catch { /* opaque origin or unavailable */ }
     return true
   })
 }

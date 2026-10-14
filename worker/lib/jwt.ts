@@ -35,7 +35,7 @@ function base64url(bytes: Uint8Array): string {
 }
 
 // Helper to decode Base64URL string to Uint8Array
-function decodeBase64url(str: string): Uint8Array {
+function decodeBase64url(str: string): Uint8Array<ArrayBuffer> {
   const base64 = str.replace(/-/g, '+').replace(/_/g, '/')
   const binary = atob(base64)
   const bytes = new Uint8Array(binary.length)
@@ -112,7 +112,7 @@ export async function signJwt(payload: Record<string, unknown>, secret: string):
 
   const key = await crypto.subtle.importKey(
     'raw',
-    encoder.encode(secret) as any,
+    encoder.encode(secret),
     { name: 'HMAC', hash: 'SHA-256' },
     false,
     ['sign']
@@ -121,7 +121,7 @@ export async function signJwt(payload: Record<string, unknown>, secret: string):
   const signature = await crypto.subtle.sign(
     'HMAC',
     key,
-    encoder.encode(message) as any
+    encoder.encode(message)
   )
 
   return `${message}.${base64url(new Uint8Array(signature))}`
@@ -139,7 +139,7 @@ export async function verifyJwt(token: string, secret: string): Promise<Record<s
   try {
     const key = await crypto.subtle.importKey(
       'raw',
-      encoder.encode(secret) as any,
+      encoder.encode(secret),
       { name: 'HMAC', hash: 'SHA-256' },
       false,
       ['verify']
@@ -149,8 +149,8 @@ export async function verifyJwt(token: string, secret: string): Promise<Record<s
     const isValid = await crypto.subtle.verify(
       'HMAC',
       key,
-      signature as any,
-      encoder.encode(message) as any
+      signature,
+      encoder.encode(message)
     )
 
     if (!isValid) return null
