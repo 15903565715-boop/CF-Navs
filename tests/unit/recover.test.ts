@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import recoverRoutes, { isValidRecoverPassword } from '../../worker/routes/recover'
 import { resetJwtSecretCache } from '../../worker/lib/jwt'
 import type { Env } from '../../worker/types'
@@ -293,5 +293,43 @@ describe('POST /api/recover', () => {
     expect(res.status).toBe(200)
     expect((await res.json<any>()).code).toBe(1500)
     expect(JSON.parse(db.settings.get('admin_password')!)).toBe('oldsalt:oldhash')
+  })
+})
+
+describe('POST /api/recover catch logging', () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  function loggedText(spy: ReturnType<typeof vi.spyOn>): string {
+    return spy.mock.calls.map((args) => args.map((arg) => (arg instanceof Error ? arg.message : String(arg))).join(' ')).join('\n')
+  }
+
+  it('logs a failed password write without leaking the password and keeps the response', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const db = new FakeDb(installedSeed())
+    db.failSettingsWrite = true
+    const res = await post(createEnv(db, createKv()), { password: 'abcd1234' })
+    expect(res.status).toBe(200)
+    expect(await res.json<any>()).toEqual({ code: 1500, msg: 'failed to reset password', data: null })
+    expect(errorSpy).toHaveBeenCalledWith('[recover] password reset write failed:', expect.objectContaining({ message: 'D1 write failed' }))
+    expect(loggedText(errorSpy)).not.toContain('abcd1234')
+    expect(loggedText(errorSpy)).not.toContain('setup-secret')
+  })
+
+  it('logs an unreachable session store and keeps the response', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const kv = createKv({ get: vi.fn(async () => { throw new Error('KV unavailable') }) as unknown as KVNamespace['get'] })
+    const res = await post(createEnv(new FakeDb(installedSeed()), kv), { password: 'abcd1234' })
+    expect(await res.json<any>()).toEqual({ code: 1500, msg: 'required bindings are unavailable', data: null })
+    expect(errorSpy).toHaveBeenCalledWith('[recover] session store probe failed:', expect.objectContaining({ message: 'KV unavailable' }))
+  })
+
+  it('does not log expected branches (wrong token, invalid body, invalid password)', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const env = createEnv(new FakeDb(installedSeed()), createKv())
+    expect((await post(env, { password: 'abcd1234' }, { 'X-Setup-Token': 'nope' })).status).toBe(401)
+    const invalid = await recoverRoutes.request('/recover', { method: 'POST', headers: { 'X-Setup-Token': 'setup-secret' }, body: '{' }, env)
+    expect(await invalid.json<any>()).toEqual({ code: 1002, msg: 'invalid request body', data: null })
+    expect((await (await post(env, { password: '12345678' })).json<any>()).code).toBe(1002)
+    expect(errorSpy).not.toHaveBeenCalled()
   })
 })
