@@ -79,7 +79,8 @@ class FakeDb {
 
   async batch(statements: D1PreparedStatement[]): Promise<D1Result[]> {
     const bound = statements as unknown as BoundStatement[]
-    const isSchemaBatch = bound.some(({ sql }) => sql.includes('CREATE TABLE settings'))
+    // 安装建表 batch 与随后写 schema_version 的迁移步骤 batch 都算 schema batch。
+    const isSchemaBatch = bound.some(({ sql }) => sql.includes('CREATE TABLE settings') || sql.includes("'schema_version'"))
     this.executedSql.push(...bound.map(({ sql }) => sql))
     if (isSchemaBatch && this.failSchemaBatch) throw new Error('schema failed')
     if (!isSchemaBatch && this.failCredentialBatchOnce) {

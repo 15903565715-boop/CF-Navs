@@ -1,4 +1,5 @@
 import schemaSql from '../../schema.sql'
+import { ensureSchema } from './db/schema'
 
 function splitSqlStatements(sql: string): string[] {
   const statements: string[] = []
@@ -85,4 +86,12 @@ export async function initializeSchema(db: D1Database): Promise<void> {
   const results = await db.batch(statements.map((statement) => db.prepare(statement)))
   const failed = results.find((result) => !result.success)
   if (failed) throw new Error(failed.error ?? 'installation schema statement failed')
+  // 写入 schema_version。不直接在 schema.sql 里写最新版本：库里若残留旧表，
+  // CREATE IF NOT EXISTS 不会补列，必须由迁移步骤按实际结构判断后再记版本。
+  // 记版本失败不阻断安装：表已建好，下一个请求的 ensureSchema 会重试。
+  try {
+    await ensureSchema(db, true)
+  } catch (error) {
+    console.error('[install] recording schema version failed:', error)
+  }
 }

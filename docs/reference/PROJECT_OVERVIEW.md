@@ -118,7 +118,7 @@ worker/
 ├── middleware/
 │   └── auth.ts         # 认证中间件
 ├── lib/
-│   ├── db.ts           # 数据库操作（含幂等迁移）
+│   ├── db.ts           # 数据库操作（版本化幂等迁移见 db/schema.ts）
 │   ├── routeHelpers.ts # 路由层共用校验与响应 helper（含批量/排序上限）
 │   ├── bookmarkPayload.ts # 书签写入 payload 的统一校验与归一化
 │   ├── sessionRevocation.ts # 退出登录的会话撤销名单
@@ -287,7 +287,7 @@ SESSION_TTL = "2592000"             # wrangler.toml 默认会话有效期（30�
 - 后台设置面板提交完整 `Settings` 字段时，`PUT /api/settings` 写入 D1 后直接由提交 payload 合成响应；只有兼容性部分更新请求才写后回读完整 settings
 - 分类新增用 `INSERT ... SELECT ... RETURNING` 在目标父级作用域计算末尾排序；分类更新先读取当前父级和子分类状态，再用 `UPDATE ... RETURNING` 完成合法移动。书签新增仍在单条语句中判断分类是否存在；书签更新在 SQL 内只于图标变化时清空 `icon_blob`
 - 分类删除先查询子分类数量执行保护，无子分类时再按删除语句 `changes` 判断目标是否存在，并显式删除直属书签
-- 公开聚合、后台聚合、书签列表和图标详情等读取路径跳过预检查式 schema 迁移，仅在旧库缺列错误时迁移并重试一次
+- schema 迁移版本化（`settings.schema_version` + 有序幂等步骤，每 isolate 一次、版本最新时只读一行不跑 DDL）；公开聚合、后台聚合、书签列表和图标详情等读取路径不做预检，仅在旧库缺列错误时修复式迁移并重试一次
 - `/api/icon/:id`、`/api/category-icon/:id` 与 `/api/iconify/:set/:name.svg` 统一提供图标代理能力，普通书签图标 cache miss 时一次 D1 查询同时读取地址和 `icon_blob`；外站抓取成功后直接返回图片字节。首页普通书签卡片不从聚合响应读取 `icon_blob`，而根据 `icon_cached` 选择本地缓存、已保存的 HTTP(S) 图标 URL 或兼容路径；Iconify 图标和 icon-sets 页面链接不写 `icon_blob`，后台预览通过稳定 `/api/iconify/*` 共享 edge cache，首页展示复用浏览器 HTTP 缓存的 Iconify SVG；Service Worker 不缓存跨域 `opaque` 图标响应，普通 HTTP(S) 书签图标代理抓取失败时按现有临时 SVG fallback 规则处理。
 - 静态资源 CDN
 

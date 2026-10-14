@@ -51,7 +51,7 @@ export async function recordBookmarkClick(
 ): Promise<ClickOutcome> {
   const clientKey = clickRateLimitKey(ip, bookmarkId)
   try {
-    // 旧库缺表时 withSchemaRetry 触发一次 migrateSchema（含建表）后重试。
+    // 旧库缺表时 withSchemaRetry 触发一次修复式迁移（含建表）后重试。
     return await withSchemaRetry(db, () => recordWithRateLimit(db, bookmarkId, clientKey, now))
   } catch (error) {
     console.error('Failed to apply click count rate limiting:', error)

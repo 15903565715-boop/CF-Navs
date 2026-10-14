@@ -46,7 +46,7 @@
 
 `/api/error-report` 接收前端运行时错误上报，payload 为 `{ errors: ErrorReportEntry[] }` 或单个 `ErrorReportEntry`。该接口不要求登录，但限制请求体为 16 KB、单批最多 10 条，并对消息、分类、URL 和行列字段做类型与长度归一化；有效请求通过 D1 原子计数按来源 IP 限制为每分钟 12 次，已封禁来源可由当前 Worker isolate 内存快速拒绝。超大请求返回 HTTP 413，高频请求返回 HTTP 429，无效 JSON 或无有效条目返回 HTTP 400。Worker 只把有限字段写入 `console.error`，响应中的 `received` 表示实际接收条数；前端会对同一错误做 60 秒去重，且上报失败不得影响页面主流程。
 
-`POST /api/public/bookmarks/:id/click` 由首页在打开书签时调用，成功后将对应 `click_count` 加一。每个 IP 与书签 ID 组合在 10 分钟内最多计数 3 次，超过后仍返回成功但不重复增加计数；书签不存在或为私密书签返回 HTTP 404。点击计数不会提升 `data_version`，后台访问分析打开时会强制刷新后台聚合数据。限流计数存于 D1 表 `click_rate_limits`（`schema.sql` 安装时创建，旧库由 `migrateSchema` 补建，缺表时经 schema 重试自动迁移），与计数更新放在**同一个 D1 batch**：只为存在且公开的书签建计数行；计数在上限 +1 处饱和，超限后的重复点击不再产生写入；过期行在每次 batch 开头按 `reset_at` 索引清理。限流 batch 因其它原因失败时退回为不限流的单条计数。
+`POST /api/public/bookmarks/:id/click` 由首页在打开书签时调用，成功后将对应 `click_count` 加一。每个 IP 与书签 ID 组合在 10 分钟内最多计数 3 次，超过后仍返回成功但不重复增加计数；书签不存在或为私密书签返回 HTTP 404。点击计数不会提升 `data_version`，后台访问分析打开时会强制刷新后台聚合数据。限流计数存于 D1 表 `click_rate_limits`（`schema.sql` 安装时创建，旧库由版本化迁移第 3 步补建，缺表时经 schema 重试自动迁移），与计数更新放在**同一个 D1 batch**：只为存在且公开的书签建计数行；计数在上限 +1 处饱和，超限后的重复点击不再产生写入；过期行在每次 batch 开头按 `reset_at` 索引清理。限流 batch 因其它原因失败时退回为不限流的单条计数。
 
 ## 安装接口
 
@@ -211,7 +211,9 @@
 
 HTTP(S) 图标抓取成功后，代理会直接返回图片字节并写入 Cloudflare edge cache；只有书签图标需要写入 `bookmarks.icon_blob` 时才生成 base64 data URI，避免 Iconify 预览和分类图标在 Worker 内部做不必要的 base64 编解码。
 
-公开聚合、后台聚合、书签列表和图标详情等读取路径默认直接执行查询，避免每个 Worker isolate 冷启动都先跑 `PRAGMA table_info`。如果遇到旧库缺列错误，后端会执行一次兼容 schema 检查/迁移并重试当前查询。
+公开聚合、后台聚合、书签列表和图标详情等读取路径默认直接执行查询，冷启动不额外读库。如果遇到旧库缺列错误，后端会以修复模式幂等重跑全部迁移步骤并重试当前查询。
+
+**Schema 版本。** 库内版本号存于 `settings` 表的内部键 `schema_version`（JSON 整数，不属于 `SETTINGS_KEYS`，不出现在设置读写与导入导出中；与安装标记 `installation_schema_version` 无关）。迁移是 `worker/lib/db/schema.ts` 中有序、幂等的 `SCHEMA_STEPS`，`ensureSchema` 每个 isolate 只运行一次：先读一行版本号，已是最新则不执行任何 DDL；否则按序执行缺失步骤，每步的 DDL 与版本写入同在一个 D1 batch，失败整步回滚、版本不前进。版本写入只升不降，并发迁移撞上「列已存在」时重算该步重试。没有版本行的旧库（含 v0.8.3）按版本 0 自动升级，无需手动操作；`/install` 建表后立即记录最新版本，手动执行 `schema.sql` 的库在首个写请求时记录。
 
 普通书签/分类代理的 `v` 必须包含聚合数据已有的 `icon_revision`，未知时回退至 `icon_write_epoch`。快照可能省略图片来源和正文，仅用来源、标题或网址不能区分“只换图”的新内容。已知 revision 不变时不因写入代次单独变化更换版本；版本计算在前端完成，不增加服务端查询或改变权限、no-store 与 SW 边界。
 
