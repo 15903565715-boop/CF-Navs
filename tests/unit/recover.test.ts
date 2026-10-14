@@ -3,8 +3,6 @@ import recoverRoutes, { isValidRecoverPassword } from '../../worker/routes/recov
 import { resetJwtSecretCache } from '../../worker/lib/jwt'
 import type { Env } from '../../worker/types'
 
-const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000
-
 interface RateRow {
   count: number
   resetAt: number
@@ -91,7 +89,7 @@ class FakeDb {
     throw new Error(`unhandled queryFirst sql: ${sql}`)
   }
 
-  queryAll<T>(sql: string, args: unknown[]): { results: T[] } {
+  queryAll<T>(_sql: string, args: unknown[]): { results: T[] } {
     const wanted = new Set(args as string[])
     const rows = [...this.settings.entries()]
       .filter(([key]) => wanted.has(key))
@@ -136,7 +134,7 @@ function installedSeed(extra: Record<string, unknown> = {}): Record<string, unkn
   }
 }
 
-function post(
+async function post(
   env: Env,
   body: unknown,
   headers: Record<string, string> = { 'X-Setup-Token': 'setup-secret' },
@@ -299,7 +297,7 @@ describe('POST /api/recover', () => {
 describe('POST /api/recover catch logging', () => {
   afterEach(() => vi.restoreAllMocks())
 
-  function loggedText(spy: ReturnType<typeof vi.spyOn>): string {
+  function loggedText(spy: { mock: { calls: unknown[][] } }): string {
     return spy.mock.calls.map((args) => args.map((arg) => (arg instanceof Error ? arg.message : String(arg))).join(' ')).join('\n')
   }
 

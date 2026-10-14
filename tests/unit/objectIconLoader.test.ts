@@ -2,6 +2,7 @@ import { logoSurfIcon } from '../../src/lib/icons'
 import { decodeVersionedIcon, iconContentRevision } from '../../worker/lib/iconRevision'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createObjectIconLoader } from '../../src/lib/objectIconLoader'
+import type { fetchIconCopy } from '../../src/lib/api'
 import { iconBytesRevision, type IconDescriptor } from '../../shared/iconLocalCopy'
 import { ApiError } from '../../src/lib/api'
 import { IconStorageError } from '../../src/lib/iconCopyStorage'
@@ -32,7 +33,7 @@ async function fixture() {
     storage, refreshStats: vi.fn(async () => undefined), reportStorageError: vi.fn(),
   }
   const response = (descriptor = ready) => ({ protocol: 1 as const, persistence: 'session-scoped' as const, descriptor, image: { mime: icon.contentType, byte_length: icon.bytes.length, base64: icon.dataUri.split(',')[1] } })
-  const fetchCopy = vi.fn(async () => response())
+  const fetchCopy = vi.fn<typeof fetchIconCopy>(async () => response())
   let serial = 0
   const revoke = vi.fn()
   const decode = vi.fn(async () => undefined)

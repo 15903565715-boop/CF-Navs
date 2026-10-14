@@ -30,6 +30,7 @@ it('selects a newly created empty child instead of leaving the parent bookmarks 
     icon: null,
     icon_source: 'custom',
     icon_background_color: null,
+    icon_blob: null,
     description: null,
     description_mode: null,
     open_method: 1,

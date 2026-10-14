@@ -368,7 +368,7 @@ describe('installer catch logging', () => {
   beforeEach(() => resetJwtSecretCache())
   afterEach(() => vi.restoreAllMocks())
 
-  function loggedText(spy: ReturnType<typeof vi.spyOn>): string {
+  function loggedText(spy: { mock: { calls: unknown[][] } }): string {
     return spy.mock.calls.map((args) => args.map((arg) => (arg instanceof Error ? arg.message : String(arg))).join(' ')).join('\n')
   }
 

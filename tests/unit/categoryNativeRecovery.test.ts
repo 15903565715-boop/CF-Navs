@@ -6,7 +6,7 @@ vi.mock('../../src/lib/trustedIconView',()=>({emptyTrustedIcon:{active:false,url
 import CategoryIcon from '../../src/components/CategoryIcon.svelte'
 let observers: Array<{callback:IntersectionObserverCallback,target?:Element}>
 const image=()=>document.querySelector('[data-category-icon] img') as HTMLImageElement|null
-function visible(img:HTMLImageElement){const observer=observers.find(o=>o.target===img);observer?.callback([{target:img,isIntersecting:true,intersectionRatio:1,boundingClientRect:{width:18,height:18}} as IntersectionObserverEntry],{} as IntersectionObserver)}
+function visible(img:HTMLImageElement){const observer=observers.find(o=>o.target===img);observer?.callback([{target:img,isIntersecting:true,intersectionRatio:1,boundingClientRect:{width:18,height:18}} as unknown as IntersectionObserverEntry],{} as IntersectionObserver)}
 beforeEach(()=>{vi.useFakeTimers();state.active=true;state.url='/api/category-icon/7?v=1';state.failed.mockReset();observers=[];vi.spyOn(document,'hidden','get').mockReturnValue(false);vi.spyOn(document,'visibilityState','get').mockReturnValue('visible');vi.spyOn(navigator,'onLine','get').mockReturnValue(true);vi.stubGlobal('IntersectionObserver',class{constructor(callback:IntersectionObserverCallback){observers.push({callback})}observe(target:Element){observers.at(-1)!.target=target}disconnect(){}})})
 afterEach(()=>{cleanup();vi.useRealTimers();vi.unstubAllGlobals();vi.restoreAllMocks()})
 describe('native category request recovery',()=>{

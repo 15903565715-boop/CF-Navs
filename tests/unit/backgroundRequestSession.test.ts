@@ -61,7 +61,7 @@ describe('background request session handling', () => {
   )
 
   it('does not leak the option into the fetch init', async () => {
-    const fetchMock = vi.fn(async () =>
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
       new Response(JSON.stringify({ code: 0, msg: 'ok', data: { title: 'Example', final_url: 'https://example.com/' } }), {
         status: 200,
         headers: { 'content-type': 'application/json' },

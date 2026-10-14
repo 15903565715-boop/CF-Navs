@@ -26,7 +26,9 @@ describe('默认搜索引擎下拉的真实事件序列（Issue #25 复现）', 
     // 把用户刚选中的选项重置回去。select 必须在自己这一层于 input 阶段立即提交。
     const form = engineForm()
     const { container } = render(SearchEngineSettingsSection, { props: { form, saving: false, enginesValid: true } })
-    const select = container.querySelector('label.field-select select') as HTMLSelectElement
+    // 测试程序同时加载了 @cloudflare/workers-types，其 HTMLRewriter 的 Element 会并入 DOM Element，
+    // 导致 HTMLSelectElement 与之不再兼容，只能经 unknown 收窄。
+    const select = container.querySelector('label.field-select select') as unknown as HTMLSelectElement
     expect(select.value).toBe('Google')
 
     select.value = 'Bing'
@@ -39,7 +41,7 @@ describe('默认搜索引擎下拉的真实事件序列（Issue #25 复现）', 
   it('input + change 完整序列后 current 保持为用户选择', async () => {
     const form = engineForm()
     const { container } = render(SearchEngineSettingsSection, { props: { form, saving: false, enginesValid: true } })
-    const select = container.querySelector('label.field-select select') as HTMLSelectElement
+    const select = container.querySelector('label.field-select select') as unknown as HTMLSelectElement
 
     select.value = 'Bing'
     fireEvent.input(select)

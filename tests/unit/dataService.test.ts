@@ -90,6 +90,7 @@ const settings: Settings = {
   site_title_color: '#ffffff',
   site_title_font_size: 32,
   public_mode: true,
+  browser_sync_enabled: false,
   theme: 'auto',
   background_preset_id: 'custom',
   custom_accent_color: '',
@@ -121,6 +122,8 @@ const settings: Settings = {
   content_layout: { max_width: 1200, max_width_unit: 'px', margin_x: 0, margin_top: 0, margin_bottom: 0 },
   navigation: { position: 'left', always_expanded: false, top_layout: 'scroll' },
   footer_html: '',
+  most_visited_count: 8,
+  site_title_show: true,
 }
 
 const category: Category = { id: 1, parent_id: null, title: 'Tools', icon: null, sort: 0, created_at: 100 }
@@ -143,7 +146,7 @@ const bookmark: Bookmark = {
 
 function makePublicData(version?: string): PublicData {
   return {
-    categories: [{ id: category.id, title: category.title, icon: category.icon, sort: category.sort }],
+    categories: [{ id: category.id, parent_id: category.parent_id, title: category.title, icon: category.icon, sort: category.sort }],
     bookmarks: [],
     settings: toPublicSettings(settings),
     ...(version ? { version } : {}),

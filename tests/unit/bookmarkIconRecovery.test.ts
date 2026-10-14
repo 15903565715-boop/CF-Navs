@@ -79,7 +79,7 @@ for (const [name, Component] of [['home', BookmarkCard], ['spotlight', Spotlight
     })
 
     it.each(['', 'test-grant'])('recovers an uncached HTTP icon after its direct image request fails (grant=%s)', async (iconAccessKey) => {
-      const fetch = vi.fn(async () => image())
+      const fetch = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => image())
       vi.stubGlobal('fetch', fetch)
       const { container } = render(Component, { props: { bookmark: { ...bookmark, icon_cached: false }, iconAccessKey } })
       await vi.waitFor(() => expect(container.querySelector('img')?.getAttribute('src')).toBe(bookmark.icon))

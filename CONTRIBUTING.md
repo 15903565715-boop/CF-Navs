@@ -78,7 +78,7 @@
   - 只认首行。docblock 写在第二行的 jsdom 文件仍会在 jsdom 里跑，但落进 `node` project 的 `forks` 池，失去提速。
   - `vmForks` 下 `instanceof` 跨 realm 会失真（`node:sqlite` 返回的对象、Node 内置模块产出的 `Uint8Array` 等来自宿主 realm；改成 `vmForks` 跑全部文件时曾有 4 个纯逻辑用例因此失败）。不需要 DOM 的纯逻辑测试**不要**加 jsdom docblock；需要 DOM 又要断言这类对象时，改用结构断言（`ArrayBuffer.isView`、`toMatchObject`），不要把文件挪回 `forks` 了事。
   - 只需要一个对象引用、不触碰 DOM API 的测试应留在 `node` project（例如 `searchBoxVisibility` 用 `{}` 代替元素）。
-- `tests/` 与 `scripts/` 目前**不在** `npm run type-check` 范围内（2026-10-13 评估）：把 `tests/**/*.ts` 并入主配置的独立 tsconfig 实测 663 个错误、分布在 75 个文件（主要是 `noImplicitAny` 下未标注的回调形参、测试替身缺字段、`node:*` 模块无类型），且仓库未依赖 `@types/node`；`scripts/` 是 `.mjs`，同样依赖 Node 类型。批量补类型是大面积改动，不值得夹带在其他主题里。若要做，单开一个主题：先加 `@types/node`，用 `tsconfig.tests.json`（`extends` 主配置、`include` 加 `tests/**/*.ts`）按目录逐步清零后再接入 CI。
+- `tests/` 已纳入类型检查：`npm run type-check` 末尾串联 `npm run type-check:tests`（`tsc --noEmit -p tsconfig.tests.json`），CI 经 `type-check` 一并执行。`tsconfig.tests.json` 继承主配置的严格设置，额外加载 `@types/node`（与 CI 的 Node 24 对齐）；测试导入的 `scripts/lib/*.mjs` 只参与类型推断（`checkJs: false`），`scripts/` 本身仍**不在**检查范围，若要纳入需另开主题逐文件补 JSDoc。测试与 `@cloudflare/workers-types` 同处一个程序，后者 HTMLRewriter 的 `Element` 会并入 DOM `Element`（`append` / `remove` 等签名冲突）：测试里优先用 `appendChild`、把查询辅助函数的参数标为 `Element` 而非 `ParentNode`，确需具体子类型时经 `unknown` 收窄并注明原因。
 - 组件测试依赖 `vite.config.ts` 在 test 模式下的 `resolve.conditions: ['browser']`。Svelte 5 的 `exports["."]` 在 `browser` 条件下提供 `src/index-client.js`，默认落到 `src/index-server.js`，其中 `onMount` 是空实现；选错入口会让组件注册的 `window` / `document` 监听器**静默不存在**。不要删掉这项配置。
 - 断言「观察不到某个行为」时，先确认不是运行时解析或缺失的浏览器 API（`scrollIntoView`、`matchMedia`、`scrollTo` 在 jsdom 里都需要自己补），再下「jsdom 做不到」的结论。把环境问题写成不可迁移结论会留下错误的判断记录。
 - 新写的组件测试要做一次反向对照：改坏被测行为，确认对应用例精确失败。若两道防线互为兜底（去掉任一条都不红），在文件里注明这是 defense-in-depth，不要因此删掉断言。
