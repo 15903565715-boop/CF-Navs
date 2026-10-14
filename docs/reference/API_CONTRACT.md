@@ -6,15 +6,43 @@
 
 - 所有接口前缀为 `/api`。
 - 常规响应使用统一包络：`{ code, msg, data }`。
-- 业务错误通常仍返回 HTTP 200，用 `code` 区分；认证中间件拦截返回 HTTP 401 且 `code=1001`。
+- 业务错误通常仍返回 HTTP 200，用 `code` 区分；认证中间件拦截返回 HTTP 401 且 `code=1001`。完整口径见下方「错误码与 HTTP 状态约定」。
 - 受保护的写操作使用 `Authorization: Bearer <token>` 鉴权；安装接口使用一次性的 `X-Setup-Token`，公开点击计数接口不要求登录。
 - 时间戳使用毫秒数，即 `Date.now()`。
 - **写响应的 `data_version`（附加字段）**：改变聚合数据的受保护写接口（分类/书签增删改、批量删除/移动、排序、整理、设置保存、导入、浏览器同步、显式图标刷新）成功且确实提升了数据版本时，包络额外携带 `data_version: string`，值即本次提交后的 `/api/data/version` 版本号：`{ code: 0, msg, data, data_version }`。业务写入与版本提升在**同一个 D1 batch（同一事务）**中提交（`worker/lib/db/mutation.ts` 的 `Mutation` / `commitMutation`），不会出现「数据已变、版本未变」或对外先后变化两次。未写入任何数据（404、批量集合全部不存在、空设置补丁）时不提升版本、不失效缓存，也不带该字段。该字段只在包络层出现，`data` 形状不变；旧客户端忽略即可，客户端也不应依赖它一定存在。
 
+## 错误码与 HTTP 状态约定
+
+`code` 取值见 `shared/types.ts` 的 `ErrCode`：`0` 成功、`1001` 未认证、`1002` 参数错误、`1003` 不存在、`1004` 限流、`1005` 禁止访问、`1006` 状态冲突、`1500` 服务端错误。
+
+**默认规则：业务错误走包络，HTTP 200。** 判错一律看 `code !== 0`，而不是 HTTP 状态。前端 `src/lib/api.ts` 的 `request()` 对两种形态都抛 `ApiError`：HTTP 非 2xx 时 `status` 为真实状态、`code` 取包络的 `code`（无包络时退回 HTTP 状态）；HTTP 200 且 `code !== 0` 时 `status=200`、`code` 为包络值。会话失效判定（`isUnauthorizedError`）同时认 `status === 401` 与 `code === 1001`。浏览器扩展（`browser-extension/background.js`）同样以 `code !== 0` 判错，另对 HTTP 401 单独处理。因此**不要把现有 HTTP 200 的业务错误改成 4xx**，也不要把下表的真实状态端点改回 200——`objectIconLoader` 依赖图标副本的 401/403/404/409 真实状态，浏览器扩展依赖 401。
+
+| helper / 位置 | HTTP 状态 | `code` | 何时使用 |
+| --- | --- | --- | --- |
+| `ok(data)`（`worker/lib/response.ts`） | 200 | `0` | 成功 |
+| `badRequest(c, msg)`（`worker/lib/routeHelpers.ts`） | 200 | `1002` | 请求体 / 参数 / id 校验失败、非法 URL、出网目标被拒、导入超限等业务校验失败 |
+| `c.json(fail(ErrCode.NOT_FOUND, …))` | 200 | `1003` | 受保护接口的目标资源不存在；未知 `/api/*` 路径（登录后） |
+| `c.json(fail(ErrCode.CONFLICT, …))` | 200 | `1006` | 资源状态不允许该操作（整理 / 批量移动集合过期、浏览器同步已关闭、分类仍有子分类） |
+| `c.json(fail(ErrCode.RATE_LIMITED, …))` | 200 | `1004` | 登录、安装、找回限流 |
+| `c.json(fail(ErrCode.FORBIDDEN, …))` | 200 | `1005` | 公开模式关闭时匿名访问 `/api/public/data`、`/api/data/version` |
+| `c.json(fail(ErrCode.UNAUTHORIZED, 'invalid credentials'))` | 200 | `1001` | `POST /api/login` 用户名或密码错误（不是会话失效，前端登录请求不带 Bearer，不会误清登录态） |
+| `serverError(c, msg, error)` | 200 | `1500` | 路由 catch 的非预期失败；原始错误只写 Workers 日志 |
+| `app.onError`（`worker/index.ts`） | 200（`/api/*`）/ 500 文本（其它路径） | `1500` | 未被路由捕获的异常 |
+| `authRequired` 中间件 | **401** | `1001` | 缺少 / 无效 / 已撤销的 Bearer token；未登录访问未知 `/api/*` 路径 |
+| `/api/public/data`、`/api/data/version` 带无效 Bearer | **401** | `1001` | 带了 token 但会话无效，不能退回匿名结果 |
+| `POST /api/install`、`POST /api/recover` | **401** / **403** | `1001` / `1005` | `X-Setup-Token` 错误或未配置 / 跨域请求；其余失败（参数、已安装 / 未安装、限流、服务端错误）走 HTTP 200 包络 |
+| `serverError(c, msg, error, 500)` | **500** | `1500` | 仅 `POST /api/public/bookmarks/:id/click` 的 catch |
+| `POST /api/public/bookmarks/:id/click` | **400** / **404** | `1002` / `1003` | 非法 id / 书签不存在或为私密 |
+| `POST /api/error-report` | **400** / **413** / **429** | `1002` / `1002` / `1004` | 无效 payload / 请求体超限 / 限流 |
+| `GET /api/iconify-search` | **400** / **502** | `1002` / `1500` | 查询词非法 / 上游 Iconify 搜索失败 |
+| `POST /api/icon-local-copy` | **400** / **403** / 404 / 409 / 503 | `1002` / `1005` / `0` | 无效请求 / 跨域；404、409、503 为成功包络（`code=0`）+ `data.reason`（`not-found` / `conflict` / `unavailable`），见下文「可信设备图标数据协议」 |
+
+新增端点默认用前半张表的 helper（HTTP 200 + `code`）。只有调用方必须靠 HTTP 语义区分结果（鉴权、跨域、`sendBeacon` 式上报、带协议的图标副本、上游代理失败）时才返回真实状态，并同步本表与 `tests/unit/errorConvention.test.ts` 的非 200 快照——该测试扫描 `worker/` 中全部 `c.json(fail(ErrCode.X, …), <status>)`，并钉住 `badRequest` / `serverError` / `authRequired` / `onError` 的状态与 `code`。
+
 ## 鉴权规则
 
 - `authRequired`：读取 Bearer token，用 `settings.jwt_secret` 校验 HS256 签名和 `exp`，再查 KV 撤销名单。签名、过期或撤销不通过返回 401；KV 读取故障可能由全局错误处理返回服务端错误。**缺少 `SESSION` 绑定时不再跳过撤销检查，而是直接拒绝会话**（见下方口径）。
-- **路由鉴权按构造保证**：`worker/index.ts` 把 API 拆成公开子应用 `publicApi`（唯一的公开清单，见下方「公开接口」「安装接口」与 `/login`、`/recover`、图标代理）和受保护子应用 `protectedApi`（`use('*', authRequired)`，在全部公开处理器之后挂载）。新增接口默认受保护；未登录访问未知的 `/api/*` 路径或公开路径的未定义方法时返回 401 / `code=1001`（此前为 `code=1004` not found），登录后仍返回 not found。`tests/unit/routeAuth.test.ts` 枚举受保护子应用的全部路由断言无 token / 伪造 token 均为 401，并对公开路由清单做快照。
+- **路由鉴权按构造保证**：`worker/index.ts` 把 API 拆成公开子应用 `publicApi`（唯一的公开清单，见下方「公开接口」「安装接口」与 `/login`、`/recover`、图标代理）和受保护子应用 `protectedApi`（`use('*', authRequired)`，在全部公开处理器之后挂载）。新增接口默认受保护；未登录访问未知的 `/api/*` 路径或公开路径的未定义方法时返回 401 / `code=1001`（此前为 `code=1003` not found），登录后仍返回 not found。`tests/unit/routeAuth.test.ts` 枚举受保护子应用的全部路由断言无 token / 伪造 token 均为 401，并对公开路由清单做快照。
 - 会话是无状态 JWT，payload 为 `{ username, exp, jti }`。`jti` 保证同一毫秒内的两次登录也会签出不同 token，否则「退出这台设备」会连带撤销另一台。
 - `POST /api/logout` 把当前 token 的 SHA-256 摘要写入 KV `revoked:<sha256>`，TTL 为 `max(60 秒, token 剩余寿命)`，以满足 KV `expirationTtl` 的下限。用摘要而不是 token 本身做 key，避免 KV 被 dump 时泄露仍在有效期内的 token。其它 isolate 上最多 15 秒后才感知到撤销，这是内存缓存换来的固定窗口。撤销名单是「退出登录」的**全部实质**，写不进去就等于没退，因此该接口用 `LogoutResp` 把结果显式告知调用方，不再一律返回纯成功——三种结果见「认证接口」小节。
 - 修改密码和凭据重置走 `rotateJwtSecret`，一次性作废全部会话；新密码哈希与新的 JWT 签名密钥写在**同一条** settings upsert 里（`POST /api/password`、`POST /api/recover`），不会出现「密码已改、旧 token 仍有效」的中间态。
