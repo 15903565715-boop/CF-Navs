@@ -71,11 +71,14 @@ export interface AppBootController {
    * 调用方也不安装焦点刷新）；否则发起 initializeApp 并返回 true。
    */
   start: () => boolean
-  /**
-   * 完整启动流程。参数沿用原签名的「真值即跳过安装探测」语义：安装页的「重新检查」按钮
-   * 直接把它作为 on:click 处理器，收到的 MouseEvent 同样按真值处理（原样保留）。
-   */
+  /** 完整启动流程。参数沿用原签名的「真值即跳过安装探测」语义，只供内部（安装完成后）传 true。 */
   initializeApp: (installStatusKnown?: unknown) => Promise<void>
+  /**
+   * 安装页「重新检查」按钮的处理器：总是重新探测安装状态并重置 installState。
+   * 不接收参数——按钮以 on:click 直接接线，传入的 MouseEvent 不能流进 initializeApp 的
+   * installStatusKnown（代码审查三轮第 13 项）。
+   */
+  retryInstallStatus: () => Promise<void>
   install: (value: InstallCredentials) => Promise<void>
   /** dataService 的 onRootError：记下原始异常，供启动流程判断是否回头复核安装状态。 */
   recordDataError: (error: unknown) => void
@@ -319,6 +322,9 @@ export function createAppBootController(deps: AppBootDeps): AppBootController {
       return true
     },
     initializeApp,
+    retryInstallStatus() {
+      return initializeApp()
+    },
     install,
     recordDataError(error) {
       lastDataError = error

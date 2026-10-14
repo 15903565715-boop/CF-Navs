@@ -17,6 +17,7 @@ import {
   setInstalledHint,
   shouldProbeInstallStatus,
   shouldRecheckInstallAfterDataError,
+  getInstallViewState,
   toInstallScreenState,
   type InstallScreenState,
 } from '../../src/lib/appInstall'
@@ -65,6 +66,8 @@ interface LogEntry { call: string; args: unknown[]; state: Snapshot }
 interface Impl {
   start(): boolean
   initializeApp(installStatusKnown?: unknown): Promise<void>
+  /** 安装页「重新检查」按钮；参数模拟 on:click 传入的事件对象。 */
+  retryInstallStatus(event?: unknown): Promise<void>
   install(value: InstallCredentials): Promise<void>
   recovered(session: LoginResp): Promise<void>
   goInstall(): void
@@ -212,6 +215,8 @@ function attachController(w: World): Impl {
   const impl: Impl = {
     start: () => boot.start(),
     initializeApp: (x) => boot.initializeApp(x),
+    // 与 App 接线一致：onRetryStatus={boot.retryInstallStatus}，Install 的 on:click 会传入事件对象。
+    retryInstallStatus: (event) => (boot.retryInstallStatus as (event?: unknown) => Promise<void>)(event),
     install: (v) => boot.install(v),
     recovered: (s) => boot.recovered(s),
     goInstall: () => boot.goInstall(),
@@ -609,15 +614,34 @@ const scenarios: Scenario[] = [
     },
   },
   {
-    name: 'retry wired straight to on:click: a truthy event skips the probe (original behaviour kept)',
-    plan: { status: [{ error: new Error('boom') }], refreshPublic: [{}] },
+    // 代码审查三轮第 13 项：原先按钮以 on:click={initializeApp} 接线，MouseEvent 被当作
+    // installStatusKnown 的真值，跳过探测、installState 停在 status_error，数据随后加载成功时
+    // 安装页一直留在屏幕上。现在按钮接 retryInstallStatus，事件对象不再流入。
+    name: 'install page retry button: the click event is ignored, status is re-probed and installState reset',
+    plan: { status: [{ error: new Error('boom') }, { value: installed }], refreshPublic: [{}] },
     drive: async (impl, _w, s) => {
       await boot(impl, s); await flush()
-      await init(impl, s, 'retry', { type: 'click' }); await flush()
+      await track(s, 'retry', impl.retryInstallStatus({ type: 'click' })); await flush()
     },
     check: ({ impl, world }) => {
-      expect(world.log.filter(e => e.call === 'status')).toHaveLength(1)
-      expect(impl.read()).toMatchObject({ booting: false, installState: { type: 'status_error' } })
+      const probes = world.log.filter(e => e.call === 'status')
+      expect(probes).toHaveLength(2)
+      expect(probes[1].state).toMatchObject({ booting: true, installState: { type: 'checking' } })
+      expect(impl.read()).toMatchObject({ booting: false, installState: { type: 'checking' }, currentView: 'home' })
+      expect(getInstallViewState(impl.read().installState)).toBeNull()
+    },
+  },
+  {
+    name: 'install page retry button while the status endpoint is still down: shows the fresh status error',
+    plan: { status: [{ error: new Error('boom') }, { error: new Error('still down') }] },
+    drive: async (impl, _w, s) => {
+      await boot(impl, s); await flush()
+      await track(s, 'retry', impl.retryInstallStatus({ type: 'click' })); await flush()
+    },
+    check: ({ impl, world }) => {
+      expect(world.log.filter(e => e.call === 'status')).toHaveLength(2)
+      expect(world.log.some(e => e.call === 'refreshPublicData')).toBe(false)
+      expect(impl.read()).toMatchObject({ booting: false, installState: { type: 'status_error', message: 'still down' } })
     },
   },
 
@@ -1153,6 +1177,8 @@ function attachLegacy(w: World): Impl {
       return true
     },
     initializeApp,
+    // 第 13 项修复后的接线（原为 on:click={initializeApp}，事件对象会流入 installStatusKnown）。
+    retryInstallStatus: () => initializeApp(),
     install: handleInstall,
     recovered: handleRecovered,
     goInstall: handleGoInstall,

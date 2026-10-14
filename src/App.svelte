@@ -924,7 +924,7 @@
     installing={installView.installing}
     error={installView.error}
     onInstall={boot.install}
-    onRetryStatus={boot.initializeApp}
+    onRetryStatus={boot.retryInstallStatus}
   />
 {:else if booting || recoverActive || installView}
   <AppSplash

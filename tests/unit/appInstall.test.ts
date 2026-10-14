@@ -86,6 +86,9 @@ describe('app boot wiring', () => {
     expect(app).toContain('createAppBootController(')
     expect(app).toContain('boot.recordDataError(error)')
     expect(app).toContain('if (!boot.start()) return')
+    // 第 13 项：「重新检查」按钮不能把 MouseEvent 传进 initializeApp(installStatusKnown)。
+    expect(app).toContain('onRetryStatus={boot.retryInstallStatus}')
+    expect(app).not.toContain('onRetryStatus={boot.initializeApp}')
   })
 })
 
