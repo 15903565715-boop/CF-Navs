@@ -2,11 +2,10 @@ import { readFileSync } from 'node:fs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createSqliteD1 } from '../helpers/d1Sqlite'
 
-// 安装器的 splitSqlStatements 目前按分号切分、不识别 CREATE TRIGGER 的 BEGIN…END
-// （既有问题，非本项范围），这里只喂触发器之前的建表部分；触发器由迁移第 2 步补齐。
+// 安装器喂完整 schema.sql（含 6 个 CREATE TRIGGER … BEGIN … END）。
 vi.mock('../../schema.sql', async () => {
   const { readFileSync: read } = await import('node:fs')
-  return { default: read(new URL('../../schema.sql', import.meta.url), 'utf8').split('-- Versioned bookmark images:')[0] }
+  return { default: read(new URL('../../schema.sql', import.meta.url), 'utf8') }
 })
 
 import { LATEST_SCHEMA_VERSION, SCHEMA_STEPS, ensureSchema, migrateSchema, readSchemaVersion } from '../../worker/lib/db/schema'
@@ -62,6 +61,11 @@ describe('versioned schema migrations', () => {
     expect(hasTable(instance, 'click_rate_limits')).toBe(true)
     // 全新库上不应有任何 ALTER（schema.sql 已含全部列）。
     expect(instance.statements.some((sql) => sql.startsWith('ALTER'))).toBe(false)
+    // 触发器由 schema.sql 本身建好（不靠迁移补齐）：安装 batch 中即包含完整的 CREATE TRIGGER。
+    // （之后的修复模式 ensureSchema 会幂等重跑第 2 步，故只看首条 schema_version 语句之前的安装 batch。）
+    const installBatch = instance.statements.slice(0, instance.statements.findIndex((sql) => sql.includes('schema_version')))
+    expect(installBatch.filter((sql) => /^CREATE TRIGGER/i.test(sql) && /\bEND$/i.test(sql))).toHaveLength(6)
+    expect(instance.sqlite.prepare("SELECT count(*) AS n FROM sqlite_master WHERE type = 'trigger'").get()).toEqual({ n: 6 })
   })
 
   it('fresh install from the full schema.sql (db:init) reaches the latest version without ALTER', async () => {
