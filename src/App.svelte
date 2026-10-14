@@ -8,7 +8,6 @@
     type BookmarkBatchMoveReq,
     type BookmarkReorganizeReq,
     type ChangePasswordReq,
-    type LoginResp,
     type PublicBookmark,
     type Settings,
     type ThemeMode,
@@ -53,28 +52,14 @@
     createCustomScriptController,
     type CustomScriptController,
   } from './lib/customScript'
-  import {
-    canUseInstalledFallback,
-    getInstallViewState,
-    hasInstalledHint,
-    installationCommittedAfterFailure,
-    isInstallPath,
-    isRecoverPath,
-    normalizeInstallError,
-    replaceBrowserPath,
-    setInstalledHint,
-    shouldProbeInstallStatus,
-    shouldRecheckInstallAfterDataError,
-    toInstallScreenState,
-    type InstallScreenState,
-  } from './lib/appInstall'
+  import { getInstallViewState, replaceBrowserPath } from './lib/appInstall'
+  import { createAppBootController, getBrowserInstallHintStorage } from './lib/appBootController'
   import { readReducedMotion, subscribeSystemDark } from './lib/appMediaPreferences'
   import { createBookmarkDraft, createCategoryDraft } from './lib/appModalState'
   import {
     canSeeHomeView,
     createHomeGateState,
     shouldOpenLoginGate,
-    shouldRevealHomeFromLocalSnapshot,
     type AppView,
   } from './lib/appNavigation'
   import { resolveGlobalShortcut } from './lib/appShortcuts'
@@ -109,12 +94,7 @@
   type SettingsSubset = SettingsFormValue
   const rootStyleWriter = typeof document !== 'undefined' ? createRootStyleWriter(document) : null
 
-  let booting = true
-  let installState: InstallScreenState = { type: 'checking' }
-  let recoverActive = false
   let rootError = ''
-  // 数据加载失败时的原始异常，用来判断是否需要回头复核安装状态。
-  let lastDataError: unknown = null
   let currentView: AppView = 'home'
 
   function isAdminPath(): boolean {
@@ -141,6 +121,43 @@
     Install: InstallComponent,
     Recover: RecoverComponent,
   } = lazyComponents.components
+  // 启动 / 安装 / 找回流程见 lib/appBootController：控制器持有 booting / installState / recoverActive，
+  // rootError / currentView / loginModalOpen 仍归 App，经下列回调在原先的时机读写。
+  const boot = createAppBootController({
+    onChange: (next) => {
+      booting = next.booting
+      recoverActive = next.recoverActive
+      // 只在控制器真正换了对象时赋值：Svelte 对对象的同引用赋值也会触发依赖，
+      // 否则 booting 变化会连带重跑 installView 与 Install 分包加载语句。
+      if (installState !== next.installState) installState = next.installState
+    },
+    installApi: api.install,
+    getInstallHintStorage: getBrowserInstallHintStorage,
+    getPathname: () => typeof window === 'undefined' ? null : window.location.pathname,
+    replacePath: replaceBrowserPath,
+    clearCachedAdminData,
+    clearCachedPublicData,
+    setSession: (session) => authStore.setSession(session),
+    initializeAuth: () => authStore.initialize(),
+    resetAdminData: () => adminStore.reset(),
+    isLoggedIn,
+    refreshLoggedInData,
+    refreshPublicData,
+    getPublicMode: () => get(configStore).data?.public_mode,
+    isAdminPath,
+    ensureLazyComponent: (name) => lazyComponents.ensure(name),
+    getRootError: () => rootError,
+    setRootError: (message) => {
+      rootError = message
+    },
+    setLoginModalOpen: (open) => {
+      loginModalOpen = open
+    },
+    setCurrentView: (view) => {
+      currentView = view
+    },
+  })
+  let { booting, installState, recoverActive } = boot.getState()
   let lazyViewError = ''
   let confirmDialog: ConfirmDialogState | null = null
   const confirmController = createConfirmController((next) => {
@@ -232,10 +249,10 @@
   configureDataService({
     onRootError: (message, error) => {
       rootError = message
-      lastDataError = error
+      boot.recordDataError(error)
     },
     onLocalSnapshotRestored: () => {
-      revealHomeFromCurrentData()
+      boot.revealHomeFromCurrentData()
     },
     onNetworkFallback: (message) => {
       toastStore.addToast(message, 'info', { duration: 8000 })
@@ -349,180 +366,6 @@
     } catch (error) {
       rootError = getErrorMessage(error)
     }
-  }
-
-  function getInstallHintStorage(): Storage | null {
-    if (typeof window === 'undefined') return null
-
-    try {
-      return window.localStorage
-    } catch {
-      return null
-    }
-  }
-
-  function rememberInstalled(installed: boolean): void {
-    setInstalledHint(getInstallHintStorage(), installed)
-  }
-
-  async function enterInstalledApp(session: Awaited<ReturnType<typeof api.install.install>> | null): Promise<void> {
-    await Promise.all([clearCachedAdminData(), clearCachedPublicData()])
-    rememberInstalled(true)
-    authStore.setSession(session)
-    replaceBrowserPath('/')
-    installState = { type: 'checking' }
-    await initializeApp(true)
-  }
-
-  async function checkInstallStatus(forceProbe = false): Promise<boolean> {
-    const installedHint = hasInstalledHint(getInstallHintStorage())
-    const pathname = typeof window === 'undefined' ? '/' : window.location.pathname
-
-    // 浏览器已经记住装过时直接放行：这个探测过去无条件串行阻塞在数据加载之前，
-    // 每次打开页面白白多一个网络往返。标记过期的情况由 recheckInstallAfterDataError 兜底。
-    if (!shouldProbeInstallStatus({ installedHint, pathname, forceProbe })) {
-      return true
-    }
-
-    installState = { type: 'checking' }
-
-    try {
-      const status = await api.install.status()
-      if (status.state !== 'installed') {
-        if (canUseInstalledFallback(status, installedHint)) {
-          if (typeof window !== 'undefined' && isInstallPath(window.location.pathname)) {
-            replaceBrowserPath('/')
-          }
-          return true
-        }
-
-        rememberInstalled(false)
-        replaceBrowserPath('/install')
-        installState = toInstallScreenState(status)
-        booting = false
-        return false
-      }
-
-      rememberInstalled(true)
-      if (typeof window !== 'undefined' && isInstallPath(window.location.pathname)) {
-        replaceBrowserPath('/')
-      }
-      return true
-    } catch (error) {
-      if (installedHint) {
-        if (typeof window !== 'undefined' && isInstallPath(window.location.pathname)) {
-          replaceBrowserPath('/')
-        }
-        return true
-      }
-
-      installState = { type: 'status_error', message: normalizeInstallError(error) }
-      booting = false
-      return false
-    }
-  }
-
-  // 跳过启动探测的代价：数据库被重置或重新绑定后，本地的「装过」标记会过期。
-  // 数据加载因服务端错误失败时回头复核一次，把用户带回安装页。
-  async function recheckInstallAfterDataError(error: unknown): Promise<boolean> {
-    if (!shouldRecheckInstallAfterDataError(error)) return false
-    return !await checkInstallStatus(true)
-  }
-
-  async function handleInstall(value: { setupToken: string; username: string; password: string }): Promise<void> {
-    if (installState.type !== 'pending' || installState.status.state !== 'needs_install') return
-
-    const pendingStatus = installState.status
-    installState = { type: 'installing', status: pendingStatus }
-
-    try {
-      const session = await api.install.install(
-        { username: value.username, password: value.password },
-        value.setupToken,
-      )
-      await enterInstalledApp(session)
-    } catch (error) {
-      if (await installationCommittedAfterFailure(api.install.status)) {
-        await enterInstalledApp(null)
-        return
-      }
-
-      installState = {
-        type: 'pending',
-        status: pendingStatus,
-        error: normalizeInstallError(error),
-      }
-    }
-  }
-
-  async function initializeApp(installStatusKnown = false): Promise<void> {
-    booting = true
-    rootError = ''
-    lastDataError = null
-
-    if (!installStatusKnown && !await checkInstallStatus()) {
-      return
-    }
-
-    try {
-      await authStore.initialize()
-    } catch (error) {
-      rootError = getErrorMessage(error)
-    }
-
-    adminStore.reset()
-    if (isLoggedIn()) {
-      try {
-        await refreshLoggedInData()
-      } catch (error) {
-        if (isUnauthorizedError(error)) {
-          authStore.setSession(null)
-          adminStore.reset()
-          await clearCachedAdminData()
-        } else {
-          if (await recheckInstallAfterDataError(error)) return
-          rootError = getErrorMessage(error)
-        }
-
-        await refreshPublicData()
-      }
-    } else {
-      await refreshPublicData(true)
-      if (rootError && await recheckInstallAfterDataError(lastDataError)) return
-    }
-
-    const homeGate = createHomeGateState({
-      publicMode: get(configStore).data?.public_mode,
-      authenticated: isLoggedIn(),
-    })
-    if (homeGate.loginModalOpen) {
-      await lazyComponents.ensure('LoginModal')
-    }
-    loginModalOpen = homeGate.loginModalOpen
-    if (isAdminPath() && isLoggedIn()) {
-      await lazyComponents.ensure('Admin')
-      currentView = 'admin'
-      loginModalOpen = false
-    } else {
-      currentView = homeGate.view
-    }
-    booting = false
-  }
-
-  function revealHomeFromCurrentData(): void {
-    const homeGate = createHomeGateState({
-      publicMode: get(configStore).data?.public_mode,
-      authenticated: isLoggedIn(),
-    })
-    if (!shouldRevealHomeFromLocalSnapshot({
-      booting,
-      adminPath: isAdminPath(),
-      homeView: homeGate.view,
-    })) return
-
-    loginModalOpen = false
-    currentView = 'home'
-    booting = false
   }
 
   function resetCategoryState(): void {
@@ -1029,28 +872,12 @@
       await refreshAdminDataAfterMutation()
     }
   }
-  async function handleRecovered(session: LoginResp): Promise<void> {
-    recoverActive = false
-    await enterInstalledApp(session)
-  }
-  function handleGoInstall(): void {
-    replaceBrowserPath('/install')
-    recoverActive = false
-    installState = { type: 'checking' }
-    void initializeApp()
-  }
-  function handleRecoverCancel(): void {
-    replaceBrowserPath('/')
-    recoverActive = false
-    installState = { type: 'checking' }
-    void initializeApp()
-  }
   function handleForgotPassword(): void {
     authViewIntent.invalidate()
     // 忘记密码是登录态的子流程，按模态语义处理：不改 URL，避免 pushState 制造一个没有
     // popstate 监听的历史项（后退键会让 URL 与视图错位）。直达 /recover 仍由 onMount 处理。
     loginModalOpen = false
-    recoverActive = true
+    boot.enterRecover()
   }
 
   onMount(() => {
@@ -1063,12 +890,8 @@
       systemPrefersDark = prefersDark
     })
 
-    if (typeof window !== 'undefined' && isRecoverPath(window.location.pathname)) {
-      recoverActive = true
-      booting = false
-      return
-    }
-    void initializeApp()
+    // 直达 /recover 时只进入找回流程，不继续启动，也不安装焦点刷新。
+    if (!boot.start()) return
     // 切回已打开的标签页时按会话状态刷新（Issue #25 跨标签页设置同步 / Issue #29
     // 登录态保留私密视图）：登录态走登录态聚合刷新，未登录走公开刷新。
     stopPublicDataFocusRefresh = installPublicDataFocusRefresh(() => refreshVisibleData())
@@ -1088,9 +911,9 @@
 {#if recoverActive && $RecoverComponent}
   <svelte:component
     this={$RecoverComponent}
-    onRecovered={handleRecovered}
-    onGoInstall={handleGoInstall}
-    onCancel={handleRecoverCancel}
+    onRecovered={boot.recovered}
+    onGoInstall={boot.goInstall}
+    onCancel={boot.cancelRecover}
   />
 {:else if !recoverActive && installView && $InstallComponent}
   <svelte:component
@@ -1100,8 +923,8 @@
     schemaVersion={installView.schemaVersion}
     installing={installView.installing}
     error={installView.error}
-    onInstall={handleInstall}
-    onRetryStatus={initializeApp}
+    onInstall={boot.install}
+    onRetryStatus={boot.initializeApp}
   />
 {:else if booting || recoverActive || installView}
   <AppSplash
