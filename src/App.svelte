@@ -33,7 +33,7 @@
     importDataFromFile,
   } from './lib/appImportExport'
   import {
-    createConfirmDialogState,
+    createConfirmController,
     createBatchDeleteConfirmation,
     createDeleteBookmarkConfirmation,
     createDeleteCategoryConfirmation,
@@ -131,7 +131,9 @@
   let RecoverComponent: typeof import('./views/Recover.svelte').default | null = null
   let lazyViewError = ''
   let confirmDialog: ConfirmDialogState | null = null
-  let confirmDialogResolver: ((confirmed: boolean) => void) | null = null
+  const confirmController = createConfirmController((next) => {
+    confirmDialog = next
+  })
 
   const ensureAdminComponent = createLazyComponentLoader({
     load: () => import('./views/Admin.svelte'),
@@ -334,27 +336,15 @@
   }
 
   function requestConfirmation(options: ConfirmDialogInput): Promise<boolean> {
-    confirmDialogResolver?.(false)
-
-    return new Promise((resolve) => {
-      confirmDialogResolver = resolve
-      confirmDialog = createConfirmDialogState(options)
-    })
-  }
-
-  function closeConfirmDialog(confirmed: boolean): void {
-    const resolver = confirmDialogResolver
-    confirmDialogResolver = null
-    confirmDialog = null
-    resolver?.(confirmed)
+    return confirmController.request(options)
   }
 
   function handleConfirmDialogConfirm(): void {
-    closeConfirmDialog(true)
+    confirmController.close(true)
   }
 
   function handleConfirmDialogCancel(): void {
-    closeConfirmDialog(false)
+    confirmController.close(false)
   }
 
   async function ensureLoggedInDataLoaded(): Promise<boolean> {
