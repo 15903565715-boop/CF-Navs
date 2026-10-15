@@ -1,22 +1,43 @@
+<svelte:options runes />
+
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte'
+  import { untrack } from 'svelte'
   import ColorAlphaInput from './ColorAlphaInput.svelte'
   import { parseCssColor } from '../lib/color'
 
-  export let value = ''
-  export let defaultStart = '#1e3a8a'
-  export let defaultEnd = '#0f172a'
-  export let startLabel = '起始颜色'
-  export let endLabel = '结束颜色'
-
-  let startColor = defaultStart
-  let endColor = defaultEnd
-  let lastValue = ''
-  const dispatch = createEventDispatcher<{ change: string }>()
-
-  $: if (value !== lastValue) {
-    syncStopsFromValue(value)
+  interface Props {
+    /** ThemeBackgroundCard 以 `bind:value` 传入。 */
+    value?: string
+    defaultStart?: string
+    defaultEnd?: string
+    startLabel?: string
+    endLabel?: string
+    /** 原 `change` 事件：两端颜色重组成新渐变并写回 `value` 之后调用，参数为新值。 */
+    onchange?: (value: string) => void
   }
+
+  let {
+    value = $bindable(''),
+    defaultStart = '#1e3a8a',
+    defaultEnd = '#0f172a',
+    startLabel = '起始颜色',
+    endLabel = '结束颜色',
+    onchange,
+  }: Props = $props()
+
+  let startColor = $state(untrack(() => defaultStart))
+  let endColor = $state(untrack(() => defaultEnd))
+  // 只在下面的副作用与重组函数里比较，不进模板。
+  let lastValue = ''
+
+  // 原 `$: if (value !== lastValue) syncStopsFromValue(value)`：只依赖 value（lastValue 为普通变量，
+  // 两者只在重组时一起变化），语句体在 untrack 中执行，读到的默认色不成为依赖（与原语法依赖一致）。
+  $effect.pre(() => {
+    const nextValue = value
+    untrack(() => {
+      if (nextValue !== lastValue) syncStopsFromValue(nextValue)
+    })
+  })
 
   function syncStopsFromValue(nextValue: string) {
     const stops = parseGradientStops(nextValue)
@@ -41,7 +62,7 @@
     const nextValue = `linear-gradient(135deg, ${startColor.trim() || defaultStart}, ${endColor.trim() || defaultEnd})`
     value = nextValue
     lastValue = nextValue
-    dispatch('change', value)
+    onchange?.(value)
   }
 
   function parseGradientStops(input: string): [string, string] | null {

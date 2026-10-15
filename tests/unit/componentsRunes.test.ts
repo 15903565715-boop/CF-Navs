@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 // 代码审查三轮第 23 项起（APP_SPLIT_PLAN 第 8f 步起）：层级 0 视图与层级 1+ 组件改为 runes 模式的源码护栏。
 // 8c–8e 的 29 个叶子见 tests/unit/leafComponentsRunes.test.ts。行为等价由各批迁移前写成、迁移时未改的行为基线保证：
-// 8f viewsBehavior。
+// 8f viewsBehavior；8g level1ComponentsBehavior。
 
 const read = (path: string) => readFileSync(path, 'utf8')
 
@@ -42,5 +42,65 @@ describe('8f: lazy-loaded views in runes mode', () => {
     expect(read('src/views/Install.svelte')).toContain("let username = $state('admin')")
     expect(read('src/views/Recover.svelte')).toContain('let submitting = $state(false)')
     expect(read('src/views/Recover.svelte')).toContain('let tokenHint = $state(false)')
+  })
+})
+
+const LEVEL1_8G = [
+  'BookmarkBaseFields',
+  'BookmarkCardCompact',
+  'BookmarkCardInfo',
+  'BookmarkContextMenu',
+  'BookmarkIconCandidatePicker',
+  'GradientBackgroundInput',
+  'HomeCategoryScope',
+  'HomeHeroSearch',
+  'IconifySelector',
+  'Sidebar',
+  'SpotlightBookmarkIcon',
+].map((name) => `src/components/${name}.svelte`)
+
+describe('8g: level-1 home and bookmark components in runes mode', () => {
+  it.each(LEVEL1_8G)('%s opts into runes and drops the legacy syntax', expectRunes)
+
+  it('keeps every prop that a parent binds two-way bindable, and the parents still bind them', () => {
+    const base = read('src/components/BookmarkBaseFields.svelte')
+    for (const name of ['categoryId', 'title', 'url', 'openMethod', 'isPrivate', 'description', 'descriptionMode']) {
+      expect(base, name).toMatch(new RegExp(`\\b${name} = \\$bindable\\(`))
+      expect(read('src/components/BookmarkEditModal.svelte'), name).toContain(`bind:${name}={form.`)
+    }
+    expect(read('src/components/HomeHeroSearch.svelte')).toContain("query = $bindable('')")
+    expect(read('src/views/Home.svelte')).toContain('bind:query={searchQuery}')
+    expect(read('src/components/settings/SettingsHomePreview.svelte')).toContain('bind:query={previewQuery}')
+    expect(read('src/components/IconifySelector.svelte')).toContain("iconifyName = $bindable('')")
+    expect(read('src/components/BookmarkEditModal.svelte')).toMatch(/<IconifySelector\s+bind:iconifyName/)
+    expect(read('src/components/CategoryEditModal.svelte')).toMatch(/<IconifySelector\s+bind:iconifyName/)
+    expect(read('src/components/GradientBackgroundInput.svelte')).toContain("value = $bindable('')")
+    // 只被单向传入的 prop 不做 bindable
+    for (const path of ['BookmarkCardCompact', 'BookmarkCardInfo', 'BookmarkContextMenu', 'HomeCategoryScope', 'Sidebar', 'SpotlightBookmarkIcon']) {
+      expect(read(`src/components/${path}.svelte`), path).not.toContain('$bindable')
+    }
+  })
+
+  it('replaces the GradientBackgroundInput change event with an onchange callback at its only call site', () => {
+    expect(read('src/components/GradientBackgroundInput.svelte')).toContain('onchange?.(value)')
+    const card = read('src/components/settings/ThemeBackgroundCard.svelte')
+    const tag = card.slice(card.indexOf('<GradientBackgroundInput'), card.indexOf('/>', card.indexOf('<GradientBackgroundInput')))
+    expect(tag).toContain('onchange={() => void syncBackground()}')
+    expect(tag).not.toMatch(/\son:change/)
+  })
+
+  it('keeps the context menu stopPropagation listeners directly on the menu node and remeasures after updates', () => {
+    const menu = read('src/components/BookmarkContextMenu.svelte')
+    expect(menu).toContain('{@attach attachMenuListeners}')
+    expect(menu).toContain("import { on } from 'svelte/events'")
+    expect(menu).toMatch(/\$effect\(\(\) => \{\n\s+void \[placement, maxHeight, topOffset, onEdit, movePickerOpen, canMove, onMoveBookmark, categories, categories\.length, moveCategoryId\]\n\s+untrack\(scheduleMeasure\)/)
+    expect(menu).toMatch(/<CategoryTreeSelect[^>]*\bbind:value=\{moveCategoryId\}/)
+  })
+
+  it('does not deep-proxy replaced Sets, observers or trusted-icon snapshots', () => {
+    const sidebar = read('src/components/Sidebar.svelte')
+    expect(sidebar).toContain('let expandedParentIds = $state.raw(new Set<string>())')
+    expect(sidebar).toContain('let resizeObserver: ResizeObserver | null = $state.raw(null)')
+    expect(read('src/components/SpotlightBookmarkIcon.svelte')).toContain('let trustedImage = $state.raw(emptyTrustedIcon)')
   })
 })

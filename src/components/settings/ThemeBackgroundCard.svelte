@@ -99,7 +99,7 @@
         {:else if background.type === 'gradient'}
           <GradientBackgroundInput
             bind:value={background.value}
-            on:change={() => void syncBackground()}
+            onchange={() => void syncBackground()}
             defaultStart={gradientDefaults.start}
             defaultEnd={gradientDefaults.end}
             startLabel="起始颜色"

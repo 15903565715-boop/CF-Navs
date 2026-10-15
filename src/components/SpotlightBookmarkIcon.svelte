@@ -1,9 +1,12 @@
+<svelte:options runes />
+
 <script lang="ts">
   import { createTrustedIconView, emptyTrustedIcon } from '../lib/trustedIconView'
   import { applyIconDisplayOverride, bookmarkIconDisplay } from '../lib/iconDisplayStore'
-  let trustedImage = emptyTrustedIcon
+  // 可信图标视图每次发布新对象；不做深层代理。
+  let trustedImage = $state.raw(emptyTrustedIcon)
   const trustedView = createTrustedIconView(value => { trustedImage = value })
-  import { onDestroy } from 'svelte'
+  import { onDestroy, untrack } from 'svelte'
   import type { PublicBookmark } from '../../shared/types'
   import {
     deriveBookmarkCardIconBase,
@@ -21,38 +24,49 @@
 
   const ICON_SIZE = 30
 
-  export let bookmark: PublicBookmark
-  /** 私密对象及其私密分类树下的书签需要授权 key；公开对象传空串以保留共享缓存。 */
-  export let iconAccessKey = ''
-  export let reuseCompletedObject = false
+  interface Props {
+    bookmark: PublicBookmark
+    /** 私密对象及其私密分类树下的书签需要授权 key；公开对象传空串以保留共享缓存。 */
+    iconAccessKey?: string
+    reuseCompletedObject?: boolean
+  }
 
-  let cachedIconFailed = false
-  let fallbackFailed = false
-  let localCachedIconUrl = ''
+  let { bookmark, iconAccessKey = '', reuseCompletedObject = false }: Props = $props()
+
+  let cachedIconFailed = $state(false)
+  let fallbackFailed = $state(false)
+  let localCachedIconUrl = $state('')
+  // 只在处理器与加载函数里读写，不进模板。
   let localIconReady = false
   const iconRetry = createIconRetry(() => {
     if (iconBaseState.proxiedHttpIconUrl) {
       void loadLocalCachedIcon(iconBaseState.localCacheKey, false, iconBaseState.proxiedHttpIconUrl)
     }
   })
-  let syncLocalCachedIconUrl = ''
-  let localCachePending = false
+  let localCachePending = $state(false)
+  // 只在下面的副作用里比较，不进模板。
   let iconStateKey = ''
   const localCacheRequest = { current: 0 }
 
-  $: iconDisplayOverride = bookmarkIconDisplay.watch(bookmark.id)
-  $: iconBookmark = applyIconDisplayOverride(bookmark, $iconDisplayOverride)
-  $: trustedView.set({ ...iconBookmark, visible: true, online_url: iconBaseState.proxiedHttpIconUrl })
-  $: iconBaseState = deriveBookmarkCardIconBase({
+  // watch 对同一 id 返回同一个 store，`$iconDisplayOverride` 不会反复重订阅。
+  const iconDisplayOverride = $derived(bookmarkIconDisplay.watch(bookmark.id))
+  const iconBookmark = $derived(applyIconDisplayOverride(bookmark, $iconDisplayOverride))
+  // 原拓扑顺序：iconBaseState 先于依赖它的 trustedView.set 计算。
+  const iconBaseState = $derived(deriveBookmarkCardIconBase({
     bookmark: iconBookmark,
     iconInView: true,
     shouldWaitForLocalIconCache: true,
     iconAccessKey,
+  }))
+  // 与原 `$:` 一样先于 DOM 更新、在状态键判断之前执行；set 内部按签名去重，只在入参依赖变化时调用。
+  $effect.pre(() => {
+    const input = { ...iconBookmark, visible: true, online_url: iconBaseState.proxiedHttpIconUrl }
+    untrack(() => trustedView.set(input))
   })
-  $: iconText = iconBaseState.iconText
-  $: localCacheKey = iconBaseState.localCacheKey
-  $: syncLocalCachedIconUrl = readCachedBookmarkIconDataUri(localCacheKey) ?? ''
-  $: iconUrlState = deriveBookmarkCardIconUrl({
+  const iconText = $derived(iconBaseState.iconText)
+  const localCacheKey = $derived(iconBaseState.localCacheKey)
+  const syncLocalCachedIconUrl = $derived(readCachedBookmarkIconDataUri(localCacheKey) ?? '')
+  const iconUrlState = $derived(deriveBookmarkCardIconUrl({
     bookmark: iconBookmark,
     baseState: iconBaseState,
     cachedIconFailed,
@@ -60,30 +74,38 @@
     syncLocalCachedIconUrl,
     localCachedIconUrl,
     localCachePending,
-  })
-  $: iconUrl = trustedImage.active ? trustedImage.url : iconUrlState.hasRenderableIcon ? iconUrlState.iconUrl : ''
-  $: iconStyle = buildIconStyle(ICON_SIZE, {
+  }))
+  const iconUrl = $derived(trustedImage.active ? trustedImage.url : iconUrlState.hasRenderableIcon ? iconUrlState.iconUrl : '')
+  const iconStyle = $derived(buildIconStyle(ICON_SIZE, {
     customBackground: bookmark.icon_background_color ?? '',
+  }))
+  const nextStateKey = $derived(iconBaseState.nextIconStateKey + ':' + trustedImage.active)
+  // 状态键变化时复位并重新加载；原语句的语法依赖是 nextStateKey 与 iconBaseState / trustedImage
+  // （三者都已含在键里或随键变化），被调用函数里读写的 localCachedIconUrl 等不作为依赖。
+  $effect.pre(() => {
+    const key = nextStateKey
+    const baseState = iconBaseState
+    const trustedActive = trustedImage.active
+    untrack(() => {
+      if (key === iconStateKey) return
+      iconStateKey = key
+      cachedIconFailed = false
+      fallbackFailed = false
+      localIconReady = false
+      iconRetry.reset()
+      resetLocalCachedIconUrl()
+      if (baseState.shouldReadLocalIconCache && !trustedActive) {
+        void loadLocalCachedIcon(
+          baseState.localCacheKey,
+          baseState.shouldWaitForLocalIconCache,
+          baseState.shouldUseIconProxy ? baseState.proxiedHttpIconUrl : '',
+        )
+      } else {
+        localCacheRequest.current += 1
+        localCachePending = false
+      }
+    })
   })
-  $: nextStateKey = iconBaseState.nextIconStateKey + ':' + trustedImage.active
-  $: if (nextStateKey !== iconStateKey) {
-    iconStateKey = nextStateKey
-    cachedIconFailed = false
-    fallbackFailed = false
-    localIconReady = false
-    iconRetry.reset()
-    resetLocalCachedIconUrl()
-    if (iconBaseState.shouldReadLocalIconCache && !trustedImage.active) {
-      void loadLocalCachedIcon(
-        iconBaseState.localCacheKey,
-        iconBaseState.shouldWaitForLocalIconCache,
-        iconBaseState.shouldUseIconProxy ? iconBaseState.proxiedHttpIconUrl : '',
-      )
-    } else {
-      localCacheRequest.current += 1
-      localCachePending = false
-    }
-  }
 
   function resetLocalCachedIconUrl(): void {
     if (!localCachedIconUrl) return

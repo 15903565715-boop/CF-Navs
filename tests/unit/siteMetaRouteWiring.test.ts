@@ -30,7 +30,7 @@ describe('site meta route wiring', () => {
     const baseFields = readFileSync('src/components/BookmarkBaseFields.svelte', 'utf8')
     const modal = readFileSync('src/components/BookmarkEditModal.svelte', 'utf8')
 
-    expect(baseFields).toContain('on:blur={() => onUrlBlur?.()}')
+    expect(baseFields).toContain('onblur={() => onUrlBlur?.()}')
     expect(modal).toContain('createBookmarkTitleState(titleLookupState.requestId)')
     expect(modal).toContain('onUrlBlur={handleUrlBlur}')
   })

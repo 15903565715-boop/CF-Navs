@@ -241,11 +241,11 @@ describe('Slider：bind:value 写回数字并触发父组件同步', () => {
 })
 
 describe('ColorAlphaInput：change 载荷与 bind:value / bind:alpha 写回', () => {
-  it('GradientBackgroundInput 用 e.detail 重组渐变并向上派发', async () => {
+  // 第 8g 步 GradientBackgroundInput 自身改为 runes：`change` 事件随之改为 `onchange` 回调 prop（参数即原 e.detail）。
+  it('GradientBackgroundInput 用 ColorAlphaInput 的回调值重组渐变并向上回调', async () => {
     const onChange = vi.fn()
     render(GradientBackgroundInput, {
-      props: { value: 'linear-gradient(135deg, #111111, #222222)', startLabel: '起始颜色', endLabel: '结束颜色' },
-      events: { change: (event) => onChange(event.detail) },
+      props: { value: 'linear-gradient(135deg, #111111, #222222)', startLabel: '起始颜色', endLabel: '结束颜色', onchange: onChange },
     })
 
     await fireEvent.input(screen.getByLabelText('起始颜色'), { target: { value: '#123456' } })
