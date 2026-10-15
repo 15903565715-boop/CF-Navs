@@ -22,8 +22,8 @@
   import { clearCachedAdminData } from './lib/adminDataCache'
   import { clearCachedPublicData } from './lib/publicDataCache'
   import { toastStore } from './lib/toast'
-  import type { AdminTab, BookmarkFormValue, CategoryFormValue } from './lib/adminTypes'
-  import { toBookmarkForm, toBookmarkPayload, toCategoryForm, toCategoryPayload } from './lib/adminFormAdapters'
+  import type { AdminTab, BookmarkFormValue } from './lib/adminTypes'
+  import { toBookmarkForm, toBookmarkPayload } from './lib/adminFormAdapters'
   import { runAdminMutation } from './lib/appAdminMutation'
   import { createAuthViewIntent, logoutRevocationWarning } from './lib/appAuthController'
   import {
@@ -35,7 +35,6 @@
     createConfirmController,
     createBatchDeleteConfirmation,
     createDeleteBookmarkConfirmation,
-    createDeleteCategoryConfirmation,
     type ConfirmDialogInput,
     type ConfirmDialogState,
   } from './lib/appConfirmDialog'
@@ -55,7 +54,9 @@
   import { getInstallViewState, replaceBrowserPath } from './lib/appInstall'
   import { createAppBootController, getBrowserInstallHintStorage } from './lib/appBootController'
   import { readReducedMotion, subscribeSystemDark } from './lib/appMediaPreferences'
-  import { createBookmarkDraft, createCategoryDraft } from './lib/appModalState'
+  import { createBookmarkDraft } from './lib/appModalState'
+  import { createEditIntentCounter } from './lib/appEditIntent'
+  import { createCategoryController } from './lib/appCategoryController'
   import {
     canSeeHomeView,
     createHomeGateState,
@@ -177,9 +178,7 @@
 
   const authViewIntent = createAuthViewIntent()
   let loginModalOpen = false
-  let categoryModalOpen = false
   let bookmarkModalOpen = false
-  let categoryCreateReturnToHome = false
   let homeFocusCategoryId: number | null = null
   let spotlightOpen = false
   let viewBookmark: PublicBookmark | null = null
@@ -221,20 +220,16 @@
     else void openSpotlight()
   }
 
-  let categoryModalMode: 'create' | 'edit' = 'create'
   let bookmarkModalMode: 'create' | 'edit' = 'create'
 
-  let activeCategory: Partial<CategoryFormValue> | null = null
   let activeBookmark: Partial<BookmarkFormValue> | null = null
-  let editIntent = 0
+  // 分类与书签共用一个编辑意图计数器（见 lib/appEditIntent），必须注入同一个实例。
+  const editIntent = createEditIntentCounter()
 
-  let savingCategory = false
   let savingBookmark = false
   let savingSettings = false
-  let deletingCategoryId: number | null = null
   let deletingBookmarkId: number | null = null
 
-  let categoryError = ''
   let bookmarkError = ''
   let settingsError = ''
 
@@ -243,7 +238,6 @@
   let prefersReducedMotion = false
   // 只在浏览器里创建：SSR/测试环境没有 document 和 URL.createObjectURL。
   let customScriptController: CustomScriptController | null = null
-  const categorySortState = createOptimisticSortState()
   const bookmarkSortState = createOptimisticSortState()
 
   configureDataService({
@@ -368,15 +362,54 @@
     }
   }
 
-  function resetCategoryState(): void {
-    editIntent += 1
-    categoryModalOpen = false
-    categoryModalMode = 'create'
-    activeCategory = null
-    categoryError = ''
-    savingCategory = false
-    categoryCreateReturnToHome = false
-  }
+  // 分类的打开 / 编辑 / 提交 / 删除 / 批量删除 / 排序见 lib/appCategoryController：控制器持有分类编辑框状态，
+  // rootError / currentView / homeFocusCategoryId 仍归 App，经下列回调在原先的时机写入。
+  const categoryController = createCategoryController({
+    onChange: (next) => {
+      categoryModalOpen = next.modalOpen
+      categoryModalMode = next.modalMode
+      // 同引用不赋值：Svelte 对对象的同引用赋值也会触发依赖（会把同一份 value 再推给编辑框）。
+      if (activeCategory !== next.active) activeCategory = next.active
+      savingCategory = next.saving
+      deletingCategoryId = next.deletingId
+      categoryError = next.error
+      categoryCreateReturnToHome = next.createReturnToHome
+    },
+    editIntent,
+    api,
+    isLoggedIn,
+    openLogin: handleOpenLogin,
+    ensureLoggedInDataLoaded,
+    ensureLazyComponent: (name) => lazyComponents.ensure(name),
+    readAdminDataForEdit,
+    getAdminData: () => adminData,
+    requestConfirmation,
+    applyLocalCategoryUpsert,
+    applyLocalCategoryDelete,
+    applyLocalCategorySort,
+    persistCurrentAdminData,
+    refreshAdminDataAfterMutation,
+    refreshLoggedInData,
+    setRootError: (message) => {
+      rootError = message
+    },
+    setCurrentView: (view) => {
+      currentView = view
+    },
+    setHomeFocusCategoryId: (id) => {
+      homeFocusCategoryId = id
+    },
+    tick,
+  })
+  let {
+    modalOpen: categoryModalOpen,
+    modalMode: categoryModalMode,
+    active: activeCategory,
+    saving: savingCategory,
+    deletingId: deletingCategoryId,
+    error: categoryError,
+    createReturnToHome: categoryCreateReturnToHome,
+  } = categoryController.getState()
 
   function resetSettingsState(): void {
     settingsError = ''
@@ -384,7 +417,7 @@
   }
 
   function resetBookmarkState(): void {
-    editIntent += 1
+    editIntent.next()
     bookmarkModalOpen = false
     bookmarkModalMode = 'create'
     activeBookmark = null
@@ -444,7 +477,7 @@
   async function completeLogoutUseCase(previousSettings: Settings | null): Promise<string | null> {
     const revocationWarning = logoutRevocationWarning(await authStore.logout())
     if (isLoggedIn()) return revocationWarning
-    resetCategoryState()
+    categoryController.reset()
     resetSettingsState()
     resetBookmarkState()
     adminStore.reset()
@@ -500,130 +533,8 @@
     replaceBrowserPath('/admin')
     currentView = 'admin'
   }
-  async function openCreateCategoryUseCase(returnToHome: boolean): Promise<boolean> {
-    editIntent += 1
-    if (!isLoggedIn()) {
-      await handleOpenLogin()
-      return false
-    }
-
-    if (!await ensureLoggedInDataLoaded()) {
-      return false
-    }
-
-    if (returnToHome) await lazyComponents.ensure('CategoryEditModal')
-    else await lazyComponents.ensure('Admin')
-    return true
-  }
-  async function handleOpenCreateCategory(parentId: string | number | null = null, returnToHomeOverride: boolean | undefined = undefined): Promise<void> {
-    const returnToHome = returnToHomeOverride ?? parentId != null
-    if (!await openCreateCategoryUseCase(returnToHome)) return
-
-    categoryError = ''
-    categoryCreateReturnToHome = returnToHome
-    categoryModalMode = 'create'
-    activeCategory = createCategoryDraft(parentId)
-    categoryModalOpen = true
-    if (!returnToHome) currentView = 'admin'
-  }
-  async function handleOpenCreateRootCategory(): Promise<void> {
-    await handleOpenCreateCategory(null, true)
-  }
-
-  async function openEditCategoryUseCase(category: { id: string | number }): Promise<void> {
-    const intent = ++editIntent
-    try {
-      const data = await readAdminDataForEdit()
-      if (!data || intent !== editIntent) return
-      const current = data.categories.find(item => item.id === Number(category.id))
-      if (!current) throw new Error('分类已不存在，请刷新后重试。')
-      categoryError = ''
-      categoryModalMode = 'edit'
-      activeCategory = toCategoryForm(current)
-      categoryModalOpen = true
-    } catch (error) {
-      if (intent === editIntent) rootError = `无法读取分类的原始编辑数据：${getErrorMessage(error)}`
-    }
-  }
-  async function handleEditCategory(category: { id: string | number }): Promise<void> {
-    await openEditCategoryUseCase(category)
-  }
-
-  async function handleCloseCategoryModal(): Promise<void> {
-    resetCategoryState()
-  }
-
-  async function submitCategoryUseCase(form: CategoryFormValue): Promise<void> {
-    const returnToHome = categoryCreateReturnToHome
-    // 提交意图只看表单本身。`resetCategoryState()` 会把 categoryModalMode 改回 'create'，
-    // 在它之后再读 mode 就会让编辑也提示「已创建」——这条提示语曾经一直是「已创建」。
-    const isEdit = form.id != null
-    savingCategory = true
-    categoryError = ''
-
-    await runAdminMutation({
-      run: () =>
-        isEdit
-          ? api.categories.update(Number(form.id), toCategoryPayload(form))
-          : api.categories.create(toCategoryPayload(form)),
-      onSuccess: async (category) => {
-        resetCategoryState()
-        await applyLocalCategoryUpsert(category)
-        await refreshAdminDataAfterMutation()
-        if (returnToHome) {
-          currentView = 'home'
-          homeFocusCategoryId = null
-          await tick()
-          homeFocusCategoryId = category.id
-          await tick()
-        }
-      },
-      successMessage: (category) =>
-        isEdit ? `分类「${category.title}」已更新` : `分类「${category.title}」已创建`,
-      onError: (message) => {
-        categoryError = message
-      },
-      onSettled: () => {
-        savingCategory = false
-      },
-    })
-  }
-  async function handleSubmitCategory(form: CategoryFormValue): Promise<void> {
-    await submitCategoryUseCase(form)
-  }
-
-  async function handleDeleteCategory(category: { id: string | number; title: string }): Promise<void> {
-    const categoryId = Number(category.id)
-    const directBookmarkCount = adminData.bookmarks.filter((bookmark) => bookmark.category_id === categoryId).length
-    const childCategoryCount = adminData.categories.filter((item) => item.parent_id === categoryId).length
-    const confirmed = await requestConfirmation(createDeleteCategoryConfirmation(
-      category.title,
-      directBookmarkCount,
-      childCategoryCount,
-    ))
-    if (!confirmed) return
-
-    deletingCategoryId = categoryId
-    categoryError = ''
-
-    await runAdminMutation({
-      run: () => api.categories.remove(categoryId),
-      onSuccess: async () => {
-        await applyLocalCategoryDelete(categoryId)
-        await refreshAdminDataAfterMutation()
-      },
-      successMessage: () => `分类「${category.title}」已删除`,
-      onError: (message) => {
-        categoryError = message
-      },
-      onSettled: () => {
-        deletingCategoryId = null
-      },
-    })
-  }
-
   async function handleOpenCreateBookmark(categoryId?: string | number): Promise<void> {
-    editIntent += 1
+    editIntent.next()
     if (!isLoggedIn()) {
       await handleOpenLogin()
       return
@@ -641,7 +552,7 @@
   }
 
   async function handleEditBookmark(bookmark: { id: string | number }): Promise<void> {
-    const intent = ++editIntent
+    const intent = editIntent.next()
     const editSession = get(authStore).session
     if (!isLoggedIn()) {
       await handleOpenLogin()
@@ -650,17 +561,17 @@
     bookmarkError = ''
     try {
       const data = await readAdminDataForEdit()
-      if (!data || intent !== editIntent) return
+      if (!data || intent !== editIntent.current()) return
       const current = data.bookmarks.find(item => item.id === Number(bookmark.id))
       if (!current) throw new Error('书签已不存在，请刷新后重试。')
       await lazyComponents.ensure('BookmarkEditModal')
-      if (!isLoggedIn() || get(authStore).session !== editSession || intent !== editIntent) return
+      if (!isLoggedIn() || get(authStore).session !== editSession || intent !== editIntent.current()) return
       bookmarkModalMode = 'edit'
       activeBookmark = toBookmarkForm(current)
       bookmarkModalOpen = true
       refreshBookmarkIconCacheInBackground(Number(bookmark.id))
     } catch (error) {
-      if (intent === editIntent) rootError = `无法读取书签的原始编辑数据：${getErrorMessage(error)}`
+      if (intent === editIntent.current()) rootError = `无法读取书签的原始编辑数据：${getErrorMessage(error)}`
     }
   }
 
@@ -669,7 +580,7 @@
   }
 
   async function handleSubmitBookmark(form: BookmarkFormValue): Promise<void> {
-    // 同 handleSubmitCategory：意图只看表单，resetBookmarkState() 之后 mode 已经变回 'create'。
+    // 同分类提交（appCategoryController 的 submit）：意图只看表单，resetBookmarkState() 之后 mode 已经变回 'create'。
     const isEdit = form.id != null
     const submitSession = get(authStore).session
     const isCurrent = () => submitSession !== null && get(authStore).session === submitSession
@@ -754,26 +665,6 @@
     })
   }
 
-  async function handleBatchDeleteCategories(ids: number[]): Promise<void> {
-    if (ids.length === 0) return
-    const bookmarkCount = adminData.bookmarks.filter((bookmark) => ids.includes(bookmark.category_id)).length
-    const childCategoryCount = adminData.categories.filter((category) => (
-      category.parent_id != null && ids.includes(category.parent_id)
-    )).length
-    if (!await requestConfirmation(createBatchDeleteConfirmation('category', ids.length, bookmarkCount, childCategoryCount))) return
-
-    await runAdminMutation({
-      run: () => api.categories.batchDelete(ids),
-      onSuccess: async (result) => {
-        if (result.deleted > 0 || result.deleted_bookmarks > 0) await refreshAdminDataAfterMutation()
-      },
-      successMessage: (result) => `已删除 ${result.deleted} 个分类及 ${result.deleted_bookmarks} 个书签`,
-      onError: (message) => {
-        categoryError = message
-      },
-    })
-  }
-
   async function handleSubmitSettings(payload: SettingsSubset): Promise<void> {
     savingSettings = true
     settingsError = ''
@@ -797,7 +688,7 @@
 
     await api.auth.changePassword(payload)
     authStore.setSession(null)
-    resetCategoryState()
+    categoryController.reset()
     resetSettingsState()
     resetBookmarkState()
     adminStore.reset()
@@ -806,21 +697,6 @@
     await lazyComponents.ensure('LoginModal')
     loginModalOpen = true
     currentView = 'login'
-  }
-
-  async function handleSortCategories(parentId: number | null, ids: Array<string | number>): Promise<void> {
-    categoryError = ''
-
-    await runOptimisticSort(categorySortState, ids, {
-      applyLocalSort: (sortedIds) => applyLocalCategorySort(parentId, sortedIds, false),
-      saveRemoteSort: (sortedIds) => api.categories.sort(parentId, sortedIds),
-      persist: persistCurrentAdminData,
-      onSuccess: refreshAdminDataAfterMutation,
-      restoreOnError: () => refreshLoggedInData(true),
-      onError: (error) => {
-        categoryError = getErrorMessage(error)
-      },
-    })
   }
 
   async function handleSortBookmarks(ids: Array<string | number>): Promise<void> {
@@ -950,8 +826,8 @@
           title={homeTitle}
           isAuthenticated={$isAuthenticated}
           authLoading={$authStore.loading}
-          onOpenCreateCategory={handleOpenCreateCategory}
-          onOpenCreateRootCategory={handleOpenCreateRootCategory}
+          onOpenCreateCategory={categoryController.openCreate}
+          onOpenCreateRootCategory={categoryController.openCreateRoot}
           focusCategoryId={homeFocusCategoryId}
           onOpenCreateBookmark={handleOpenCreateBookmark}
           onEditBookmark={handleEditBookmark}
@@ -995,12 +871,12 @@
         onOpenLogin={handleOpenLogin}
         onLogout={handleLogout}
       onSwitchToHome={() => { replaceBrowserPath('/'); currentView = 'home' }}
-        onOpenCreateCategory={handleOpenCreateCategory}
-        onEditCategory={handleEditCategory}
-        onDeleteCategory={handleDeleteCategory}
-        onBatchDeleteCategories={handleBatchDeleteCategories}
-        onCloseCategoryModal={handleCloseCategoryModal}
-        onSubmitCategory={handleSubmitCategory}
+        onOpenCreateCategory={categoryController.openCreate}
+        onEditCategory={categoryController.openEdit}
+        onDeleteCategory={categoryController.remove}
+        onBatchDeleteCategories={categoryController.batchRemove}
+        onCloseCategoryModal={categoryController.close}
+        onSubmitCategory={categoryController.submit}
         onOpenCreateBookmark={handleOpenCreateBookmark}
         onEditBookmark={handleEditBookmark}
         onDeleteBookmark={handleDeleteBookmark}
@@ -1009,7 +885,7 @@
         onSubmitSettings={handleSubmitSettings}
         onVerifyDevice={() => refreshLoggedInData(true)}
         onChangePassword={handleChangePassword}
-        onSortCategories={handleSortCategories}
+        onSortCategories={categoryController.sort}
         onSortBookmarks={handleSortBookmarks}
         onSelectTab={handleAdminTabChange}
         importing={importExportState.importing}
@@ -1066,8 +942,8 @@
         mode={categoryModalMode}
         value={activeCategory}
         categories={adminCategories}
-        onSubmit={handleSubmitCategory}
-        onCancel={handleCloseCategoryModal}
+        onSubmit={categoryController.submit}
+        onCancel={categoryController.close}
         imageHostUrl={adminData.settings?.image_host_url ?? ''}
       />
     {/if}
