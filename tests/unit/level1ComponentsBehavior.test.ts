@@ -256,10 +256,11 @@ describe('BookmarkIconCandidatePicker', () => {
 })
 
 describe('GradientBackgroundInput：经真实 legacy 父组件 ThemeBackgroundCard', () => {
+  // 第 8i 步 ThemeBackgroundCard 自身改为 runes：`change` 事件改为 `onchange` 回调 prop（参数即原 e.detail）。
   it('改起始色后父组件派发的新背景是重组后的渐变；父组件推送新值后两端颜色跟随', async () => {
     const background: BackgroundSetting = { type: 'gradient', value: 'linear-gradient(135deg, #111111, #222222)', blur: 0, mask: 0, maskColor: '#000000' }
     const onChange = vi.fn()
-    const { rerender } = render(ThemeBackgroundCard, { props: { theme: 'dark', background }, events: { change: (event) => onChange(event.detail) } })
+    const { rerender } = render(ThemeBackgroundCard, { props: { theme: 'dark', background, onchange: onChange } })
 
     await fireEvent.input(screen.getByLabelText('起始颜色'), { target: { value: '#abcdef' } })
     await flush()

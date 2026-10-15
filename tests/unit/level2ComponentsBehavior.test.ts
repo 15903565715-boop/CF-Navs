@@ -395,8 +395,7 @@ describe('ThemeBackgroundCard', () => {
     const background: BackgroundSetting = { type: 'image', value: 'https://img.example/a.jpg', blur: 0, mask: 0.2, maskColor: '#000000' }
     const onChange = vi.fn()
     const view = render(ThemeBackgroundCard, {
-      props: { theme: 'dark', background },
-      events: { change: (event) => onChange(event.detail) },
+      props: { theme: 'dark', background, onchange: onChange },
     })
     expect(document.body.textContent).toContain('深色模式背景')
     expect(document.body.textContent).toContain('Dark')
@@ -416,8 +415,7 @@ describe('ThemeBackgroundCard', () => {
     const background: BackgroundSetting = { type: 'image', value: '', blur: 0, mask: 0.2, maskColor: '#000000' }
     const onChange = vi.fn()
     render(ThemeBackgroundCard, {
-      props: { theme: 'light', background, valid: false },
-      events: { change: (event) => onChange(event.detail) },
+      props: { theme: 'light', background, valid: false, onchange: onChange },
     })
     expect(document.body.textContent).toContain('请填写浅色模式背景值')
     await fireEvent.input(screen.getByLabelText('浅色背景图片地址'), { target: { value: 'https://x.example/b.png' } })

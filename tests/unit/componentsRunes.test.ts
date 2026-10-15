@@ -21,7 +21,8 @@ function expectRunes(path: string): void {
   expect(markup).not.toContain('<slot')
   expect(markup).not.toMatch(/\sslot="/)
   expect(markup).not.toContain('<svelte:component')
-  expect(script).toMatch(/\}: Props = \$props\(\)/)
+  // Toast 没有 props
+  if (!path.endsWith('/Toast.svelte')) expect(script).toMatch(/\}: Props = \$props\(\)/)
   expect(script).not.toMatch(/\b(beforeUpdate|afterUpdate)\b/)
 }
 
@@ -153,5 +154,52 @@ describe('8h: admin panels and settings sections in runes mode', () => {
     const categories = read('src/components/admin/CategoryListPanel.svelte')
     expect(categories).toContain('let expandedRootIds = $state.raw(new Set<string>())')
     expect(categories).toContain('let collapsedSearchRootIds = $state.raw(new Set<string>())')
+  })
+})
+
+const LEVEL2_8I = [
+  'BookmarkCard',
+  'BookmarkEditModal',
+  'CategoryEditModal',
+  'SearchSpotlight',
+  'admin/AdminTabContent',
+  'settings/ThemeBackgroundCard',
+  'Toast',
+].map((name) => `src/components/${name}.svelte`)
+
+describe('8i: level-2 components and Toast in runes mode', () => {
+  it.each(LEVEL2_8I)('%s opts into runes and drops the legacy syntax', expectRunes)
+
+  it('replaces the ThemeBackgroundCard change / upload events with callbacks at its only call site', () => {
+    const card = read('src/components/settings/ThemeBackgroundCard.svelte')
+    expect(card).toContain('onchange?.({ ...background })')
+    expect(card).toContain('onclick={() => onupload?.()}')
+    const advanced = read('src/components/settings/AdvancedSettingsSection.svelte')
+    const tag = advanced.slice(advanced.indexOf('<ThemeBackgroundCard'), advanced.indexOf('/>', advanced.indexOf('<ThemeBackgroundCard')))
+    expect(tag).toContain('onchange={(background) => updateThemeBackground(activeTheme, background)}')
+    expect(tag).toContain('onupload={openUpload}')
+    expect(tag).not.toMatch(/\son:(change|upload)/)
+  })
+
+  it('keeps bound fields deeply reactive and only AdminTabContent.importSource bindable', () => {
+    expect(read('src/components/BookmarkEditModal.svelte')).toContain('let form: BookmarkFormValue = $state({ ...emptyBookmarkForm })')
+    expect(read('src/components/CategoryEditModal.svelte')).toContain('let form: CategoryFormValue = $state({ ...emptyForm })')
+    expect(read('src/components/settings/ThemeBackgroundCard.svelte')).toContain('let background: BackgroundSetting = $state(untrack(() => backgroundProp))')
+    expect(read('src/components/admin/AdminTabContent.svelte')).toContain("importSource = $bindable('cf-navs')")
+    expect(read('src/views/Admin.svelte')).toContain('bind:importSource')
+    for (const path of LEVEL2_8I.filter((item) => !item.includes('AdminTabContent'))) {
+      expect(read(path), path).not.toContain('$bindable')
+    }
+  })
+
+  it('keeps the move-trigger stopPropagation listeners directly on the button', () => {
+    const card = read('src/components/BookmarkCard.svelte')
+    expect(card).toContain('{@attach attachMoveTriggerListeners}')
+    expect(card).toContain("import { on } from 'svelte/events'")
+    expect(card).toContain('<ContextMenuComponent')
+  })
+
+  it('keeps the legacy whole-form dependency of the candidate refresh', () => {
+    expect(read('src/components/BookmarkEditModal.svelte')).toContain('for (const key in form) void form[key as keyof BookmarkFormValue]')
   })
 })

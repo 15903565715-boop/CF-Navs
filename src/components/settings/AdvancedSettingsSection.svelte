@@ -79,8 +79,8 @@
             background={activeBackground}
             valid={activeBackgroundValid}
             {uploadHost}
-            on:change={(event) => updateThemeBackground(activeTheme, event.detail)}
-            on:upload={openUpload}
+            onchange={(background) => updateThemeBackground(activeTheme, background)}
+            onupload={openUpload}
           />
         {/key}
       </div>

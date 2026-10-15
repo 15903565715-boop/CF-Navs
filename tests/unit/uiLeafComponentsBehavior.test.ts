@@ -177,13 +177,13 @@ describe('InputGroup：bind:value 写回先于回调，number 类型保持数字
     expect((screen.getByLabelText('图标链接') as HTMLInputElement).value).toContain('google.com')
   })
 
+  // 第 8i 步 ThemeBackgroundCard 自身改为 runes：`change` / `upload` 事件随之改为 `onchange` / `onupload` 回调 prop（参数即原 e.detail）。
   it('ThemeBackgroundCard：svelte:fragment 具名插槽按 uploadHost 显示上传按钮', async () => {
     const background: BackgroundSetting = { type: 'image', value: '', blur: 0, mask: 0.2, maskColor: '#000000' }
     const onChange = vi.fn()
     const onUpload = vi.fn()
     const view = render(ThemeBackgroundCard, {
-      props: { theme: 'light', background, uploadHost: 'https://img.example' },
-      events: { change: (event) => onChange(event.detail), upload: onUpload },
+      props: { theme: 'light', background, uploadHost: 'https://img.example', onchange: onChange, onupload: onUpload },
     })
 
     const upload = screen.getByRole('button', { name: '打开图床上传 ↗' })
@@ -229,8 +229,7 @@ describe('Slider：bind:value 写回数字并触发父组件同步', () => {
     const background: BackgroundSetting = { type: 'color', value: '#ffffff', blur: 0, mask: 0.2, maskColor: '#000000' }
     const onChange = vi.fn()
     render(ThemeBackgroundCard, {
-      props: { theme: 'dark', background },
-      events: { change: (event) => onChange(event.detail) },
+      props: { theme: 'dark', background, onchange: onChange },
     })
 
     await fireEvent.input(screen.getByRole('slider', { name: '模糊度' }), { target: { value: '12' } })
@@ -288,8 +287,7 @@ describe('ColorAlphaInput：change 载荷与 bind:value / bind:alpha 写回', ()
     const background: BackgroundSetting = { type: 'color', value: '#ffffff', blur: 0, mask: 0.5, maskColor: '#000000' }
     const onChange = vi.fn()
     render(ThemeBackgroundCard, {
-      props: { theme: 'light', background },
-      events: { change: (event) => onChange(event.detail) },
+      props: { theme: 'light', background, onchange: onChange },
     })
 
     await fireEvent.click(screen.getByRole('button', { name: '选择浅色模式背景遮罩颜色' }))
