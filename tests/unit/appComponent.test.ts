@@ -629,11 +629,15 @@ describe('App boot splash and view switching', () => {
 
 describe('App login gate', () => {
   it('opens the login gate once booting ends on a private site, before rendering any other view', async () => {
+    // 记录每一个被插入或移除的节点：中途渲染过又被替换掉的视图会出现在 removedNodes 里。
     const seen: string[] = []
-    const observer = new MutationObserver(() => {
-      const t = text()
-      if (t.includes('正在加载后台...')) seen.push('admin-splash')
-      if (document.querySelector('[data-probe="Home"]')) seen.push('home')
+    const observer = new MutationObserver((records) => {
+      for (const record of records) {
+        for (const node of [...record.addedNodes, ...record.removedNodes]) {
+          if ((node.textContent ?? '').includes('正在加载后台...')) seen.push('admin-splash')
+          if (node instanceof Element && (node.matches('[data-probe="Home"]') || node.querySelector('[data-probe="Home"]'))) seen.push('home')
+        }
+      }
     })
     observer.observe(document.body, { childList: true, subtree: true, characterData: true })
     await mountApp({ config: { site_title: 'Cfg', public_mode: false }, publicData: null })
