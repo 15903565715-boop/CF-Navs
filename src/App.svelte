@@ -7,7 +7,6 @@
   import {
     type LoginResp,
     type PublicBookmark,
-    type Settings,
     type ThemeMode,
   } from '../shared/types'
   import AppSplash from './components/AppSplash.svelte'
@@ -15,12 +14,11 @@
   import Toast from './components/Toast.svelte'
   import Home from './views/Home.svelte'
   import BookmarkLinkModal from './components/BookmarkLinkModal.svelte'
-  import { api, getErrorMessage, isUnauthorizedError } from './lib/api'
+  import { api } from './lib/api'
   import { clearCachedAdminData } from './lib/adminDataCache'
   import { clearCachedPublicData } from './lib/publicDataCache'
   import { toastStore } from './lib/toast'
-  import type { AdminTab } from './lib/adminTypes'
-  import { createAuthViewIntent, logoutRevocationWarning } from './lib/appAuthController'
+  import { createAuthController, createAuthViewIntent } from './lib/appAuthController'
   import {
     createConfirmController,
     type ConfirmDialogInput,
@@ -47,7 +45,6 @@
   import { createSettingsController } from './lib/appSettingsController'
   import {
     canSeeHomeView,
-    createHomeGateState,
     shouldOpenLoginGate,
     type AppView,
   } from './lib/appNavigation'
@@ -130,9 +127,11 @@
     persistCurrentAdminData,
     requestConfirmation,
     ensureLazyComponent: lazyComponents.ensure,
-    openLogin: handleOpenLogin,
-    ensureLoggedInDataLoaded,
-    refreshAdminDataAfterMutation,
+    replacePath: replaceBrowserPath,
+    // 认证控制器最后创建（登出要重置其它控制器）；这三项转发给它，返回同一个 promise。
+    openLogin: () => authController.openLogin(),
+    ensureLoggedInDataLoaded: () => authController.ensureLoggedInDataLoaded(),
+    refreshAdminDataAfterMutation: () => authController.refreshAdminDataAfterMutation(),
     resetCategories: () => categoryController.reset(),
     resetBookmarks: () => bookmarkController.reset(),
     setRootError: (message: string) => {
@@ -159,7 +158,6 @@
     installApi: api.install,
     getInstallHintStorage: getBrowserInstallHintStorage,
     getPathname: () => typeof window === 'undefined' ? null : window.location.pathname,
-    replacePath: replaceBrowserPath,
     clearCachedPublicData,
     initializeAuth: () => authStore.initialize(),
     getRootError: () => rootError,
@@ -306,51 +304,6 @@
     confirmController.close(false)
   }
 
-  async function ensureLoggedInDataLoaded(): Promise<boolean> {
-    if (!isLoggedIn()) return false
-
-    const current = get(adminStore)
-    if (current.loaded && current.data.settings) {
-      return true
-    }
-
-    try {
-      await refreshLoggedInData()
-      return isLoggedIn() && get(adminStore).loaded
-    } catch (error) {
-      if (isUnauthorizedError(error)) {
-        authStore.setSession(null)
-        adminStore.reset()
-        await clearCachedAdminData()
-        await refreshPublicData()
-        await handleOpenLogin()
-        return false
-      }
-
-      rootError = getErrorMessage(error)
-      return false
-    }
-  }
-
-  async function refreshAdminDataAfterMutation(): Promise<void> {
-    try {
-      await refreshLoggedInData(true)
-    } catch (error) {
-      // 写入已经成功；刷新失败时保留本地即时结果，并提示用户稍后重试。
-      rootError = getErrorMessage(error)
-    }
-  }
-
-  async function handleAdminTabChange(tab: AdminTab): Promise<void> {
-    if (tab !== 'analytics') return
-
-    try {
-      await refreshLoggedInData(true)
-    } catch (error) {
-      rootError = getErrorMessage(error)
-    }
-  }
-
   // 分类的打开 / 编辑 / 提交 / 删除 / 批量删除 / 排序见 lib/appCategoryController：控制器持有分类编辑框状态，
   // rootError / currentView / homeFocusCategoryId 仍归 App，经下列回调在原先的时机写入。
   const categoryController = createCategoryController({
@@ -428,121 +381,17 @@
     importExport: importExportState,
   } = settingsController.getState()
 
-  async function openLoginUseCase(): Promise<void> {
-    authViewIntent.invalidate()
-    rootError = ''
-    authStore.resetError()
-    await lazyComponents.ensure('LoginModal')
-    loginModalOpen = true
-    if (!canSeeHome) currentView = 'login'
-  }
-  async function handleOpenLogin(): Promise<void> {
-    await openLoginUseCase()
-  }
-
-  async function handleCloseLogin(): Promise<void> {
-    authViewIntent.invalidate()
-    authStore.resetError()
-    if (!canSeeHome) {
-      loginModalOpen = true
-      currentView = 'login'
-      return
-    }
-
-    loginModalOpen = false
-  }
-
-  async function handleSwitchToAdmin(): Promise<void> {
-    await openAdminUseCase()
-  }
-
-  async function completeLoginUseCase(payload: { username: string; password: string }): Promise<void> {
-    authViewIntent.invalidate()
-    await authStore.login(payload.username, payload.password)
-    loginModalOpen = false
-    rootError = ''
-    await refreshLoggedInData(true)
-    if (isAdminPath()) {
-      await lazyComponents.ensure('Admin')
-      currentView = 'admin'
-      return
-    }
-    currentView = 'home'
-  }
-  async function handleLogin(payload: { username: string; password: string }): Promise<void> {
-    try {
-      await completeLoginUseCase(payload)
-    } catch {
-      // authStore 已经记录错误
-    }
-  }
-
-  async function completeLogoutUseCase(previousSettings: Settings | null): Promise<string | null> {
-    const revocationWarning = logoutRevocationWarning(await authStore.logout())
-    if (isLoggedIn()) return revocationWarning
-    categoryController.reset()
-    settingsController.reset()
-    bookmarkController.reset()
-    adminStore.reset()
-    await clearCachedAdminData()
-    if (isLoggedIn()) return revocationWarning
-    if (previousSettings) {
-      applyConfigFromSettings(previousSettings)
-    }
-    await refreshPublicData()
-    return revocationWarning
-  }
-
-  async function handleLogout(): Promise<void> {
-    const viewIsCurrent = authViewIntent.begin()
-    rootError = ''
-    const previousSettings = get(adminStore).data.settings
-
-    try {
-      const revocationWarning = await completeLogoutUseCase(previousSettings)
-
-      const homeGate = createHomeGateState({
-        publicMode: get(configStore).data?.public_mode,
-        authenticated: false,
-      })
-      if (viewIsCurrent() && !isLoggedIn()) {
-        if (homeGate.loginModalOpen) await lazyComponents.ensure('LoginModal')
-        // Lazy loading can yield to another login/recovery action as well.
-        if (viewIsCurrent() && !isLoggedIn()) {
-          loginModalOpen = homeGate.loginModalOpen
-          currentView = homeGate.view
-        }
-      }
-      // 视图先切换，确保全局 Toast 不被登出后的页面切换影响。
-      if (revocationWarning) {
-        toastStore.addToast(revocationWarning, 'error', { duration: 12000 })
-      }
-    } catch (error) {
-      if (viewIsCurrent()) rootError = getErrorMessage(error)
-    }
-  }
-
-  async function openAdminUseCase(): Promise<void> {
-    if (!isLoggedIn()) {
-      await handleOpenLogin()
-      return
-    }
-
-    if (!await ensureLoggedInDataLoaded()) {
-      return
-    }
-
-    await lazyComponents.ensure('Admin')
-    replaceBrowserPath('/admin')
-    currentView = 'admin'
-  }
-  function handleForgotPassword(): void {
-    authViewIntent.invalidate()
-    // 忘记密码是登录态的子流程，按模态语义处理：不改 URL，避免 pushState 制造一个没有
-    // popstate 监听的历史项（后退键会让 URL 与视图错位）。直达 /recover 仍由 onMount 处理。
-    loginModalOpen = false
-    boot.enterRecover()
-  }
+  // 登录 / 登出 / 进入后台 / 忘记密码与登录态数据加载、变更后刷新见 lib/appAuthController：
+  // 不持有状态，loginModalOpen / currentView / rootError 仍归 App；登出经注入的函数按原顺序重置三个编辑状态。
+  const authController = createAuthController({
+    ...appDeps,
+    authStore,
+    getCanSeeHome: () => canSeeHome,
+    readAdminState: () => get(adminStore),
+    applyConfigFromSettings,
+    enterRecover: boot.enterRecover,
+    resetSettings: settingsController.reset,
+  })
 
   onMount(() => {
     stopIconDevice = startIconDevice()
@@ -620,9 +469,9 @@
           onOpenCreateBookmark={bookmarkController.openCreate}
           onEditBookmark={bookmarkController.openEdit}
           onReorganizeBookmarks={bookmarkController.reorganize}
-          onSwitchToAdmin={handleSwitchToAdmin}
-          onLogout={handleLogout}
-          onOpenLogin={handleOpenLogin}
+          onSwitchToAdmin={authController.switchToAdmin}
+          onLogout={authController.logout}
+          onOpenLogin={authController.openLogin}
           activeTheme={activeTheme}
           activeThemeMode={themeMode}
           onToggleTheme={handleToggleTheme}
@@ -656,8 +505,8 @@
         categoryModalMode={categoryModalMode}
         activeCategory={activeCategory}
         canSeeHome={canSeeHome}
-        onOpenLogin={handleOpenLogin}
-        onLogout={handleLogout}
+        onOpenLogin={authController.openLogin}
+        onLogout={authController.logout}
       onSwitchToHome={() => { replaceBrowserPath('/'); currentView = 'home' }}
         onOpenCreateCategory={categoryController.openCreate}
         onEditCategory={categoryController.openEdit}
@@ -675,7 +524,7 @@
         onChangePassword={settingsController.changePassword}
         onSortCategories={categoryController.sort}
         onSortBookmarks={bookmarkController.sort}
-        onSelectTab={handleAdminTabChange}
+        onSelectTab={authController.selectAdminTab}
         importing={importExportState.importing}
         exporting={importExportState.exporting}
         backupError={importExportState.backupError}
@@ -699,9 +548,9 @@
         open={loginModalOpen}
         loading={$authStore.loading}
         error={$authStore.error ?? ''}
-        onSubmit={handleLogin}
-        onCancel={handleCloseLogin}
-        onForgotPassword={handleForgotPassword}
+        onSubmit={authController.login}
+        onCancel={authController.closeLogin}
+        onForgotPassword={authController.forgotPassword}
       />
     {/if}
 
