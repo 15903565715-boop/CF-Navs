@@ -5,7 +5,7 @@
 
 ## 现状
 
-- 依赖 `svelte@^5.57`，`svelte.config.js` 未开启 `runes`，App 及组件仍用 `$:` / `export let` / `on:`，即 **Svelte 5 的 legacy（兼容）模式**。第 8b 步起 App.svelte 单文件开启 runes（`<svelte:options runes />`），第 8c 步起 14 个层级 0 纯展示组件也已逐文件开启，其余组件仍为 legacy。
+- 依赖 `svelte@^5.57`，`svelte.config.js` 未开启 `runes`，App 及组件仍用 `$:` / `export let` / `on:`，即 **Svelte 5 的 legacy（兼容）模式**。第 8b 步起 App.svelte 单文件开启 runes（`<svelte:options runes />`），第 8c 步起 14 个层级 0 纯展示组件、第 8d 步起 9 个层级 0 有状态组件也已逐文件开启，其余组件仍为 legacy。
 - 已有一批纯逻辑模块（`appAuthController`、`appInstall`、`appNavigation`、`appThemeState`、`appConfirmDialog`、`appModalState`、`appSortQueue`、`appImportExport`、`appLazyComponent`、`appData`、`dataService` 等），App 剩下的主要是「状态变量 + 用例编排 + 模板接线」。
 
 ## 职责分组（行号为第 1 步之后的 App.svelte，约值）
@@ -51,7 +51,7 @@
      | 批次 | 范围 | 数量 | 说明 |
      |---|---|---|---|
      | 8c | `components/` 根目录与 `admin/`、`settings/` 中的纯展示叶子：AdminSidebar、AppSplash、BookmarkCustomIconField、BookmarkIcon、BookmarkIconCandidateButton、BookmarkLinkModal、BookmarkModalActions、BookmarkModalHeader、DeviceIconCachePanel、HomeContentSummary、HomeEmptyPanel、LogoSchemeSelector、admin/AdminPageHeader、settings/FooterSettingsSection | 14 | 层级 0，无 `$:`、无 dispatcher。✅ 已完成（第 20 项，见下） |
-     | 8d | `components/` 有状态叶子：BackupPanel、CachedBookmarkIcon、CategoryIcon、CategoryTreeSelect、ConfirmDialog、HomeFloatingActions、LoginModal、PasswordChangePanel、SearchBox | 9 | 层级 0，共 43 条 `$:` |
+     | 8d | `components/` 有状态叶子：BackupPanel、CachedBookmarkIcon、CategoryIcon、CategoryTreeSelect、ConfirmDialog、HomeFloatingActions、LoginModal、PasswordChangePanel、SearchBox | 9 | 层级 0，共 49 条 `$:`（原估 43）。✅ 已完成（第 21 项，见下） |
      | 8e | `ui/` 与事件分发叶子：ui/InputGroup、ui/Slider、ui/Switch、ui/Tooltip、ColorAlphaInput、settings/GradientPresetSelector | 6 | 层级 0；5 个用 `createEventDispatcher`、2 个用 `<slot>`，需同步改父组件的 `on:` |
      | 8f | `views/` 叶子：Install、Recover | 2 | 层级 0，懒加载分包 |
      | 8g | 层级 1 首页 / 书签：BookmarkBaseFields、BookmarkCardCompact、BookmarkCardInfo、BookmarkContextMenu、BookmarkIconCandidatePicker、GradientBackgroundInput、HomeCategoryScope、HomeHeroSearch、IconifySelector、Sidebar、SpotlightBookmarkIcon | 11 | Sidebar 15 条 `$:` / 21 处 `on:` |
@@ -59,4 +59,6 @@
      | 8i | 层级 2：BookmarkCard、BookmarkEditModal、CategoryEditModal、SearchSpotlight、admin/AdminTabContent、settings/ThemeBackgroundCard | 6 | BookmarkCard 32 条 `$:` |
      | 8j | 层级 3–4 顶层：CategorySection、settings/AdvancedSettingsSection、settings/SettingsHomePreview、views/Admin、SettingsPanel、views/Home | 6 | Home 40 条 `$:`，最后迁移 |
    - **8c 完成记录**（代码审查三轮第 20 项）：先补 `tests/unit/leafComponentsBehavior.test.ts`（22 项，legacy 上通过），再迁移 14 个组件，测试零改动通过；源码护栏 `tests/unit/leafComponentsRunes.test.ts`。父组件调用处零改动（legacy 父传 props / `bind:` 给 runes 子组件均可）。FooterSettingsSection 的 `form` 为 `$bindable()`；DeviceIconCachePanel 两个本地标志用 `$state`。已知差异：prop 由有值变回 `undefined` 时 runes 取默认值、legacy 保持 `undefined`（现有调用不出现）；FooterSettingsSection 三个 `bind:value={form.x}` 在开发构建报 `binding_property_non_reactive` 误报（form 是 legacy 父组件的普通对象，写回经 bindable setter 生效），SettingsPanel（8j）改 `$state` 后消失。首屏 `index` 284.67 kB 不变（gzip 96.83 → 96.90 kB）。
+   - **8d 完成记录**（代码审查三轮第 21 项）：先补 `tests/unit/statefulLeafComponentsBehavior.test.ts`（34 项）与 `tests/unit/cachedBookmarkIconBehavior.test.ts`（9 项）、`tests/helpers/statefulLeaf/` 三个 legacy `bind:` 替身父组件，legacy 上通过且 18 种变异均被捕获；再迁移 9 个组件，测试零改动通过；源码护栏并入 `tests/unit/leafComponentsRunes.test.ts`。父组件调用处零改动。`$bindable()`：CategoryTreeSelect `value`、SearchBox `query`、BackupPanel `importSource`。49 条 `$:` → 38 个 `$derived` + 9 个 `$effect.pre`（写入自身所读变量的语句用 `untrack` 保留原语法依赖，比较用变量保持普通 `let`；声明顺序按原拓扑顺序）；BackupPanel 的就地排序并入 `$derived.by`；CategoryTreeSelect 的 `afterUpdate` → 显式依赖的 `$effect`。已知差异见 CHANGELOG 第 21 项（对象 `$derived` 的 `===` 判等使同对象重推不再重跑幂等语句；更新后通知不再因深读 items 触发）。首屏 `index` 284.67 → 283.80 kB（gzip 96.90 → 96.87 kB）。
+   - **8e 起需注意**（8d 的经验）：runes 组件不能用 `beforeUpdate` / `afterUpdate`（层级 1 的 BookmarkContextMenu 也用了 `afterUpdate`，8g 需同样改为显式依赖的 `$effect`）；`on:x|preventDefault` 等修饰符要挪进处理器；`<svelte:window>` 事件属性仍直接挂载、不走委托；8e 的 5 个 dispatcher 组件改回调 prop 后，父组件（仍为 legacy）的 `on:change` / `on:input` 等要在同一提交改成回调 prop，`<slot>` 改 snippet 时 legacy 父组件的默认插槽内容可直接作为 `children` 传入，具名插槽需改为 `{#snippet}`（legacy 父组件也支持）；`bind:` 的 prop 先在调用处 grep 确认再用 `$bindable()`。
    - **8d 起需注意**：`on:` 改事件属性后 click / input / change / keydown 等走委托（在冒泡到根时执行；Svelte 的 `on:` 监听会先处理委托，但原生 `addEventListener` 里 `stopPropagation` 的祖先会挡住委托处理器）；`$:` 改 `$derived` 时对象值按 `===` 判等（legacy 对对象总视为变化）；本地 `let` 被模板依赖的要改 `$state`（对象值优先 `$state.raw`，避免把父组件或 store 的对象换成深层代理）；被父组件 `bind:` 的 prop 才用 `$bindable()`。

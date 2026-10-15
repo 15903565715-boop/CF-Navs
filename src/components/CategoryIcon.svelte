@@ -1,5 +1,7 @@
+<svelte:options runes />
+
 <script lang="ts">
-  import { onDestroy } from 'svelte'
+  import { onDestroy, untrack } from 'svelte'
   import { createIconRetry } from '../lib/iconRetry'
   import { createNativeImageWatchdog } from '../lib/nativeImageWatchdog'
   import type { CategoryIconValue } from '../lib/categoryIconDisplay'
@@ -13,47 +15,70 @@
   import { withIconAccessKey } from '../lib/iconAccessKey'
   import { createTrustedIconView, emptyTrustedIcon, type TrustedIconState } from '../lib/trustedIconView'
 
-  export let category: CategoryIconValue
-  export let size: number | string = 36
-  export let className = ''
-  export let label = ''
-  export let iconAccessKey = ''
-  export let imageLoading: 'lazy' | 'eager' = 'lazy'
-  export let preview = false
+  interface Props {
+    category: CategoryIconValue
+    size?: number | string
+    className?: string
+    label?: string
+    iconAccessKey?: string
+    imageLoading?: 'lazy' | 'eager'
+    preview?: boolean
+  }
 
-  let trustedState: TrustedIconState = emptyTrustedIcon
+  let {
+    category,
+    size = 36,
+    className = '',
+    label = '',
+    iconAccessKey = '',
+    imageLoading = 'lazy',
+    preview = false,
+  }: Props = $props()
+
+  // 可信图标视图每次发布新对象；不做深层代理。
+  let trustedState: TrustedIconState = $state.raw(emptyTrustedIcon)
   const trustedView = createTrustedIconView(value => { trustedState = value })
 
   // One native source owns its retry budget. Blob failures remain with the
   // trusted-copy owner; native fallbacks also need recovery while it is active.
-  let sourceUrl = ''
-  let retryUrl = ''
-  let failedUrl = ''
+  let sourceUrl = $state('')
+  let retryUrl = $state('')
+  let failedUrl = $state('')
+  // 只在重试回调里读写，不进模板。
   let retryAttempt = 0
   const nativeRetry = createIconRetry(() => {
     retryAttempt += 1
     retryUrl = createCategoryRetryUrl(sourceUrl, retryAttempt, performance.timeOrigin)
   })
 
-  $: iconValue = normalizeCategoryIcon(category) || category.icon_display === 'image'
-  $: trustedView.set({ object_type: 'category', id: Number(category.id), icon: category.icon, icon_blob: category.icon_blob,
-    icon_revision: category.icon_revision, icon_write_epoch: category.icon_write_epoch, icon_display: category.icon_display,
-    visible: true, preview, online_url: nextImageUrl })
-  $: previewValue = normalizeCategoryIcon(category)
-  $: previewSource = /^data:image\//i.test(previewValue) ? previewValue : /^https?:\/\//i.test(previewValue) ? previewValue : ''
-  $: nextImageUrl = preview ? previewSource : withIconAccessKey(getCategoryImageIconUrl(category), iconAccessKey)
-  $: selectedUrl = trustedState.active ? trustedState.url : nextImageUrl
-  $: if (selectedUrl !== sourceUrl) {
-    sourceUrl = selectedUrl
-    retryUrl = ''
-    failedUrl = ''
-    retryAttempt = 0
-    nativeRetry.reset()
-  }
-  $: nativeSource = !preview && sourceUrl.startsWith('/api/category-icon/')
-  $: isTrustedBlob = trustedState.active && sourceUrl.startsWith('blob:')
-  $: imageUrl = nativeSource ? retryUrl || sourceUrl : sourceUrl
-  $: textIcon = getCategoryTextIcon(category)
+  const iconValue = $derived(normalizeCategoryIcon(category) || category.icon_display === 'image')
+  const previewValue = $derived(normalizeCategoryIcon(category))
+  const previewSource = $derived(/^data:image\//i.test(previewValue) ? previewValue : /^https?:\/\//i.test(previewValue) ? previewValue : '')
+  const nextImageUrl = $derived(preview ? previewSource : withIconAccessKey(getCategoryImageIconUrl(category), iconAccessKey))
+  // 原 `$:` 经拓扑排序后在 nextImageUrl 之后、换源判断之前执行；set 内部按签名去重。
+  $effect.pre(() => {
+    const input = { object_type: 'category' as const, id: Number(category.id), icon: category.icon, icon_blob: category.icon_blob,
+      icon_revision: category.icon_revision, icon_write_epoch: category.icon_write_epoch, icon_display: category.icon_display,
+      visible: true, preview, online_url: nextImageUrl }
+    untrack(() => trustedView.set(input))
+  })
+  const selectedUrl = $derived(trustedState.active ? trustedState.url : nextImageUrl)
+  // 换源时复位重试与失败标记；只依赖 selectedUrl，先于 DOM 更新。
+  $effect.pre(() => {
+    const nextUrl = selectedUrl
+    untrack(() => {
+      if (nextUrl === sourceUrl) return
+      sourceUrl = nextUrl
+      retryUrl = ''
+      failedUrl = ''
+      retryAttempt = 0
+      nativeRetry.reset()
+    })
+  })
+  const nativeSource = $derived(!preview && sourceUrl.startsWith('/api/category-icon/'))
+  const isTrustedBlob = $derived(trustedState.active && sourceUrl.startsWith('blob:'))
+  const imageUrl = $derived(nativeSource ? retryUrl || sourceUrl : sourceUrl)
+  const textIcon = $derived(getCategoryTextIcon(category))
 
   function handleImageError(): void {
     if (isTrustedBlob) { trustedView.failed(); return }
@@ -92,7 +117,7 @@
     aria-label={label || undefined}
   >
     {#if imageUrl && (isTrustedBlob || imageUrl !== failedUrl)}
-      <img src={imageUrl} alt="" loading={imageLoading} decoding="async" use:watchNativeImage={imageUrl} on:load={handleImageLoad} on:error={handleImageError} />
+      <img src={imageUrl} alt="" loading={imageLoading} decoding="async" use:watchNativeImage={imageUrl} onload={handleImageLoad} onerror={handleImageError} />
     {:else if textIcon}
       <span class="category-icon-text">{textIcon}</span>
     {:else}

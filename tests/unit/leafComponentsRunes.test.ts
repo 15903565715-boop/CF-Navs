@@ -4,6 +4,20 @@ import { describe, expect, it } from 'vitest'
 // 代码审查三轮第 20 项（APP_SPLIT_PLAN 第 8c 步）：14 个层级 0 纯展示组件改为 runes 模式的源码护栏。
 // 行为等价由 tests/unit/leafComponentsBehavior.test.ts（迁移前写成、迁移时未改）及 appSplash /
 // deviceIconCachePanel / bookmarkIconTimeout 保证。
+// 第 21 项（第 8d 步）追加 9 个层级 0 有状态组件，行为等价由 statefulLeafComponentsBehavior /
+// cachedBookmarkIconBehavior（迁移前写成、迁移时未改）及各组件原有测试保证。
+const STATEFUL = [
+  'BackupPanel',
+  'CachedBookmarkIcon',
+  'CategoryIcon',
+  'CategoryTreeSelect',
+  'ConfirmDialog',
+  'HomeFloatingActions',
+  'LoginModal',
+  'PasswordChangePanel',
+  'SearchBox',
+]
+
 const MIGRATED = [
   'AdminSidebar',
   'AppSplash',
@@ -19,9 +33,10 @@ const MIGRATED = [
   'LogoSchemeSelector',
   'admin/AdminPageHeader',
   'settings/FooterSettingsSection',
+  ...STATEFUL,
 ]
 
-describe('level-0 presentational components in runes mode', () => {
+describe('level-0 presentational and stateful components in runes mode', () => {
   it.each(MIGRATED)('%s opts into runes and drops the legacy syntax', (name) => {
     const source = readFileSync(`src/components/${name}.svelte`, 'utf8')
     const script = source.slice(source.indexOf('<script'), source.indexOf('</script>'))
@@ -35,6 +50,26 @@ describe('level-0 presentational components in runes mode', () => {
     expect(markup).not.toMatch(/\son:[a-z]+[=|]/)
     expect(markup).not.toContain('<slot')
     expect(script).toMatch(/\}: Props = \$props\(\)/)
+    expect(script).not.toMatch(/\b(beforeUpdate|afterUpdate)\b/)
+  })
+
+  it('keeps the props that legacy parents bind: two-way bindable', () => {
+    const read = (path: string) => readFileSync(path, 'utf8')
+    expect(read('src/components/CategoryTreeSelect.svelte')).toContain('value = $bindable(undefined)')
+    expect(read('src/components/SearchBox.svelte')).toContain("query = $bindable('')")
+    expect(read('src/components/BackupPanel.svelte')).toContain("importSource = $bindable('cf-navs')")
+    expect(read('src/components/HomeHeroSearch.svelte')).toMatch(/<SearchBox[^>]*\bbind:query\b/)
+    expect(read('src/components/admin/AdminTabContent.svelte')).toMatch(/<BackupPanel[^>]*\bbind:importSource\b/)
+    expect(read('src/components/BookmarkContextMenu.svelte')).toMatch(/<CategoryTreeSelect[^>]*\bbind:value=\{moveCategoryId\}/)
+  })
+
+  it('does not deep-proxy replaced Sets or trusted-icon snapshots', () => {
+    const read = (path: string) => readFileSync(path, 'utf8')
+    expect(read('src/components/BackupPanel.svelte')).toContain('let selectedCategoryIds = $state.raw(')
+    expect(read('src/components/BackupPanel.svelte')).toContain('let expandedRootIds = $state.raw(')
+    expect(read('src/components/CategoryTreeSelect.svelte')).toContain('let expandedRootIds = $state.raw(')
+    expect(read('src/components/CachedBookmarkIcon.svelte')).toContain('let trustedImage = $state.raw(emptyTrustedIcon)')
+    expect(read('src/components/CategoryIcon.svelte')).toContain('let trustedState: TrustedIconState = $state.raw(emptyTrustedIcon)')
   })
 
   it('keeps the form two-way bindable for SettingsPanel', () => {
