@@ -1,3 +1,5 @@
+<svelte:options runes />
+
 <script lang="ts">
   import { startIconDevice } from './lib/iconDeviceState'
   let stopIconDevice: (() => void) | undefined
@@ -77,8 +79,11 @@
 
   const rootStyleWriter = typeof document !== 'undefined' ? createRootStyleWriter(document) : null
 
-  let rootError = ''
-  let currentView: AppView = 'home'
+  // 代码审查三轮第 19 项（APP_SPLIT_PLAN 第 8b 步）：App 改为 runes 模式，子组件仍为 legacy。
+  // 控制器经 onChange 写入的对象值一律用 $state.raw：不做深层代理（子组件拿到的仍是控制器的原对象，
+  // 身份比较照旧成立），同引用赋值也不会触发更新，与原先的身份守卫语义一致。
+  let rootError = $state('')
+  let currentView: AppView = $state('home')
 
   function isAdminPath(): boolean {
     if (typeof window === 'undefined') return false
@@ -151,8 +156,8 @@
     onChange: (next) => {
       booting = next.booting
       recoverActive = next.recoverActive
-      // 只在控制器真正换了对象时赋值：Svelte 对对象的同引用赋值也会触发依赖，
-      // 否则 booting 变化会连带重跑 installView 与 Install 分包加载语句。
+      // 只在控制器真正换了对象时赋值：legacy 模式下对象的同引用赋值也会触发依赖，否则 booting 变化会连带
+      // 重跑 installView 与 Install 分包加载。runes 下 $state.raw 的同引用赋值本就是空操作，守卫保留为显式意图。
       if (installState !== next.installState) installState = next.installState
     },
     installApi: api.install,
@@ -162,9 +167,12 @@
     initializeAuth: () => authStore.initialize(),
     getRootError: () => rootError,
   })
-  let { booting, installState, recoverActive } = boot.getState()
-  let lazyViewError = ''
-  let confirmDialog: ConfirmDialogState | null = null
+  const initialBootState = boot.getState()
+  let booting = $state(initialBootState.booting)
+  let installState = $state.raw(initialBootState.installState)
+  let recoverActive = $state(initialBootState.recoverActive)
+  let lazyViewError = $state('')
+  let confirmDialog: ConfirmDialogState | null = $state.raw(null)
   const confirmController = createConfirmController((next) => {
     confirmDialog = next
   })
@@ -176,14 +184,10 @@
       lazyViewError = '页面资源加载失败，请检查网络后刷新重试。'
     })
   }
-  // 加载期间沿用启动 splash；失败时在 splash 上给出可读提示而不是一直转圈。
-  $: if (recoverActive && !$RecoverComponent) loadLazyView('Recover')
-  $: if (!recoverActive && installView && !$InstallComponent) loadLazyView('Install')
-
-  let loginModalOpen = false
-  let homeFocusCategoryId: number | null = null
-  let spotlightOpen = false
-  let viewBookmark: PublicBookmark | null = null
+  let loginModalOpen = $state(false)
+  let homeFocusCategoryId: number | null = $state(null)
+  let spotlightOpen = $state(false)
+  let viewBookmark: PublicBookmark | null = $state.raw(null)
 
   function anyBlockingModalOpen(): boolean {
     return loginModalOpen || categoryModalOpen || bookmarkModalOpen || Boolean(confirmDialog) || Boolean(viewBookmark)
@@ -222,10 +226,10 @@
     else void openSpotlight()
   }
 
-  let preferredThemeMode: ThemeMode | null = null
-  let prefersReducedMotion = false
+  let preferredThemeMode: ThemeMode | null = $state(null)
+  let prefersReducedMotion = $state(false)
   // 只在浏览器里创建：SSR/测试环境没有 document 和 URL.createObjectURL。
-  let customScriptController: CustomScriptController | null = null
+  let customScriptController: CustomScriptController | null = $state.raw(null)
 
   configureDataService({
     onRootError: (message, error) => {
@@ -240,48 +244,75 @@
     },
   })
 
-  $: installView = getInstallViewState(installState)
-  $: config = $configStore.data
-  $: publicData = $publicStore.data
-  $: adminData = $adminStore.data
-  $: canSeeHome = canSeeHomeView({ publicMode: config?.public_mode, authenticated: $isAuthenticated })
-  $: homeTitle = publicData?.settings.site_title ?? config?.site_title ?? 'CF-Navs'
+  const installView = $derived(getInstallViewState(installState))
+  const config = $derived($configStore.data)
+  const publicData = $derived($publicStore.data)
+  const adminData = $derived($adminStore.data)
+  const canSeeHome = $derived(canSeeHomeView({ publicMode: config?.public_mode, authenticated: $isAuthenticated }))
+  const homeTitle = $derived(publicData?.settings.site_title ?? config?.site_title ?? 'CF-Navs')
 
-  $: adminCategories = toAdminCategories(adminData.categories, adminData.bookmarks)
-  $: adminBookmarks = toAdminBookmarks(adminData.bookmarks)
-  $: settingsValue = toSettingsForm(adminData.settings)
+  const adminCategories = $derived(toAdminCategories(adminData.categories, adminData.bookmarks))
+  const adminBookmarks = $derived(toAdminBookmarks(adminData.bookmarks))
+  const settingsValue = $derived(toSettingsForm(adminData.settings))
 
-  $: if (shouldOpenLoginGate({ booting, currentView, canSeeHome })) {
-    void lazyComponents.ensure('LoginModal')
-    loginModalOpen = true
-    currentView = 'login'
-  }
+  // 懒加载组件的当前值（未加载时为 null），模板里作为动态组件渲染。
+  const RecoverPage = $derived($RecoverComponent)
+  const InstallPage = $derived($InstallComponent)
+  const AdminPage = $derived($AdminComponent)
+  const LoginModal = $derived($LoginModalComponent)
+  const BookmarkEditModal = $derived($BookmarkEditModalComponent)
+  const CategoryEditModal = $derived($CategoryEditModalComponent)
+  const SearchSpotlight = $derived($SearchSpotlightComponent)
 
-  let systemPrefersDark = false
+  // 加载期间沿用启动 splash；失败时在 splash 上给出可读提示而不是一直转圈。
+  // 以下副作用用 $effect.pre：与原先的 `$:` 一样在同一次刷新里先于 DOM 更新执行（登录闸门尤其依赖这一点，
+  // 否则会先渲染一帧后台 splash 再切到登录视图）。声明顺序即执行顺序，与原先 `$:` 排序后的顺序一致。
+  $effect.pre(() => {
+    if (recoverActive && !RecoverPage) loadLazyView('Recover')
+  })
+  $effect.pre(() => {
+    if (!recoverActive && installView && !InstallPage) loadLazyView('Install')
+  })
+
+  $effect.pre(() => {
+    if (shouldOpenLoginGate({ booting, currentView, canSeeHome })) {
+      void lazyComponents.ensure('LoginModal')
+      loginModalOpen = true
+      currentView = 'login'
+    }
+  })
+
+  let systemPrefersDark = $state(false)
   let stopSystemDark: (() => void) | null = null
   let stopPublicDataFocusRefresh: (() => void) | null = null
 
-  $: resolvedThemeState = resolveAppThemeState({
+  const resolvedThemeState = $derived(resolveAppThemeState({
     preferredThemeMode,
     configuredThemeMode: publicData?.settings.theme,
     systemPrefersDark,
-  })
-  $: themeMode = resolvedThemeState.themeMode
-  $: activeTheme = resolvedThemeState.activeTheme
+  }))
+  const themeMode = $derived(resolvedThemeState.themeMode)
+  const activeTheme = $derived(resolvedThemeState.activeTheme)
 
-  $: homeBackgroundStyle = buildHomeBackground(publicData?.settings ?? null, activeTheme)
+  const homeBackgroundStyle = $derived(buildHomeBackground(publicData?.settings ?? null, activeTheme))
 
-  // 主题 / 背景变量与自定义 CSS 分成两条响应式语句，只依赖各自的原始值（字符串相等即不重跑），
+  // 主题 / 背景变量与自定义 CSS 分成两个副作用，只依赖各自的原始值（字符串相等即不重跑），
   // 写入口内部再按内容去重：书签、点击计数、图标状态变化不再重写全局样式。
-  $: rootBackgroundPresetId = publicData?.settings.background_preset_id ?? 'custom'
-  $: customCss = publicData?.settings?.custom_css ?? ''
-  $: rootStyleWriter?.applyTheme({ theme: activeTheme, backgroundPresetId: rootBackgroundPresetId, backgroundStyle: homeBackgroundStyle })
-  $: rootStyleWriter?.applyCustomCss(customCss)
+  const rootBackgroundPresetId = $derived(publicData?.settings.background_preset_id ?? 'custom')
+  const customCss = $derived(publicData?.settings?.custom_css ?? '')
+  $effect.pre(() => {
+    rootStyleWriter?.applyTheme({ theme: activeTheme, backgroundPresetId: rootBackgroundPresetId, backgroundStyle: homeBackgroundStyle })
+  })
+  $effect.pre(() => {
+    rootStyleWriter?.applyCustomCss(customCss)
+  })
 
-  // 自定义 JS 单独走一条响应式语句：上面那个块还依赖 activeTheme 和
+  // 自定义 JS 单独一个副作用：上面那个还依赖 activeTheme 和
   // homeBackgroundStyle，写在里面的话切个主题就会把用户脚本重跑一遍。
-  // controller 内部还做了幂等，即使这条语句被多余触发也不会重复执行。
-  $: customScriptController?.apply(publicData?.settings?.custom_js)
+  // controller 内部还做了幂等，即使这里被多余触发也不会重复执行。
+  $effect.pre(() => {
+    customScriptController?.apply(publicData?.settings?.custom_js)
+  })
 
   function setPreferredThemeMode(mode: ThemeMode): void {
     preferredThemeMode = mode
@@ -311,7 +342,7 @@
     onChange: (next) => {
       categoryModalOpen = next.modalOpen
       categoryModalMode = next.modalMode
-      // 同引用不赋值：Svelte 对对象的同引用赋值也会触发依赖（会把同一份 value 再推给编辑框）。
+      // 同引用不赋值（legacy 下同引用赋值会把同一份 value 再推给编辑框；runes 下 $state.raw 本就不触发）。
       if (activeCategory !== next.active) activeCategory = next.active
       savingCategory = next.saving
       deletingCategoryId = next.deletingId
@@ -326,15 +357,14 @@
     },
     tick,
   })
-  let {
-    modalOpen: categoryModalOpen,
-    modalMode: categoryModalMode,
-    active: activeCategory,
-    saving: savingCategory,
-    deletingId: deletingCategoryId,
-    error: categoryError,
-    createReturnToHome: categoryCreateReturnToHome,
-  } = categoryController.getState()
+  const initialCategoryState = categoryController.getState()
+  let categoryModalOpen = $state(initialCategoryState.modalOpen)
+  let categoryModalMode = $state(initialCategoryState.modalMode)
+  let activeCategory = $state.raw(initialCategoryState.active)
+  let savingCategory = $state(initialCategoryState.saving)
+  let deletingCategoryId = $state(initialCategoryState.deletingId)
+  let categoryError = $state(initialCategoryState.error)
+  let categoryCreateReturnToHome = $state(initialCategoryState.createReturnToHome)
 
   // 书签的新建 / 编辑 / 提交 / 删除 / 批量删除 / 批量移动 / 排序 / 跨分类整理见 lib/appBookmarkController，
   // 与分类控制器共用同一个 editIntent。
@@ -355,14 +385,13 @@
     applyLocalBookmarkSort,
     refreshBookmarkIconCacheInBackground,
   })
-  let {
-    modalOpen: bookmarkModalOpen,
-    modalMode: bookmarkModalMode,
-    active: activeBookmark,
-    saving: savingBookmark,
-    deletingId: deletingBookmarkId,
-    error: bookmarkError,
-  } = bookmarkController.getState()
+  const initialBookmarkState = bookmarkController.getState()
+  let bookmarkModalOpen = $state(initialBookmarkState.modalOpen)
+  let bookmarkModalMode = $state(initialBookmarkState.modalMode)
+  let activeBookmark = $state.raw(initialBookmarkState.active)
+  let savingBookmark = $state(initialBookmarkState.saving)
+  let deletingBookmarkId = $state(initialBookmarkState.deletingId)
+  let bookmarkError = $state(initialBookmarkState.error)
 
   // 设置保存 / 改密 / 导入导出见 lib/appSettingsController：控制器持有保存中 / 错误与导入导出状态。
   const settingsController = createSettingsController({
@@ -375,11 +404,10 @@
     applyLocalSettings,
     applyLoggedInData,
   })
-  let {
-    saving: savingSettings,
-    error: settingsError,
-    importExport: importExportState,
-  } = settingsController.getState()
+  const initialSettingsState = settingsController.getState()
+  let savingSettings = $state(initialSettingsState.saving)
+  let settingsError = $state(initialSettingsState.error)
+  let importExportState = $state.raw(initialSettingsState.importExport)
 
   // 登录 / 登出 / 进入后台 / 忘记密码与登录态数据加载、变更后刷新见 lib/appAuthController：
   // 不持有状态，loginModalOpen / currentView / rootError 仍归 App；登出经注入的函数按原顺序重置三个编辑状态。
@@ -419,18 +447,16 @@
   })
 </script>
 
-<svelte:window on:keydown={handleGlobalKeyDown} />
+<svelte:window onkeydown={handleGlobalKeyDown} />
 
-{#if recoverActive && $RecoverComponent}
-  <svelte:component
-    this={$RecoverComponent}
+{#if recoverActive && RecoverPage}
+  <RecoverPage
     onRecovered={boot.recovered}
     onGoInstall={boot.goInstall}
     onCancel={boot.cancelRecover}
   />
-{:else if !recoverActive && installView && $InstallComponent}
-  <svelte:component
-    this={$InstallComponent}
+{:else if !recoverActive && installView && InstallPage}
+  <InstallPage
     mode={installView.mode}
     missingBindings={installView.missingBindings}
     schemaVersion={installView.schemaVersion}
@@ -484,9 +510,8 @@
         title="请先登录管理员账号"
         message="当前站点未公开，登录后再加载后台管理界面。"
       />
-    {:else if $AdminComponent}
-      <svelte:component
-        this={$AdminComponent}
+    {:else if AdminPage}
+      <AdminPage
         isAuthenticated={$isAuthenticated}
         authLoading={$authStore.loading}
         categories={adminCategories}
@@ -542,9 +567,8 @@
       />
     {/if}
 
-    {#if $LoginModalComponent}
-      <svelte:component
-        this={$LoginModalComponent}
+    {#if LoginModal}
+      <LoginModal
         open={loginModalOpen}
         loading={$authStore.loading}
         error={$authStore.error ?? ''}
@@ -554,9 +578,8 @@
       />
     {/if}
 
-    {#if $BookmarkEditModalComponent}
-      <svelte:component
-        this={$BookmarkEditModalComponent}
+    {#if BookmarkEditModal}
+      <BookmarkEditModal
         open={bookmarkModalOpen}
         loading={savingBookmark}
         error={bookmarkError}
@@ -570,9 +593,8 @@
         imageHostUrl={adminData.settings?.image_host_url ?? ''}
       />
     {/if}
-    {#if $CategoryEditModalComponent && categoryCreateReturnToHome}
-      <svelte:component
-        this={$CategoryEditModalComponent}
+    {#if CategoryEditModal && categoryCreateReturnToHome}
+      <CategoryEditModal
         open={categoryModalOpen}
         loading={savingCategory}
         error={categoryError}
@@ -584,9 +606,8 @@
         imageHostUrl={adminData.settings?.image_host_url ?? ''}
       />
     {/if}
-    {#if $SearchSpotlightComponent}
-      <svelte:component
-        this={$SearchSpotlightComponent}
+    {#if SearchSpotlight}
+      <SearchSpotlight
         open={spotlightOpen}
         bookmarks={publicData?.bookmarks ?? []}
         categories={publicData?.categories ?? []}

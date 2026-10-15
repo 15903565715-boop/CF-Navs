@@ -5,7 +5,7 @@
 
 ## 现状
 
-- 依赖 `svelte@^5.57`，`svelte.config.js` 未开启 `runes`，App 及组件仍用 `$:` / `export let` / `on:`，即 **Svelte 5 的 legacy（兼容）模式**。
+- 依赖 `svelte@^5.57`，`svelte.config.js` 未开启 `runes`，App 及组件仍用 `$:` / `export let` / `on:`，即 **Svelte 5 的 legacy（兼容）模式**。第 8b 步起 App.svelte 单文件开启 runes（`<svelte:options runes />`），其余组件仍为 legacy。
 - 已有一批纯逻辑模块（`appAuthController`、`appInstall`、`appNavigation`、`appThemeState`、`appConfirmDialog`、`appModalState`、`appSortQueue`、`appImportExport`、`appLazyComponent`、`appData`、`dataService` 等），App 剩下的主要是「状态变量 + 用例编排 + 模板接线」。
 
 ## 职责分组（行号为第 1 步之后的 App.svelte，约值）
@@ -46,5 +46,15 @@
    - 第 7 步完成后 App `<script>` 只剩：imports、懒加载注册表、`appDeps` 与五个控制器的创建 / 接线、确认框、Spotlight / 书签查看 / 全局快捷键、数据服务回调、store 派生与登录闸门 `$:`、主题 / 根样式 / 自定义脚本、onMount / onDestroy。
 8. **（后续阶段）Svelte 5 runes 迁移**：以上步骤完成、App 变薄后，再逐组件开启 runes（`<svelte:options runes />`），`$:` → `$derived` / `$effect`，`on:` → 事件属性，`<svelte:component>` → 动态组件。不与拆分混在同一提交。
    - **8a 组件级行为基线**：迁移前先在 jsdom 中真实挂载 App，钉住响应式部分的可观察行为（登录闸门及其「先于 DOM」的时机、主题 / 根样式写入与重跑条件、自定义脚本注入、Install / Recover 懒加载与加载失败提示的保持、21 条 `$:` 的效果、动态组件切换、全局快捷键、onMount / onDestroy 清理），只替换模块边界（五个控制器、dataService、懒加载分包、媒体查询、图标设备、焦点刷新、自定义脚本控制器；stores 与 rootStyleWriter 用真实实现）。✅ 已完成（代码审查三轮第 18 项；`tests/unit/appComponent.test.ts` 34 项 + `tests/helpers/appProbe/` 子组件替身；14 种对 App 的变异均有用例精确失败）。
-   - **8b App.svelte 改为 runes**：只迁移 App，子组件保持 legacy（Svelte 5 支持混用）；8a 的测试必须不改一行地通过。
-   - **8c+ 子组件分批迁移**：按目录、叶子优先分批（批次见第 8b 步提交说明 / 本文后续更新）。
+   - **8b App.svelte 改为 runes**：只迁移 App，子组件保持 legacy（Svelte 5 支持混用）；8a 的测试必须不改一行地通过。✅ 已完成（代码审查三轮第 19 项；`<svelte:options runes />`；控制器经 onChange 写入的变量 → `$state`，其中对象值（`installState` / `activeCategory` / `activeBookmark` / `importExportState` / `confirmDialog` / `viewBookmark` / `customScriptController`）用 `$state.raw`，不做深层代理、同引用赋值即空操作，原有身份守卫保留；21 条 `$:` → 15 个 `$derived` + 6 个 `$effect.pre`（两条 Install / Recover 懒加载、登录闸门、主题写入、自定义 CSS、自定义脚本，均需与原先一样先于 DOM 更新执行）；`<svelte:component>` → 由懒加载 store 派生的动态组件；`on:keydown` → `onkeydown`。8a 测试在迁移后零改动通过；首屏 `index` 285.51 → 284.67 kB，gzip 96.95 → 96.83 kB）。已知差异（均不可观察，8a 已钉住全部功能性效果）：对象值 `$derived` 按 `===` 判等，store 以同一个 `data` 对象重复推送时不再把相同对象重推给子组件、也不再以相同内容重调 `customScript.apply`（原本即幂等空操作）；从回调里读派生值（`getAdminData` / `getCanSeeHome` 等）总是最新值，legacy 下在 store 写入后、下一次刷新前的同一同步段内可能读到旧值（现有调用点都在 await 或用户事件之后，不受影响）；两条懒加载副作用的源码位置移到派生值之后（`$effect.pre` 创建时同步执行一次，需避开 TDZ），执行顺序与原先 `$:` 拓扑排序后一致。
+   - **8c+ 子组件分批迁移**（64 个 `export let` 组件，共 536 个 `export let`、304 条 `$:`、288 处 `on:`；另 `Toast.svelte` 无 props，可随任一批）。按目录、叶子优先（层级 = 依赖的本地 `.svelte` 组件的最大深度），每批独立提交、先补 / 复用组件级测试，再迁移；含 `createEventDispatcher` / `<slot>` 的组件改为回调 prop / snippet 时，同一提交内更新父组件调用处，父组件被 `bind:` 的 prop 用 `$bindable()`：
+     | 批次 | 范围 | 数量 | 说明 |
+     |---|---|---|---|
+     | 8c | `components/` 根目录与 `admin/`、`settings/` 中的纯展示叶子：AdminSidebar、AppSplash、BookmarkCustomIconField、BookmarkIcon、BookmarkIconCandidateButton、BookmarkLinkModal、BookmarkModalActions、BookmarkModalHeader、DeviceIconCachePanel、HomeContentSummary、HomeEmptyPanel、LogoSchemeSelector、admin/AdminPageHeader、settings/FooterSettingsSection | 14 | 层级 0，无 `$:`、无 dispatcher |
+     | 8d | `components/` 有状态叶子：BackupPanel、CachedBookmarkIcon、CategoryIcon、CategoryTreeSelect、ConfirmDialog、HomeFloatingActions、LoginModal、PasswordChangePanel、SearchBox | 9 | 层级 0，共 43 条 `$:` |
+     | 8e | `ui/` 与事件分发叶子：ui/InputGroup、ui/Slider、ui/Switch、ui/Tooltip、ColorAlphaInput、settings/GradientPresetSelector | 6 | 层级 0；5 个用 `createEventDispatcher`、2 个用 `<slot>`，需同步改父组件的 `on:` |
+     | 8f | `views/` 叶子：Install、Recover | 2 | 层级 0，懒加载分包 |
+     | 8g | 层级 1 首页 / 书签：BookmarkBaseFields、BookmarkCardCompact、BookmarkCardInfo、BookmarkContextMenu、BookmarkIconCandidatePicker、GradientBackgroundInput、HomeCategoryScope、HomeHeroSearch、IconifySelector、Sidebar、SpotlightBookmarkIcon | 11 | Sidebar 15 条 `$:` / 21 处 `on:` |
+     | 8h | 层级 1 `admin/` 与 `settings/` 分区：admin/AnalyticsPanel、admin/BookmarkListPanel、admin/CategoryListPanel、settings/Background / Basic / Card / CategoryDisplay / Hero / Navigation / SearchEngine 七个 Section | 10 | 两个列表面板各 16 条 `$:` |
+     | 8i | 层级 2：BookmarkCard、BookmarkEditModal、CategoryEditModal、SearchSpotlight、admin/AdminTabContent、settings/ThemeBackgroundCard | 6 | BookmarkCard 32 条 `$:` |
+     | 8j | 层级 3–4 顶层：CategorySection、settings/AdvancedSettingsSection、settings/SettingsHomePreview、views/Admin、SettingsPanel、views/Home | 6 | Home 40 条 `$:`，最后迁移 |
