@@ -103,24 +103,25 @@
               bind:value={engine.icon}
               placeholder="图标链接"
               ariaLabel="图标链接"
-              on:input={() => void syncForm()}
+              oninput={() => void syncForm()}
             >
-              <button
-                slot="suffix"
-                type="button"
-                class="favicon-suffix-button"
-                on:click={() => applyFaviconImIcon(index)}
-                disabled={!faviconImIcon(engine.url_template)}
-                aria-label="根据查询模板域名生成图标"
-                title={faviconImIcon(engine.url_template)
-                  ? '根据查询模板域名生成 Favicon.im 图标 URL'
-                  : '请先填写有效的查询模板 URL'}
-              >
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <circle cx="11" cy="11" r="7" />
-                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                </svg>
-              </button>
+              {#snippet suffix()}
+                <button
+                  type="button"
+                  class="favicon-suffix-button"
+                  on:click={() => applyFaviconImIcon(index)}
+                  disabled={!faviconImIcon(engine.url_template)}
+                  aria-label="根据查询模板域名生成图标"
+                  title={faviconImIcon(engine.url_template)
+                    ? '根据查询模板域名生成 Favicon.im 图标 URL'
+                    : '请先填写有效的查询模板 URL'}
+                >
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="11" cy="11" r="7" />
+                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                  </svg>
+                </button>
+              {/snippet}
             </InputGroup>
             {#if canPreviewIcon(engine.icon)}
               <span class="engine-icon-preview" title="搜索引擎图标预览">

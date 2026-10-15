@@ -6,6 +6,16 @@ import { describe, expect, it } from 'vitest'
 // deviceIconCachePanel / bookmarkIconTimeout 保证。
 // 第 21 项（第 8d 步）追加 9 个层级 0 有状态组件，行为等价由 statefulLeafComponentsBehavior /
 // cachedBookmarkIconBehavior（迁移前写成、迁移时未改）及各组件原有测试保证。
+// 第 22 项（第 8e 步）追加 ui/ 四个组件与 ColorAlphaInput、GradientPresetSelector：事件分发改回调 prop、
+// <slot> 改 snippet，行为等价由 uiLeafComponentsBehavior（迁移前写成、迁移时未改，经真实 legacy 父组件观察）保证。
+const UI_LEAF = [
+  'ColorAlphaInput',
+  'settings/GradientPresetSelector',
+  'ui/InputGroup',
+  'ui/Slider',
+  'ui/Switch',
+  'ui/Tooltip',
+]
 const STATEFUL = [
   'BackupPanel',
   'CachedBookmarkIcon',
@@ -34,6 +44,7 @@ const MIGRATED = [
   'admin/AdminPageHeader',
   'settings/FooterSettingsSection',
   ...STATEFUL,
+  ...UI_LEAF,
 ]
 
 describe('level-0 presentational and stateful components in runes mode', () => {
@@ -82,5 +93,47 @@ describe('level-0 presentational and stateful components in runes mode', () => {
     const panel = readFileSync('src/components/DeviceIconCachePanel.svelte', 'utf8')
     expect(panel).toContain('let busy = $state(false)')
     expect(panel).toContain("let localError = $state('')")
+  })
+
+  it('replaces dispatched events with callback props and slots with snippets', () => {
+    const read = (path: string) => readFileSync(path, 'utf8')
+    expect(read('src/components/ui/InputGroup.svelte')).toContain("value = $bindable('')")
+    expect(read('src/components/ui/InputGroup.svelte')).toContain('{@render suffix?.()}')
+    expect(read('src/components/ui/Slider.svelte')).toContain('value = $bindable(0)')
+    expect(read('src/components/ColorAlphaInput.svelte')).toContain("value = $bindable('#ffffff')")
+    expect(read('src/components/ColorAlphaInput.svelte')).toContain('alpha = $bindable(null)')
+    expect(read('src/components/ui/Switch.svelte')).toContain('{@render children?.()}')
+    // Switch 的 checked 没有调用处 bind:，保持普通 prop
+    expect(read('src/components/ui/Switch.svelte')).not.toContain('$bindable')
+  })
+
+  it('updates every legacy parent call site to the callback props and suffix snippet', () => {
+    const parents = [
+      'src/components/BookmarkEditModal.svelte',
+      'src/components/GradientBackgroundInput.svelte',
+      'src/components/settings/AdvancedSettingsSection.svelte',
+      'src/components/settings/BackgroundSettingsSection.svelte',
+      'src/components/settings/BasicSettingsSection.svelte',
+      'src/components/settings/CardSettingsSection.svelte',
+      'src/components/settings/CategoryDisplaySettingsSection.svelte',
+      'src/components/settings/HeroSettingsSection.svelte',
+      'src/components/settings/NavigationSettingsSection.svelte',
+      'src/components/settings/SearchEngineSettingsSection.svelte',
+      'src/components/settings/ThemeBackgroundCard.svelte',
+    ]
+    // 开始标签：属性表达式里可能有 `=>` 与两层花括号
+    const tag = /<(InputGroup|Slider|Switch|ColorAlphaInput|GradientPresetSelector)\b(?:[^>{]|\{(?:[^{}]|\{[^{}]*\})*\})*>/g
+    let tags = 0
+    for (const path of parents) {
+      const source = readFileSync(path, 'utf8')
+      for (const match of source.matchAll(tag)) {
+        tags += 1
+        expect(match[0], `${path}: ${match[1]}`).not.toMatch(/\son:[a-z]+=/)
+        expect(match[0], `${path}: ${match[1]}`).not.toContain('event.detail')
+      }
+      // legacy 父组件的 slot="suffix" 不会传到 runes 子组件的 suffix snippet，必须写成 {#snippet suffix()}
+      expect(source, path).not.toMatch(/slot="suffix"/)
+    }
+    expect(tags).toBe(39)
   })
 })

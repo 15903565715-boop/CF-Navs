@@ -27,13 +27,13 @@
     lastValue = nextValue
   }
 
-  function handleStartChange(event: CustomEvent<string>) {
-    startColor = event.detail
+  function handleStartChange(color: string) {
+    startColor = color
     updateGradientFromStops()
   }
 
-  function handleEndChange(event: CustomEvent<string>) {
-    endColor = event.detail
+  function handleEndChange(color: string) {
+    endColor = color
     updateGradientFromStops()
   }
 
@@ -116,7 +116,7 @@
         inputLabel={startLabel}
         swatchTitle={`选择${startLabel}`}
         alphaText={`${startLabel}透明度`}
-        on:change={handleStartChange}
+        onchange={handleStartChange}
       />
       <span class="gradient-color-label">{startLabel}</span>
     </div>
@@ -128,7 +128,7 @@
         inputLabel={endLabel}
         swatchTitle={`选择${endLabel}`}
         alphaText={`${endLabel}透明度`}
-        on:change={handleEndChange}
+        onchange={handleEndChange}
       />
       <span class="gradient-color-label">{endLabel}</span>
     </div>

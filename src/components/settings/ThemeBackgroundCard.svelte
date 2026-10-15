@@ -90,7 +90,7 @@
         {#if background.type === 'color'}
           <ColorAlphaInput
             bind:value={background.value}
-            on:change={() => void syncBackground()}
+            onchange={() => void syncBackground()}
             placeholder={colorPlaceholder}
             inputLabel={`${title}颜色值`}
             swatchTitle={`选择${title}颜色`}
@@ -111,15 +111,15 @@
             bind:value={background.value}
             placeholder={imagePlaceholder}
             ariaLabel={imageInputLabel}
-            on:input={() => void syncBackground()}
+            oninput={() => void syncBackground()}
           >
-            <svelte:fragment slot="suffix">
+            {#snippet suffix()}
               {#if uploadHost}
                 <button type="button" class="ghost-button" on:click={() => dispatch('upload')}>
                   打开图床上传 ↗
                 </button>
               {/if}
-            </svelte:fragment>
+            {/snippet}
           </InputGroup>
         {/if}
         {#if !valid}
@@ -134,7 +134,7 @@
         <ColorAlphaInput
           bind:value={background.maskColor}
           bind:alpha={background.mask}
-          on:change={() => void syncBackground()}
+          onchange={() => void syncBackground()}
           placeholder={isLight ? '#ffffff' : '#000000'}
           inputLabel={`${title}遮罩颜色值`}
           swatchTitle={`选择${title}遮罩颜色`}
@@ -150,7 +150,7 @@
           max={40}
           step={1}
           bind:value={background.blur}
-          on:input={() => void syncBackground()}
+          oninput={() => void syncBackground()}
         />
       </div>
 
@@ -162,7 +162,7 @@
           max={1}
           step={0.05}
           bind:value={background.mask}
-          on:input={() => void syncBackground()}
+          oninput={() => void syncBackground()}
         />
       </div>
     </div>
