@@ -50,7 +50,7 @@
    - **8c+ 子组件分批迁移**（64 个 `export let` 组件，共 536 个 `export let`、304 条 `$:`、288 处 `on:`；另 `Toast.svelte` 无 props，可随任一批）。按目录、叶子优先（层级 = 依赖的本地 `.svelte` 组件的最大深度），每批独立提交、先补 / 复用组件级测试，再迁移；含 `createEventDispatcher` / `<slot>` 的组件改为回调 prop / snippet 时，同一提交内更新父组件调用处，父组件被 `bind:` 的 prop 用 `$bindable()`：
      | 批次 | 范围 | 数量 | 说明 |
      |---|---|---|---|
-     | 8c | `components/` 根目录与 `admin/`、`settings/` 中的纯展示叶子：AdminSidebar、AppSplash、BookmarkCustomIconField、BookmarkIcon、BookmarkIconCandidateButton、BookmarkLinkModal、BookmarkModalActions、BookmarkModalHeader、DeviceIconCachePanel、HomeContentSummary、HomeEmptyPanel、LogoSchemeSelector、admin/AdminPageHeader、settings/FooterSettingsSection | 14 | 层级 0，无 `$:`、无 dispatcher |
+     | 8c | `components/` 根目录与 `admin/`、`settings/` 中的纯展示叶子：AdminSidebar、AppSplash、BookmarkCustomIconField、BookmarkIcon、BookmarkIconCandidateButton、BookmarkLinkModal、BookmarkModalActions、BookmarkModalHeader、DeviceIconCachePanel、HomeContentSummary、HomeEmptyPanel、LogoSchemeSelector、admin/AdminPageHeader、settings/FooterSettingsSection | 14 | 层级 0，无 `$:`、无 dispatcher；行为基线 `leafComponentsBehavior.test.ts` 已补（第 20 项） |
      | 8d | `components/` 有状态叶子：BackupPanel、CachedBookmarkIcon、CategoryIcon、CategoryTreeSelect、ConfirmDialog、HomeFloatingActions、LoginModal、PasswordChangePanel、SearchBox | 9 | 层级 0，共 43 条 `$:` |
      | 8e | `ui/` 与事件分发叶子：ui/InputGroup、ui/Slider、ui/Switch、ui/Tooltip、ColorAlphaInput、settings/GradientPresetSelector | 6 | 层级 0；5 个用 `createEventDispatcher`、2 个用 `<slot>`，需同步改父组件的 `on:` |
      | 8f | `views/` 叶子：Install、Recover | 2 | 层级 0，懒加载分包 |
