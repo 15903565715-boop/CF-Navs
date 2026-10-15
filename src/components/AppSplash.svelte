@@ -1,14 +1,20 @@
+<svelte:options runes />
+
 <script lang="ts">
   // 启动 / 登录闸门 / 后台分包加载三处共用的 splash（代码审查三轮第 9 项，从 App.svelte 去重）。
   // 样式在 app.css 的全局 .app-splash* 规则里，本组件不带 <style>。
-  /** 渐变 id，SVG 内 stroke 引用它；同页可能同时存在多个 splash 时须各不相同。 */
-  export let gradientId: string
-  export let title: string
-  export let message: string
-  /** 加载态：卡片加 --loading 修饰并作为 status 播报（aria-busy）。 */
-  export let loading = false
-  /** 底部进度条两侧文案；null 时不渲染进度条。 */
-  export let progress: { label: string; status: string } | null = null
+  interface Props {
+    /** 渐变 id，SVG 内 stroke 引用它；同页可能同时存在多个 splash 时须各不相同。 */
+    gradientId: string
+    title: string
+    message: string
+    /** 加载态：卡片加 --loading 修饰并作为 status 播报（aria-busy）。 */
+    loading?: boolean
+    /** 底部进度条两侧文案；null 时不渲染进度条。 */
+    progress?: { label: string; status: string } | null
+  }
+
+  let { gradientId, title, message, loading = false, progress = null }: Props = $props()
 </script>
 
 <div class="app-splash">

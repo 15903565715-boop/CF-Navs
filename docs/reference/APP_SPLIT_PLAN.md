@@ -5,7 +5,7 @@
 
 ## 现状
 
-- 依赖 `svelte@^5.57`，`svelte.config.js` 未开启 `runes`，App 及组件仍用 `$:` / `export let` / `on:`，即 **Svelte 5 的 legacy（兼容）模式**。第 8b 步起 App.svelte 单文件开启 runes（`<svelte:options runes />`），其余组件仍为 legacy。
+- 依赖 `svelte@^5.57`，`svelte.config.js` 未开启 `runes`，App 及组件仍用 `$:` / `export let` / `on:`，即 **Svelte 5 的 legacy（兼容）模式**。第 8b 步起 App.svelte 单文件开启 runes（`<svelte:options runes />`），第 8c 步起 14 个层级 0 纯展示组件也已逐文件开启，其余组件仍为 legacy。
 - 已有一批纯逻辑模块（`appAuthController`、`appInstall`、`appNavigation`、`appThemeState`、`appConfirmDialog`、`appModalState`、`appSortQueue`、`appImportExport`、`appLazyComponent`、`appData`、`dataService` 等），App 剩下的主要是「状态变量 + 用例编排 + 模板接线」。
 
 ## 职责分组（行号为第 1 步之后的 App.svelte，约值）
@@ -50,7 +50,7 @@
    - **8c+ 子组件分批迁移**（64 个 `export let` 组件，共 536 个 `export let`、304 条 `$:`、288 处 `on:`；另 `Toast.svelte` 无 props，可随任一批）。按目录、叶子优先（层级 = 依赖的本地 `.svelte` 组件的最大深度），每批独立提交、先补 / 复用组件级测试，再迁移；含 `createEventDispatcher` / `<slot>` 的组件改为回调 prop / snippet 时，同一提交内更新父组件调用处，父组件被 `bind:` 的 prop 用 `$bindable()`：
      | 批次 | 范围 | 数量 | 说明 |
      |---|---|---|---|
-     | 8c | `components/` 根目录与 `admin/`、`settings/` 中的纯展示叶子：AdminSidebar、AppSplash、BookmarkCustomIconField、BookmarkIcon、BookmarkIconCandidateButton、BookmarkLinkModal、BookmarkModalActions、BookmarkModalHeader、DeviceIconCachePanel、HomeContentSummary、HomeEmptyPanel、LogoSchemeSelector、admin/AdminPageHeader、settings/FooterSettingsSection | 14 | 层级 0，无 `$:`、无 dispatcher；行为基线 `leafComponentsBehavior.test.ts` 已补（第 20 项） |
+     | 8c | `components/` 根目录与 `admin/`、`settings/` 中的纯展示叶子：AdminSidebar、AppSplash、BookmarkCustomIconField、BookmarkIcon、BookmarkIconCandidateButton、BookmarkLinkModal、BookmarkModalActions、BookmarkModalHeader、DeviceIconCachePanel、HomeContentSummary、HomeEmptyPanel、LogoSchemeSelector、admin/AdminPageHeader、settings/FooterSettingsSection | 14 | 层级 0，无 `$:`、无 dispatcher。✅ 已完成（第 20 项，见下） |
      | 8d | `components/` 有状态叶子：BackupPanel、CachedBookmarkIcon、CategoryIcon、CategoryTreeSelect、ConfirmDialog、HomeFloatingActions、LoginModal、PasswordChangePanel、SearchBox | 9 | 层级 0，共 43 条 `$:` |
      | 8e | `ui/` 与事件分发叶子：ui/InputGroup、ui/Slider、ui/Switch、ui/Tooltip、ColorAlphaInput、settings/GradientPresetSelector | 6 | 层级 0；5 个用 `createEventDispatcher`、2 个用 `<slot>`，需同步改父组件的 `on:` |
      | 8f | `views/` 叶子：Install、Recover | 2 | 层级 0，懒加载分包 |
@@ -58,3 +58,5 @@
      | 8h | 层级 1 `admin/` 与 `settings/` 分区：admin/AnalyticsPanel、admin/BookmarkListPanel、admin/CategoryListPanel、settings/Background / Basic / Card / CategoryDisplay / Hero / Navigation / SearchEngine 七个 Section | 10 | 两个列表面板各 16 条 `$:` |
      | 8i | 层级 2：BookmarkCard、BookmarkEditModal、CategoryEditModal、SearchSpotlight、admin/AdminTabContent、settings/ThemeBackgroundCard | 6 | BookmarkCard 32 条 `$:` |
      | 8j | 层级 3–4 顶层：CategorySection、settings/AdvancedSettingsSection、settings/SettingsHomePreview、views/Admin、SettingsPanel、views/Home | 6 | Home 40 条 `$:`，最后迁移 |
+   - **8c 完成记录**（代码审查三轮第 20 项）：先补 `tests/unit/leafComponentsBehavior.test.ts`（22 项，legacy 上通过），再迁移 14 个组件，测试零改动通过；源码护栏 `tests/unit/leafComponentsRunes.test.ts`。父组件调用处零改动（legacy 父传 props / `bind:` 给 runes 子组件均可）。FooterSettingsSection 的 `form` 为 `$bindable()`；DeviceIconCachePanel 两个本地标志用 `$state`。已知差异：prop 由有值变回 `undefined` 时 runes 取默认值、legacy 保持 `undefined`（现有调用不出现）；FooterSettingsSection 三个 `bind:value={form.x}` 在开发构建报 `binding_property_non_reactive` 误报（form 是 legacy 父组件的普通对象，写回经 bindable setter 生效），SettingsPanel（8j）改 `$state` 后消失。首屏 `index` 284.67 kB 不变（gzip 96.83 → 96.90 kB）。
+   - **8d 起需注意**：`on:` 改事件属性后 click / input / change / keydown 等走委托（在冒泡到根时执行；Svelte 的 `on:` 监听会先处理委托，但原生 `addEventListener` 里 `stopPropagation` 的祖先会挡住委托处理器）；`$:` 改 `$derived` 时对象值按 `===` 判等（legacy 对对象总视为变化）；本地 `let` 被模板依赖的要改 `$state`（对象值优先 `$state.raw`，避免把父组件或 store 的对象换成深层代理）；被父组件 `bind:` 的 prop 才用 `$bindable()`。
