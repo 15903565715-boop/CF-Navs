@@ -5,7 +5,7 @@
   import { get } from 'svelte/store'
   import { fade } from 'svelte/transition'
   import {
-    type ChangePasswordReq,
+    type LoginResp,
     type PublicBookmark,
     type Settings,
     type ThemeMode,
@@ -16,18 +16,11 @@
   import Home from './views/Home.svelte'
   import BookmarkLinkModal from './components/BookmarkLinkModal.svelte'
   import { api, getErrorMessage, isUnauthorizedError } from './lib/api'
-  import type { BackupSelection as BackupSelectionInput } from './lib/appBackup'
   import { clearCachedAdminData } from './lib/adminDataCache'
   import { clearCachedPublicData } from './lib/publicDataCache'
   import { toastStore } from './lib/toast'
   import type { AdminTab } from './lib/adminTypes'
-  import { runAdminMutation } from './lib/appAdminMutation'
   import { createAuthViewIntent, logoutRevocationWarning } from './lib/appAuthController'
-  import {
-    createImportExportState,
-    exportDataToFile,
-    importDataFromFile,
-  } from './lib/appImportExport'
   import {
     createConfirmController,
     type ConfirmDialogInput,
@@ -38,7 +31,6 @@
     toAdminBookmarks,
     toAdminCategories,
     toSettingsForm,
-    type SettingsFormValue,
   } from './lib/appData'
   import { createLazyComponentRegistry } from './lib/appLazyComponent'
   import {
@@ -52,6 +44,7 @@
   import { createEditIntentCounter } from './lib/appEditIntent'
   import { createCategoryController } from './lib/appCategoryController'
   import { createBookmarkController } from './lib/appBookmarkController'
+  import { createSettingsController } from './lib/appSettingsController'
   import {
     canSeeHomeView,
     createHomeGateState,
@@ -61,7 +54,6 @@
   import { resolveGlobalShortcut } from './lib/appShortcuts'
   import { getAdminBookmarkCategoryOptions } from './lib/adminListState'
   import { getNextThemePreference, resolveAppThemeState } from './lib/appThemeState'
-  import type { ImportSource } from './lib/importData'
   import { installPublicDataFocusRefresh } from './lib/publicDataFocusRefresh'
   import { adminStore, authStore, configStore, isAuthenticated, publicStore } from './lib/stores'
   import { readPreferredThemeMode, writePreferredThemeMode } from './lib/themePreference'
@@ -86,7 +78,6 @@
   } from './lib/dataService'
   import { createRootStyleWriter } from './lib/rootStyleWriter'
 
-  type SettingsSubset = SettingsFormValue
   const rootStyleWriter = typeof document !== 'undefined' ? createRootStyleWriter(document) : null
 
   let rootError = ''
@@ -116,9 +107,48 @@
     Install: InstallComponent,
     Recover: RecoverComponent,
   } = lazyComponents.components
+  // 分类与书签共用一个编辑意图计数器（见 lib/appEditIntent），两个控制器注入同一个实例。
+  const editIntent = createEditIntentCounter()
+  const authViewIntent = createAuthViewIntent()
+  // 各用例控制器共用的同名依赖只在这里写一次，再展开进每个控制器：依赖对象的属性名不会被压缩，
+  // 逐个控制器重复书写会让首屏 index 每步多出约 1.7 kB。每个控制器只取自己声明的那几项；
+  // 编辑框重置经箭头函数转发给稍后创建的控制器（只在用户操作时调用）。
+  const appDeps = {
+    api,
+    editIntent,
+    authViewIntent,
+    isLoggedIn,
+    isAdminPath,
+    getPublicMode: () => get(configStore).data?.public_mode,
+    getAdminData: () => adminData,
+    setSession: (session: LoginResp | null) => authStore.setSession(session),
+    resetAdminData: () => adminStore.reset(),
+    clearCachedAdminData,
+    refreshLoggedInData,
+    refreshPublicData,
+    readAdminDataForEdit,
+    persistCurrentAdminData,
+    requestConfirmation,
+    ensureLazyComponent: lazyComponents.ensure,
+    openLogin: handleOpenLogin,
+    ensureLoggedInDataLoaded,
+    refreshAdminDataAfterMutation,
+    resetCategories: () => categoryController.reset(),
+    resetBookmarks: () => bookmarkController.reset(),
+    setRootError: (message: string) => {
+      rootError = message
+    },
+    setLoginModalOpen: (open: boolean) => {
+      loginModalOpen = open
+    },
+    setCurrentView: (view: AppView) => {
+      currentView = view
+    },
+  }
   // 启动 / 安装 / 找回流程见 lib/appBootController：控制器持有 booting / installState / recoverActive，
   // rootError / currentView / loginModalOpen 仍归 App，经下列回调在原先的时机读写。
   const boot = createAppBootController({
+    ...appDeps,
     onChange: (next) => {
       booting = next.booting
       recoverActive = next.recoverActive
@@ -130,27 +160,9 @@
     getInstallHintStorage: getBrowserInstallHintStorage,
     getPathname: () => typeof window === 'undefined' ? null : window.location.pathname,
     replacePath: replaceBrowserPath,
-    clearCachedAdminData,
     clearCachedPublicData,
-    setSession: (session) => authStore.setSession(session),
     initializeAuth: () => authStore.initialize(),
-    resetAdminData: () => adminStore.reset(),
-    isLoggedIn,
-    refreshLoggedInData,
-    refreshPublicData,
-    getPublicMode: () => get(configStore).data?.public_mode,
-    isAdminPath,
-    ensureLazyComponent: (name) => lazyComponents.ensure(name),
     getRootError: () => rootError,
-    setRootError: (message) => {
-      rootError = message
-    },
-    setLoginModalOpen: (open) => {
-      loginModalOpen = open
-    },
-    setCurrentView: (view) => {
-      currentView = view
-    },
   })
   let { booting, installState, recoverActive } = boot.getState()
   let lazyViewError = ''
@@ -170,7 +182,6 @@
   $: if (recoverActive && !$RecoverComponent) loadLazyView('Recover')
   $: if (!recoverActive && installView && !$InstallComponent) loadLazyView('Install')
 
-  const authViewIntent = createAuthViewIntent()
   let loginModalOpen = false
   let homeFocusCategoryId: number | null = null
   let spotlightOpen = false
@@ -213,13 +224,6 @@
     else void openSpotlight()
   }
 
-  // 分类与书签共用一个编辑意图计数器（见 lib/appEditIntent），两个控制器注入同一个实例。
-  const editIntent = createEditIntentCounter()
-
-  let savingSettings = false
-  let settingsError = ''
-
-  let importExportState = createImportExportState()
   let preferredThemeMode: ThemeMode | null = null
   let prefersReducedMotion = false
   // 只在浏览器里创建：SSR/测试环境没有 document 和 URL.createObjectURL。
@@ -350,6 +354,7 @@
   // 分类的打开 / 编辑 / 提交 / 删除 / 批量删除 / 排序见 lib/appCategoryController：控制器持有分类编辑框状态，
   // rootError / currentView / homeFocusCategoryId 仍归 App，经下列回调在原先的时机写入。
   const categoryController = createCategoryController({
+    ...appDeps,
     onChange: (next) => {
       categoryModalOpen = next.modalOpen
       categoryModalMode = next.modalMode
@@ -360,27 +365,9 @@
       categoryError = next.error
       categoryCreateReturnToHome = next.createReturnToHome
     },
-    editIntent,
-    api,
-    isLoggedIn,
-    openLogin: handleOpenLogin,
-    ensureLoggedInDataLoaded,
-    ensureLazyComponent: (name) => lazyComponents.ensure(name),
-    readAdminDataForEdit,
-    getAdminData: () => adminData,
-    requestConfirmation,
     applyLocalCategoryUpsert,
     applyLocalCategoryDelete,
     applyLocalCategorySort,
-    persistCurrentAdminData,
-    refreshAdminDataAfterMutation,
-    refreshLoggedInData,
-    setRootError: (message) => {
-      rootError = message
-    },
-    setCurrentView: (view) => {
-      currentView = view
-    },
     setHomeFocusCategoryId: (id) => {
       homeFocusCategoryId = id
     },
@@ -399,6 +386,7 @@
   // 书签的新建 / 编辑 / 提交 / 删除 / 批量删除 / 批量移动 / 排序 / 跨分类整理见 lib/appBookmarkController，
   // 与分类控制器共用同一个 editIntent。
   const bookmarkController = createBookmarkController({
+    ...appDeps,
     onChange: (next) => {
       bookmarkModalOpen = next.modalOpen
       bookmarkModalMode = next.modalMode
@@ -407,26 +395,12 @@
       deletingBookmarkId = next.deletingId
       bookmarkError = next.error
     },
-    editIntent,
-    api,
     getSession: () => get(authStore).session,
     readAdminData: () => get(adminStore).data,
-    isLoggedIn,
-    openLogin: handleOpenLogin,
-    ensureLoggedInDataLoaded,
-    ensureLazyComponent: (name) => lazyComponents.ensure(name),
-    readAdminDataForEdit,
-    requestConfirmation,
     applyLocalBookmarkUpsert,
     applyLocalBookmarkDelete,
     applyLocalBookmarkSort,
     refreshBookmarkIconCacheInBackground,
-    persistCurrentAdminData,
-    refreshAdminDataAfterMutation,
-    refreshLoggedInData,
-    setRootError: (message) => {
-      rootError = message
-    },
   })
   let {
     modalOpen: bookmarkModalOpen,
@@ -437,10 +411,22 @@
     error: bookmarkError,
   } = bookmarkController.getState()
 
-  function resetSettingsState(): void {
-    settingsError = ''
-    savingSettings = false
-  }
+  // 设置保存 / 改密 / 导入导出见 lib/appSettingsController：控制器持有保存中 / 错误与导入导出状态。
+  const settingsController = createSettingsController({
+    ...appDeps,
+    onChange: (next) => {
+      savingSettings = next.saving
+      settingsError = next.error
+      if (importExportState !== next.importExport) importExportState = next.importExport
+    },
+    applyLocalSettings,
+    applyLoggedInData,
+  })
+  let {
+    saving: savingSettings,
+    error: settingsError,
+    importExport: importExportState,
+  } = settingsController.getState()
 
   async function openLoginUseCase(): Promise<void> {
     authViewIntent.invalidate()
@@ -495,7 +481,7 @@
     const revocationWarning = logoutRevocationWarning(await authStore.logout())
     if (isLoggedIn()) return revocationWarning
     categoryController.reset()
-    resetSettingsState()
+    settingsController.reset()
     bookmarkController.reset()
     adminStore.reset()
     await clearCachedAdminData()
@@ -549,60 +535,6 @@
     await lazyComponents.ensure('Admin')
     replaceBrowserPath('/admin')
     currentView = 'admin'
-  }
-  async function handleSubmitSettings(payload: SettingsSubset): Promise<void> {
-    savingSettings = true
-    settingsError = ''
-
-    await runAdminMutation({
-      run: () => api.settings.update(payload),
-      onSuccess: (settings) => applyLocalSettings(settings),
-      successMessage: () => '设置已保存',
-      onError: (message) => {
-        settingsError = message
-      },
-      onSettled: () => {
-        savingSettings = false
-      },
-    })
-  }
-
-  async function handleChangePassword(payload: ChangePasswordReq): Promise<void> {
-    authViewIntent.invalidate()
-    rootError = ''
-
-    await api.auth.changePassword(payload)
-    authStore.setSession(null)
-    categoryController.reset()
-    resetSettingsState()
-    bookmarkController.reset()
-    adminStore.reset()
-    await clearCachedAdminData()
-    rootError = '管理员密码已更新，请使用新密码重新登录。'
-    await lazyComponents.ensure('LoginModal')
-    loginModalOpen = true
-    currentView = 'login'
-  }
-
-  async function handleExportData(selection: BackupSelectionInput): Promise<void> {
-    await exportDataToFile(importExportState, selection, (next) => {
-      importExportState = next
-    })
-  }
-
-  async function handleImportData(file: File, source: ImportSource, mode: 'replace' | 'merge'): Promise<void> {
-    await importDataFromFile(importExportState, file, source, mode, {
-      adminData,
-      requestConfirmation,
-      applyLoggedInData: (data) => applyLoggedInData(data),
-      persistCurrentAdminData,
-      onStateChange: (next) => {
-        importExportState = next
-      },
-    })
-    if (!importExportState.backupError && importExportState.backupMessage) {
-      await refreshAdminDataAfterMutation()
-    }
   }
   function handleForgotPassword(): void {
     authViewIntent.invalidate()
@@ -738,9 +670,9 @@
         onDeleteBookmark={bookmarkController.remove}
         onBatchDeleteBookmarks={bookmarkController.batchRemove}
         onBatchMoveBookmarks={bookmarkController.batchMove}
-        onSubmitSettings={handleSubmitSettings}
+        onSubmitSettings={settingsController.submit}
         onVerifyDevice={() => refreshLoggedInData(true)}
-        onChangePassword={handleChangePassword}
+        onChangePassword={settingsController.changePassword}
         onSortCategories={categoryController.sort}
         onSortBookmarks={bookmarkController.sort}
         onSelectTab={handleAdminTabChange}
@@ -748,8 +680,8 @@
         exporting={importExportState.exporting}
         backupError={importExportState.backupError}
         backupMessage={importExportState.backupMessage}
-        onExportData={handleExportData}
-        onImportData={handleImportData}
+        onExportData={settingsController.exportData}
+        onImportData={settingsController.importData}
       />
     {:else}
       <AppSplash
