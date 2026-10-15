@@ -5,8 +5,6 @@
   import { get } from 'svelte/store'
   import { fade } from 'svelte/transition'
   import {
-    type BookmarkBatchMoveReq,
-    type BookmarkReorganizeReq,
     type ChangePasswordReq,
     type PublicBookmark,
     type Settings,
@@ -22,8 +20,7 @@
   import { clearCachedAdminData } from './lib/adminDataCache'
   import { clearCachedPublicData } from './lib/publicDataCache'
   import { toastStore } from './lib/toast'
-  import type { AdminTab, BookmarkFormValue } from './lib/adminTypes'
-  import { toBookmarkForm, toBookmarkPayload } from './lib/adminFormAdapters'
+  import type { AdminTab } from './lib/adminTypes'
   import { runAdminMutation } from './lib/appAdminMutation'
   import { createAuthViewIntent, logoutRevocationWarning } from './lib/appAuthController'
   import {
@@ -33,8 +30,6 @@
   } from './lib/appImportExport'
   import {
     createConfirmController,
-    createBatchDeleteConfirmation,
-    createDeleteBookmarkConfirmation,
     type ConfirmDialogInput,
     type ConfirmDialogState,
   } from './lib/appConfirmDialog'
@@ -54,9 +49,9 @@
   import { getInstallViewState, replaceBrowserPath } from './lib/appInstall'
   import { createAppBootController, getBrowserInstallHintStorage } from './lib/appBootController'
   import { readReducedMotion, subscribeSystemDark } from './lib/appMediaPreferences'
-  import { createBookmarkDraft } from './lib/appModalState'
   import { createEditIntentCounter } from './lib/appEditIntent'
   import { createCategoryController } from './lib/appCategoryController'
+  import { createBookmarkController } from './lib/appBookmarkController'
   import {
     canSeeHomeView,
     createHomeGateState,
@@ -64,7 +59,6 @@
     type AppView,
   } from './lib/appNavigation'
   import { resolveGlobalShortcut } from './lib/appShortcuts'
-  import { createOptimisticSortState, runOptimisticSort } from './lib/appSortQueue'
   import { getAdminBookmarkCategoryOptions } from './lib/adminListState'
   import { getNextThemePreference, resolveAppThemeState } from './lib/appThemeState'
   import type { ImportSource } from './lib/importData'
@@ -178,7 +172,6 @@
 
   const authViewIntent = createAuthViewIntent()
   let loginModalOpen = false
-  let bookmarkModalOpen = false
   let homeFocusCategoryId: number | null = null
   let spotlightOpen = false
   let viewBookmark: PublicBookmark | null = null
@@ -220,17 +213,10 @@
     else void openSpotlight()
   }
 
-  let bookmarkModalMode: 'create' | 'edit' = 'create'
-
-  let activeBookmark: Partial<BookmarkFormValue> | null = null
-  // 分类与书签共用一个编辑意图计数器（见 lib/appEditIntent），必须注入同一个实例。
+  // 分类与书签共用一个编辑意图计数器（见 lib/appEditIntent），两个控制器注入同一个实例。
   const editIntent = createEditIntentCounter()
 
-  let savingBookmark = false
   let savingSettings = false
-  let deletingBookmarkId: number | null = null
-
-  let bookmarkError = ''
   let settingsError = ''
 
   let importExportState = createImportExportState()
@@ -238,7 +224,6 @@
   let prefersReducedMotion = false
   // 只在浏览器里创建：SSR/测试环境没有 document 和 URL.createObjectURL。
   let customScriptController: CustomScriptController | null = null
-  const bookmarkSortState = createOptimisticSortState()
 
   configureDataService({
     onRootError: (message, error) => {
@@ -411,18 +396,50 @@
     createReturnToHome: categoryCreateReturnToHome,
   } = categoryController.getState()
 
+  // 书签的新建 / 编辑 / 提交 / 删除 / 批量删除 / 批量移动 / 排序 / 跨分类整理见 lib/appBookmarkController，
+  // 与分类控制器共用同一个 editIntent。
+  const bookmarkController = createBookmarkController({
+    onChange: (next) => {
+      bookmarkModalOpen = next.modalOpen
+      bookmarkModalMode = next.modalMode
+      if (activeBookmark !== next.active) activeBookmark = next.active
+      savingBookmark = next.saving
+      deletingBookmarkId = next.deletingId
+      bookmarkError = next.error
+    },
+    editIntent,
+    api,
+    getSession: () => get(authStore).session,
+    readAdminData: () => get(adminStore).data,
+    isLoggedIn,
+    openLogin: handleOpenLogin,
+    ensureLoggedInDataLoaded,
+    ensureLazyComponent: (name) => lazyComponents.ensure(name),
+    readAdminDataForEdit,
+    requestConfirmation,
+    applyLocalBookmarkUpsert,
+    applyLocalBookmarkDelete,
+    applyLocalBookmarkSort,
+    refreshBookmarkIconCacheInBackground,
+    persistCurrentAdminData,
+    refreshAdminDataAfterMutation,
+    refreshLoggedInData,
+    setRootError: (message) => {
+      rootError = message
+    },
+  })
+  let {
+    modalOpen: bookmarkModalOpen,
+    modalMode: bookmarkModalMode,
+    active: activeBookmark,
+    saving: savingBookmark,
+    deletingId: deletingBookmarkId,
+    error: bookmarkError,
+  } = bookmarkController.getState()
+
   function resetSettingsState(): void {
     settingsError = ''
     savingSettings = false
-  }
-
-  function resetBookmarkState(): void {
-    editIntent.next()
-    bookmarkModalOpen = false
-    bookmarkModalMode = 'create'
-    activeBookmark = null
-    bookmarkError = ''
-    savingBookmark = false
   }
 
   async function openLoginUseCase(): Promise<void> {
@@ -479,7 +496,7 @@
     if (isLoggedIn()) return revocationWarning
     categoryController.reset()
     resetSettingsState()
-    resetBookmarkState()
+    bookmarkController.reset()
     adminStore.reset()
     await clearCachedAdminData()
     if (isLoggedIn()) return revocationWarning
@@ -533,138 +550,6 @@
     replaceBrowserPath('/admin')
     currentView = 'admin'
   }
-  async function handleOpenCreateBookmark(categoryId?: string | number): Promise<void> {
-    editIntent.next()
-    if (!isLoggedIn()) {
-      await handleOpenLogin()
-      return
-    }
-
-    bookmarkError = ''
-    if (!await ensureLoggedInDataLoaded()) {
-      return
-    }
-    const fallbackCategoryId = categoryId ?? get(adminStore).data.categories[0]?.id
-    await lazyComponents.ensure('BookmarkEditModal')
-    bookmarkModalMode = 'create'
-    activeBookmark = createBookmarkDraft(fallbackCategoryId)
-    bookmarkModalOpen = true
-  }
-
-  async function handleEditBookmark(bookmark: { id: string | number }): Promise<void> {
-    const intent = editIntent.next()
-    const editSession = get(authStore).session
-    if (!isLoggedIn()) {
-      await handleOpenLogin()
-      return
-    }
-    bookmarkError = ''
-    try {
-      const data = await readAdminDataForEdit()
-      if (!data || intent !== editIntent.current()) return
-      const current = data.bookmarks.find(item => item.id === Number(bookmark.id))
-      if (!current) throw new Error('书签已不存在，请刷新后重试。')
-      await lazyComponents.ensure('BookmarkEditModal')
-      if (!isLoggedIn() || get(authStore).session !== editSession || intent !== editIntent.current()) return
-      bookmarkModalMode = 'edit'
-      activeBookmark = toBookmarkForm(current)
-      bookmarkModalOpen = true
-      refreshBookmarkIconCacheInBackground(Number(bookmark.id))
-    } catch (error) {
-      if (intent === editIntent.current()) rootError = `无法读取书签的原始编辑数据：${getErrorMessage(error)}`
-    }
-  }
-
-  async function handleCloseBookmarkModal(): Promise<void> {
-    resetBookmarkState()
-  }
-
-  async function handleSubmitBookmark(form: BookmarkFormValue): Promise<void> {
-    // 同分类提交（appCategoryController 的 submit）：意图只看表单，resetBookmarkState() 之后 mode 已经变回 'create'。
-    const isEdit = form.id != null
-    const submitSession = get(authStore).session
-    const isCurrent = () => submitSession !== null && get(authStore).session === submitSession
-    savingBookmark = true
-    bookmarkError = ''
-
-    await runAdminMutation({
-      isCurrent,
-      run: () =>
-        isEdit
-          ? api.bookmarks.update(Number(form.id), toBookmarkPayload(form))
-          : api.bookmarks.create(toBookmarkPayload(form)),
-      onSuccess: async (bookmark) => {
-        resetBookmarkState()
-        await applyLocalBookmarkUpsert(bookmark)
-        if (!isCurrent()) return
-        await refreshAdminDataAfterMutation()
-        if (isCurrent()) refreshBookmarkIconCacheInBackground(bookmark.id)
-      },
-      successMessage: (bookmark) =>
-        isEdit ? `书签「${bookmark.title}」已更新` : `书签「${bookmark.title}」已创建`,
-      onError: (message) => {
-        bookmarkError = message
-      },
-      onSettled: () => {
-        savingBookmark = false
-      },
-    })
-  }
-
-  async function handleDeleteBookmark(bookmark: { id: string | number; title: string }): Promise<void> {
-    const confirmed = await requestConfirmation(createDeleteBookmarkConfirmation(bookmark.title))
-    if (!confirmed) return
-
-    const bookmarkId = Number(bookmark.id)
-    deletingBookmarkId = bookmarkId
-    bookmarkError = ''
-
-    await runAdminMutation({
-      run: () => api.bookmarks.remove(bookmarkId),
-      onSuccess: async () => {
-        resetBookmarkState()
-        await applyLocalBookmarkDelete(bookmarkId)
-        await refreshAdminDataAfterMutation()
-      },
-      successMessage: () => `书签「${bookmark.title}」已删除`,
-      onError: (message) => {
-        bookmarkError = message
-      },
-      onSettled: () => {
-        deletingBookmarkId = null
-      },
-    })
-  }
-
-  async function handleBatchDeleteBookmarks(ids: number[]): Promise<void> {
-    if (ids.length === 0) return
-    if (!await requestConfirmation(createBatchDeleteConfirmation('bookmark', ids.length))) return
-
-    await runAdminMutation({
-      run: () => api.bookmarks.batchDelete(ids),
-      onSuccess: async (result) => {
-        if (result.deleted > 0) await refreshAdminDataAfterMutation()
-      },
-      successMessage: (result) => `已删除 ${result.deleted} 个书签`,
-      onError: (message) => {
-        bookmarkError = message
-      },
-    })
-  }
-  async function handleBatchMoveBookmarks(payload: BookmarkBatchMoveReq): Promise<void> {
-    bookmarkError = ''
-
-    await runAdminMutation({
-      run: () => api.bookmarks.batchMove(payload),
-      onSuccess: () => refreshAdminDataAfterMutation(),
-      successMessage: (result) => `已移动 ${result.moved} 个书签`,
-      onError: (message) => {
-        bookmarkError = message
-      },
-      rethrow: true,
-    })
-  }
-
   async function handleSubmitSettings(payload: SettingsSubset): Promise<void> {
     savingSettings = true
     settingsError = ''
@@ -690,42 +575,13 @@
     authStore.setSession(null)
     categoryController.reset()
     resetSettingsState()
-    resetBookmarkState()
+    bookmarkController.reset()
     adminStore.reset()
     await clearCachedAdminData()
     rootError = '管理员密码已更新，请使用新密码重新登录。'
     await lazyComponents.ensure('LoginModal')
     loginModalOpen = true
     currentView = 'login'
-  }
-
-  async function handleSortBookmarks(ids: Array<string | number>): Promise<void> {
-    bookmarkError = ''
-
-    await runOptimisticSort(bookmarkSortState, ids, {
-      applyLocalSort: (sortedIds) => applyLocalBookmarkSort(sortedIds, false),
-      saveRemoteSort: (sortedIds) => api.bookmarks.sort(sortedIds),
-      persist: persistCurrentAdminData,
-      onSuccess: refreshAdminDataAfterMutation,
-      restoreOnError: () => refreshLoggedInData(true),
-      onError: (error) => {
-        bookmarkError = getErrorMessage(error)
-      },
-    })
-  }
-
-  // 跨分类整理是全量提交：失败时草稿与服务端状态已不一致，
-  // 先按兄弟排序处理器的约定回滚到服务端数据，再把原始错误交给首页展示。
-  async function handleReorganizeBookmarks(
-    categoryOrders: BookmarkReorganizeReq['category_orders'],
-  ): Promise<void> {
-    try {
-      await api.bookmarks.reorganize(categoryOrders)
-    } catch (error) {
-      await refreshLoggedInData(true)
-      throw error
-    }
-    await refreshAdminDataAfterMutation()
   }
 
   async function handleExportData(selection: BackupSelectionInput): Promise<void> {
@@ -829,9 +685,9 @@
           onOpenCreateCategory={categoryController.openCreate}
           onOpenCreateRootCategory={categoryController.openCreateRoot}
           focusCategoryId={homeFocusCategoryId}
-          onOpenCreateBookmark={handleOpenCreateBookmark}
-          onEditBookmark={handleEditBookmark}
-          onReorganizeBookmarks={handleReorganizeBookmarks}
+          onOpenCreateBookmark={bookmarkController.openCreate}
+          onEditBookmark={bookmarkController.openEdit}
+          onReorganizeBookmarks={bookmarkController.reorganize}
           onSwitchToAdmin={handleSwitchToAdmin}
           onLogout={handleLogout}
           onOpenLogin={handleOpenLogin}
@@ -877,16 +733,16 @@
         onBatchDeleteCategories={categoryController.batchRemove}
         onCloseCategoryModal={categoryController.close}
         onSubmitCategory={categoryController.submit}
-        onOpenCreateBookmark={handleOpenCreateBookmark}
-        onEditBookmark={handleEditBookmark}
-        onDeleteBookmark={handleDeleteBookmark}
-        onBatchDeleteBookmarks={handleBatchDeleteBookmarks}
-        onBatchMoveBookmarks={handleBatchMoveBookmarks}
+        onOpenCreateBookmark={bookmarkController.openCreate}
+        onEditBookmark={bookmarkController.openEdit}
+        onDeleteBookmark={bookmarkController.remove}
+        onBatchDeleteBookmarks={bookmarkController.batchRemove}
+        onBatchMoveBookmarks={bookmarkController.batchMove}
         onSubmitSettings={handleSubmitSettings}
         onVerifyDevice={() => refreshLoggedInData(true)}
         onChangePassword={handleChangePassword}
         onSortCategories={categoryController.sort}
-        onSortBookmarks={handleSortBookmarks}
+        onSortBookmarks={bookmarkController.sort}
         onSelectTab={handleAdminTabChange}
         importing={importExportState.importing}
         exporting={importExportState.exporting}
@@ -926,9 +782,9 @@
         mode={bookmarkModalMode}
         value={activeBookmark}
         categories={getAdminBookmarkCategoryOptions(adminCategories)}
-        onSubmit={handleSubmitBookmark}
-        onCancel={handleCloseBookmarkModal}
-        onDelete={handleDeleteBookmark}
+        onSubmit={bookmarkController.submit}
+        onCancel={bookmarkController.close}
+        onDelete={bookmarkController.remove}
         deleting={deletingBookmarkId === Number(activeBookmark?.id)}
         imageHostUrl={adminData.settings?.image_host_url ?? ''}
       />
