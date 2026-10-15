@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 // 代码审查三轮第 23 项起（APP_SPLIT_PLAN 第 8f 步起）：层级 0 视图与层级 1+ 组件改为 runes 模式的源码护栏。
@@ -9,8 +9,10 @@ const read = (path: string) => readFileSync(path, 'utf8')
 
 function expectRunes(path: string): void {
   const source = read(path)
-  const script = source.slice(source.indexOf('<script'), source.indexOf('</script>'))
-  const markup = source.slice(source.indexOf('</script>'))
+  // 实例脚本（Admin 另有 `<script module>`，只放类型导出）
+  const start = source.search(/<script(?! module)[^>]*>/)
+  const script = source.slice(start, source.indexOf('</script>', start))
+  const markup = source.slice(source.indexOf('</script>', start))
 
   expect(source.startsWith('<svelte:options runes />')).toBe(true)
   expect(script).not.toMatch(/\bexport let\b/)
@@ -201,5 +203,67 @@ describe('8i: level-2 components and Toast in runes mode', () => {
 
   it('keeps the legacy whole-form dependency of the candidate refresh', () => {
     expect(read('src/components/BookmarkEditModal.svelte')).toContain('for (const key in form) void form[key as keyof BookmarkFormValue]')
+  })
+})
+
+const TOP_LEVEL_8J = [
+  'src/components/CategorySection.svelte',
+  'src/components/settings/AdvancedSettingsSection.svelte',
+  'src/components/settings/SettingsHomePreview.svelte',
+  'src/views/Admin.svelte',
+  'src/components/SettingsPanel.svelte',
+  'src/views/Home.svelte',
+]
+
+describe('8j: top-level components in runes mode', () => {
+  it.each(TOP_LEVEL_8J)('%s opts into runes and drops the legacy syntax', expectRunes)
+
+  it('keeps the settings form a deep $state so section field bindings are reactive', () => {
+    const panel = read('src/components/SettingsPanel.svelte')
+    expect(panel).toContain('let form: SettingsPanelValue = $state(cloneSettingsForm(emptySettingsForm))')
+    expect(panel).toContain('let initialForm: SettingsPanelValue = $state.raw(cloneSettingsForm(emptySettingsForm))')
+    expect(panel).toContain('<SettingsHomePreview settings={normalizedForm} bind:theme={previewTheme} />')
+    expect(read('src/components/settings/AdvancedSettingsSection.svelte')).toContain('let { form = $bindable(), saving = false }: Props = $props()')
+    expect(read('src/components/settings/SettingsHomePreview.svelte')).toContain("theme = $bindable('light')")
+  })
+
+  it('binds only what parents bind two-way', () => {
+    expect(read('src/views/Admin.svelte')).toContain("let importSource: ImportSource = $state('cf-navs')")
+    expect(read('src/views/Home.svelte')).toContain('bind:query={searchQuery}')
+    for (const path of ['src/components/CategorySection.svelte', 'src/views/Admin.svelte', 'src/views/Home.svelte', 'src/components/SettingsPanel.svelte']) {
+      expect(read(path), path).not.toContain('$bindable')
+    }
+  })
+
+  it('writes the resolved home section id back only when it changes', () => {
+    const home = read('src/views/Home.svelte')
+    expect(home).toContain('const next = resolveHomeActiveSectionId(navigationSections, activeId)')
+    expect(home).toContain('if (next !== activeId) untrack(() => { activeId = next })')
+    expect(home).toContain('let selectedCategoryIds = $state.raw(new Map<number, number>())')
+    expect(home).toContain('let homeSortDraft: PublicBookmark[] = $state.raw([])')
+  })
+
+  it('uses a module script and dynamic components instead of svelte:component', () => {
+    const admin = read('src/views/Admin.svelte')
+    expect(admin).toContain('<script module lang="ts">')
+    expect(admin).toContain('<CategoryEditModalComponent')
+  })
+})
+
+describe('step 8 complete: every component under src/ is in runes mode', () => {
+  const files = (dir: string): string[] =>
+    readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+      const path = `${dir}/${entry.name}`
+      return entry.isDirectory() ? files(path) : path.endsWith('.svelte') ? [path] : []
+    })
+
+  it('has no legacy component and no `export let` left', () => {
+    const all = files('src')
+    expect(all.length).toBeGreaterThan(60)
+    for (const path of all) {
+      const source = read(path)
+      expect(source.startsWith('<svelte:options runes />'), path).toBe(true)
+      expect(source, path).not.toMatch(/\bexport let\b/)
+    }
   })
 })

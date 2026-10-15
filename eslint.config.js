@@ -76,6 +76,16 @@ export default tseslint.config(
       },
     },
   },
+  // runes 模块（.svelte.ts，如 tests/helpers/reactiveState.svelte.ts）同样由 svelte 解析器
+  // 接管以识别 $state 等 rune，脚本本体需交给 typescript-eslint 解析（否则泛型等 TS 语法报错）。
+  {
+    files: ['**/*.svelte.ts'],
+    languageOptions: {
+      parserOptions: {
+        parser: tseslint.parser,
+      },
+    },
+  },
 
   {
     rules: {

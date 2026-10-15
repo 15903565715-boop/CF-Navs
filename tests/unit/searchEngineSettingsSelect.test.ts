@@ -4,11 +4,13 @@ import { cleanup, fireEvent, render } from '@testing-library/svelte'
 import { tick } from 'svelte'
 import SearchEngineSettingsSection from '../../src/components/settings/SearchEngineSettingsSection.svelte'
 import { createSettingsFormState } from '../../src/lib/settingsForm'
+import { reactiveState } from '../helpers/reactiveState.svelte'
 
 afterEach(cleanup)
 
+// 第 8j 步起 SettingsPanel 的 form 是 $state：这里同样传深层代理，模拟真实父组件。
 function engineForm() {
-  return createSettingsFormState({
+  return reactiveState(createSettingsFormState({
     search_engine: {
       current: 'Google',
       engines: [
@@ -16,7 +18,7 @@ function engineForm() {
         { name: 'Bing', icon: '', url_template: 'https://www.bing.com/search?q={q}' },
       ],
     },
-  })
+  }))
 }
 
 describe('默认搜索引擎下拉的真实事件序列（Issue #25 复现）', () => {
