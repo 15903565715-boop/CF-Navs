@@ -11,6 +11,7 @@
     "dev:web": "vite",
     "build": "vite build",
     "build:icon-compat": "vite build --mode icon-compat",
+    "check:bundle": "node scripts/check-bundle-size.mjs",
     "type-check": "tsc --noEmit && svelte-check --tsconfig ./tsconfig.json && npm run type-check:tests",
     "type-check:tests": "tsc --noEmit -p tsconfig.tests.json",
     "lint": "eslint . --max-warnings 0",
