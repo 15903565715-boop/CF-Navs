@@ -9,6 +9,7 @@
 
 ### 修复
 
+- **归档过时的计划文档**（代码审查三轮第 33 项）：`docs/plans/` 中 16 份已交付、已被取代或只代表某次采集时刻的文档移入 `docs/plans/_archive/`（Spotlight、管理员找回两组需求文档仍写着「尚未实现」，实际已上线；其余为已完成轮次的实施记录与 2026-09 的 Issue / PR 快照），新增归档说明 `docs/plans/_archive/README.md` 并在 `docs/README.md` 的目录表登记。仓库内所有指向这些文件的路径（含本文件历史条目与 `src/lib/pageScrollLock.ts` 注释）同步改为新路径，归档文档内部的相对链接也已修正；全仓 Markdown 相对链接复核 0 处失效。仍在使用的需求基线（REQ-15 图标本地优先、图标请求性能、Issue #31、PH / RD 决策记录、前端体验评估）保留原位。
 - **CI 增加首屏包体积门禁**（代码审查三轮第 32 项）：新增 `scripts/check-bundle-size.mjs`（`npm run check:bundle`）与 `bundle-budget.json`，读取 `dist/index.html` 引用的入口脚本、modulepreload 与样式表，按原始字节和 gzip 字节对比预算，超出即以非零退出；CI 在 Build 之后执行。预算以当前构建为基线留约 2% 余量（JS 283000 / gzip 97500，CSS 84000 / gzip 14500 字节；基线 JS 277281 / 95258，CSS 82136 / 13924）。有意增大首屏时须在同一提交调高预算并写明原因。新增 `tests/unit/bundleBudget.test.ts`（4 项）；人为把预算调到基线以下时脚本按预期失败。
 - **写后不再无条件整包重拉后台数据**（代码审查三轮第 31 项）：原先每次增删改、排序成功后都 `refreshLoggedInData(true)` 强制重拉 `/api/admin/data`。现在请求层把写响应包络上的 `data_version` 广播出去（`subscribeMutationDataVersion`，在 `initAppServices` 里接到 `dataService.recordMutationDataVersion`），单条分类 / 书签的新建、编辑、删除与两类排序在用服务端返回值应用到本地后改调 `confirmLoggedInDataAfterLocalMutation`：只请求一次 `/api/data/version`，服务端版本恰为本会话最后一次写入回报的版本且数据集未变时，只更新版本号并落快照；版本不符（其它标签页 / 设备写过）、没有版本信息、或有一次强制整包重拉尚未完成时，退回原来的整包重拉。批量删除 / 移动、整理、导入等没有本地应用的写入仍整包重拉；登录会话切换时清空记录的版本。测试：`dataService.test.ts` 新增 7 项（各分支与失败传播；去掉「未完成整包重拉」「数据集」「会话切换清空」「更新版本号」任一判断的变异均被捕获），新增 `tests/unit/postWriteRefresh.test.ts`（3 项：请求层只在成功且带版本的包络上广播；每类写入走哪条刷新路径），`appServices.test.ts` 增 1 项；控制器差分对照测试中两种刷新映射到同一步，路径由新用例单独钉住。`smoke` 新增 11 项（112 → 123）：新建 / 更新 / 排序 / 删除书签与新建 / 删除分类后，响应 `data_version` 等于随后 `/api/data/version`，写接口返回的行与 `/api/admin/data` 中同一行逐字段一致，排序后 `sort` 等于提交下标——这是本地应用可替代重拉的前提。首屏 `index` 276.43 → 277.28 kB（gzip 94.93 → 95.34 kB）。
 - **状态层边界：会话存储独立、模块接线集中到启动入口**（代码审查三轮第 30 项）：① 新增 `src/lib/authSession.ts`，把登录会话的 localStorage 持久化、进程内缓存与跨标签页 `storage` 监听从 `api.ts` 移出，`api.ts` 只负责请求（401 时经 `clearStoredAuthSession` 清会话）；② `stores.ts` 不再直接引用 `iconDeviceState` / `iconAccessKey`，`authStore` 改为通过 `configureLifecycle({ onLogoutStart, onSessionCleared })` 钩子通知外部，未接线时为空操作；③ `dataService.ts` 去掉模块加载时的 `objectIconLoader.configure(...)` 副作用；④ 新增 `src/lib/appServices.ts` 的 `initAppServices()`（幂等），由 `main.ts` 在挂载 App 前显式调用，统一接上「登出开始 → 设备副本退出」「会话消失 → 清图标访问 key」「图标描述符 → dataService」三条线，时序与原先一致（登出先于撤销请求通知设备，会话清除后清 key）。测试：新增 `tests/unit/appServices.test.ts`（8 项，含接线前无副作用、登出调用顺序、401 / 其它标签页退出清 key、描述符转发、幂等与源码边界护栏；去掉任一条钩子调用或转发的变异均被捕获），4 个测试文件只改了 mock / 导入路径（`api` → `authSession`）。首屏 `index` 276.18 → 276.43 kB（gzip 94.65 → 94.93 kB），为新增接线模块的固定开销。
@@ -705,7 +706,7 @@
 
 ### 后台管理界面审计整改 P0（对比度 / 焦点环 / 主题基建）
 
-- 由 web-design-guidelines / frontend-design / brand-guidelines / extract-design-system / theme-factory 五个前端技能驱动的只读审计，决策记录 `docs/plans/ADMIN_UI_REDESIGN_DEVELOPMENT.md`；本版本落地其 P0 批次。P1（站点设置布局拆分、单滚动、预览联动）与 L2/L3 浏览器验证欠账见该文档。
+- 由 web-design-guidelines / frontend-design / brand-guidelines / extract-design-system / theme-factory 五个前端技能驱动的只读审计，决策记录 `docs/plans/_archive/ADMIN_UI_REDESIGN_DEVELOPMENT.md`；本版本落地其 P0 批次。P1（站点设置布局拆分、单滚动、预览联动）与 L2/L3 浏览器验证欠账见该文档。
 - 对比度按 WCAG AA 复算收敛：浅色占位符 `#94a3b8→#64748b`（2.56→4.76）、暗色占位符 `#64748b→#94a3b8`（3.59→6.66）、后台徽标文字 `#64748b→#475569`（4.34→6.92）、浅色危险红 `#dc2626→#b91c1c`（4.41→5.91）。
 - 主题基建：`src/app.css` 补 `color-scheme: light` 与 `:root[data-theme='dark']{color-scheme:dark}`；`index.html` 内联脚本让 `theme-color` 随 `data-theme` 动态（暗 `#08111f` / 浅 `#f8fafc`，MutationObserver 监听）。
 - 消灭 token 漂移：`adminListPanels.css` 主按钮硬编码 `#2563eb/#fff` 收敛到 `var(--admin-accent)` + 新增 `--admin-accent-ink`（浅 `#ffffff` / 暗 `#0f172a`）。独立复核发现并修复 token 化引入的暗色主按钮对比度回归（白字 on `#7dd3fc` 仅 1.67:1），修复后浅 5.17 / 暗 10.71。
@@ -714,7 +715,7 @@
 
 ### 后台管理界面审计整改 P1/P2（设置布局 / 暗色层级 / 无障碍）
 
-- 承接 `docs/plans/ADMIN_UI_REDESIGN_DEVELOPMENT.md` 的 P1/P2 批次（P0 已在上一节交付）。
+- 承接 `docs/plans/_archive/ADMIN_UI_REDESIGN_DEVELOPMENT.md` 的 P1/P2 批次（P0 已在上一节交付）。
 - 站点设置信息架构拆分：二级菜单 6→7，新增「高级与视觉」，把 `AdvancedSettingsSection`（背景 / 尺寸 / 卡片表面 / 分类标题视觉）从「外观与卡片」移出，后者只留配色方案与卡片风格。外观分区展开高级后此前编辑区内滚约 1149px（约 3.5 屏），拆分后单分区编辑区内滚为 0。
 - 设置页去三层嵌套滚动：`.settings-panel` 移除 `height: clamp(...)` 锁高与 `overflow: hidden`，编辑区不再自成滚动，交由外层 `.admin-content` 单一滚动；`.settings-preview-column` 改 `position: sticky` 桌面粘性跟随；`@media (max-width:1320px)` 收起为单列并让预览回落静态流。
 - 布局与导航小栅格：`.navigation-grid > .field`（显示位置）占整行，两个条件开关成对落在下一行，修复「分类分行显示」开关此前单独占一行、右侧留白的孤立感。
@@ -1244,7 +1245,7 @@
 
 - `docs/reference/API_CONTRACT.md` 设置接口新增字段级契约表（PROB-08）：按 `SETTINGS_KEYS` 顺序列全 30 个键的类型、取值范围、归一化行为与默认值，并显式区分「服务端钳制」与「只是类型注释、服务端不钳制」（`site_title_font_size`、`card_background_opacity`、`background.blur`/`mask`、`content_layout` 数值项）；同时点明未知键在写入与读取聚合两个方向都会被丢弃，`most_visited_count` 与 `site_title_show` 在 PUT 没有类型校验、只在读取时归一化。原先落在浏览器同步小节之后的 4 段设置说明移回「设置接口」标题下，长度上限段不再重复逐字段数字。
 - `docs/guides/TROUBLESHOOTING.md` 补齐 `/install` 失败三态的定位路径（PROB-22）：核对发现三态原先都无法靠用户可见文案定位（页面显示「还缺少部署密钥」「还缺少存储绑定」「数据库暂时不可用」，文档小节标题却是「安装令牌无效」「Missing binding」「数据库初始化失败」），且 `unavailable` / `session_store_unreachable` 完全没有对应小节。现新增状态对照表（页面标题 + `data.state` / `data.reason` + 触发条件 → 小节），把用户文案写进既有小节标题，新增「会话存储暂时不可用」小节，并区分 `database_unreachable` 与 schema 缺失（手动执行 `schema.sql` 修不好前者）。
-- `docs/plans/DEV_TASK_BREAKDOWN_UI_NAV_EXPORT.md` §12 明确台账里的数值断点证据属于「一次性人工 CDP 证据，不构成持续回归」（PROB-16）。把它们补进 `scripts/chrome-regression.mjs` 需要可达的 `BASE_URL` 与真实管理员凭据（该脚本的安全场景会真实改写再还原管理员密码），还需额外引入视口仿真、确定性分类/书签 fixture 与下载断言；`AGENTS.md` 禁止未经要求启动本地服务或部署，因此这些断点并入 PROB-13 的部署后验收，回归套件本身未改动。
+- `docs/plans/_archive/DEV_TASK_BREAKDOWN_UI_NAV_EXPORT.md` §12 明确台账里的数值断点证据属于「一次性人工 CDP 证据，不构成持续回归」（PROB-16）。把它们补进 `scripts/chrome-regression.mjs` 需要可达的 `BASE_URL` 与真实管理员凭据（该脚本的安全场景会真实改写再还原管理员密码），还需额外引入视口仿真、确定性分类/书签 fixture 与下载断言；`AGENTS.md` 禁止未经要求启动本地服务或部署，因此这些断点并入 PROB-13 的部署后验收，回归套件本身未改动。
 - `docs/plans/TODO.md` 与 `docs/plans/PROBLEM_HANDLING_TASK_LIST.md` 同步勾选与「处理结果」行。
 - 验证：`npm run type-check` 0 errors / 0 warnings；`npm test` 100 files / 683 passed；`npm run build` 成功；`git diff --check` 通过；独立 Reviewer 逐条复核后判定 PASS。未运行部署、`smoke-test.mjs`、`chrome-regression.mjs` 与浏览器套件；PROB-02 的批量移动弹窗默认值只有纯函数单测与源码接线断言，未做真机目视确认。
 
@@ -1272,7 +1273,7 @@
 - PROB-29、PROB-30 是实现 PROB-01 与 REQ-08 时新发现的条目：R-05 的「禁用非法目标」表述仍待改写；`src/lib/appData.ts:253-255` 在无预设时仍回退旧的共用冷蓝 `#2563eb`/`#7dd3fc`（本轮授权范围只含 13 套毛玻璃预设，未改）。
 - `docs/reference/API_CONTRACT.md` 书签端点表补上此前漏列的 `POST /api/bookmarks/reorganize`，并补齐其请求形状与 `CONFLICT=1006` 语义。
 - `docs/reference/GITHUB_ISSUES_REQUIREMENTS.md` 快照更新到 2026-09-03，Open 数量 5 → 6，补入 #15（EdgeOne 部署兼容请求，标题仍是模板占位，维护者已回复未排期），并说明它未获实现承诺、未分配 R 编号。
-- `docs/plans/UI_UX_Plan.md` 补文首状态块，明确它是已被 `SETTINGS_UI_UX_ADJUSTMENT_REQUIREMENTS.md` 取代的原始草案，不作为待办；`docs/README.md` 计划清单补上它与 `DEV_TASK_BREAKDOWN_GITHUB_ISSUES.md`。
+- `docs/plans/_archive/UI_UX_Plan.md` 补文首状态块，明确它是已被 `SETTINGS_UI_UX_ADJUSTMENT_REQUIREMENTS.md` 取代的原始草案，不作为待办；`docs/README.md` 计划清单补上它与 `DEV_TASK_BREAKDOWN_GITHUB_ISSUES.md`。
 - 验证：`npm run type-check` 0 errors / 0 warnings；`npm test` 100 files / 680 passed；`npm run build` 成功；`git diff --check` 通过。未运行部署、`smoke-test.mjs`、`chrome-regression.mjs` 与浏览器套件。
 
 

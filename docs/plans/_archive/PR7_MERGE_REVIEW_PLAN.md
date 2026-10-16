@@ -217,5 +217,5 @@ README 的功能表与既有各行使用一致的 emoji 图标，不存在此前
 
 - PR #7 的核心功能由 @Helenvin 提交：私密书签、私密分类、首页跨分类排序和浏览器书签单向同步。
 - 这些功能经过安全审计、缺陷修复和回归验证后进入 `develop` 与 `main`；贡献者署名保留在集成提交和 PR 记录中。
-- 公开发布/变更说明见根目录 [`CHANGELOG.md`](../../CHANGELOG.md)。
+- 公开发布/变更说明见根目录 [`CHANGELOG.md`](../../../CHANGELOG.md)。
 - Issue #8 的 Chrome 侧边栏白色滚动条问题已在后续修复中处理；其中“部分导出备份”和“顶部导航分行显示”也已完成本地实现与回归，详见 `PARTIAL_EXPORT_AND_TOP_NAV_WRAP_REQUIREMENTS.md` §4 和 `DEV_TASK_BREAKDOWN_UI_NAV_EXPORT.md` §12。Issue 云端状态仍按 `docs/reference/GITHUB_ISSUES_REQUIREMENTS.md` 记录。
