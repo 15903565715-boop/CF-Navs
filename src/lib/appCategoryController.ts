@@ -56,6 +56,8 @@ export interface CategoryControllerDeps {
   applyLocalCategorySort: (parentId: number | null, ids: number[], refreshMissing?: boolean) => Promise<void>
   persistCurrentAdminData: () => Promise<void>
   refreshAdminDataAfterMutation: () => Promise<void>
+  /** 写入结果已用服务端返回值应用到本地之后调用：只确认版本，期间有别的写入才整包重拉。 */
+  confirmAdminDataAfterLocalMutation: () => Promise<void>
   refreshLoggedInData: (force?: boolean) => Promise<void>
   setRootError: (message: string) => void
   setCurrentView: (view: AppView) => void
@@ -170,7 +172,7 @@ export function createCategoryController(deps: CategoryControllerDeps): Category
       onSuccess: async (category) => {
         reset()
         await deps.applyLocalCategoryUpsert(category)
-        await deps.refreshAdminDataAfterMutation()
+        await deps.confirmAdminDataAfterLocalMutation()
         if (returnToHome) {
           deps.setCurrentView('home')
           deps.setHomeFocusCategoryId(null)
@@ -211,7 +213,7 @@ export function createCategoryController(deps: CategoryControllerDeps): Category
       run: () => deps.api.categories.remove(categoryId),
       onSuccess: async () => {
         await deps.applyLocalCategoryDelete(categoryId)
-        await deps.refreshAdminDataAfterMutation()
+        await deps.confirmAdminDataAfterLocalMutation()
       },
       successMessage: () => `分类「${category.title}」已删除`,
       onError: (message) => {
@@ -255,7 +257,7 @@ export function createCategoryController(deps: CategoryControllerDeps): Category
       applyLocalSort: (sortedIds) => deps.applyLocalCategorySort(parentId, sortedIds, false),
       saveRemoteSort: (sortedIds) => deps.api.categories.sort(parentId, sortedIds),
       persist: deps.persistCurrentAdminData,
-      onSuccess: deps.refreshAdminDataAfterMutation,
+      onSuccess: deps.confirmAdminDataAfterLocalMutation,
       restoreOnError: () => deps.refreshLoggedInData(true),
       onError: (caught) => {
         error = getErrorMessage(caught)

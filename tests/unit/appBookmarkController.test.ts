@@ -148,6 +148,8 @@ function doubles(w: World) {
     refreshBookmarkIconCacheInBackground: (id: number) => { w.callSync('refreshIconCache', id) },
     persistCurrentAdminData: (...args: unknown[]) => w.call<void>('persist', ...args),
     refreshAdminDataAfterMutation: () => w.call<void>('refreshAfterMutation'),
+    // 差分对照里与 legacy 的「写后刷新」是同一步；走哪条路径由下方 post-write refresh 用例单独钉住。
+    confirmAdminDataAfterLocalMutation: () => w.call<void>('refreshAfterMutation'),
     refreshLoggedInData: (force?: boolean) => w.call<void>('refreshLoggedIn', force),
   }
 }

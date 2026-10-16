@@ -63,6 +63,10 @@ export function configureDataService(next: DataServiceHooks): void {
 
 // 当前已知的后端数据版本；由聚合获取与版本确认路径维护，仅本模块内部读写。
 let currentDataVersion: string | null = null
+// 本会话最近一次写接口回报的 data_version（见 recordMutationDataVersion），
+// 以及是否有一次整包重拉尚未成功完成（被新的刷新取代或失败）。
+let lastMutationVersion: string | null = null
+let fullRefreshPending = false
 
 // authStore owns identity; this module owns all visible-data refreshes. A session change
 // invalidates pending work synchronously, including anonymous -> login -> logout (ABA).
@@ -76,6 +80,8 @@ authStore.subscribe(({ session }) => {
   sessionEpoch += 1
   refreshEpoch += 1
   currentDataVersion = null
+  lastMutationVersion = null
+  fullRefreshPending = false
   adminStore.reset()
   publicStore.reset()
   bookmarkIconDisplay.clear()
@@ -487,8 +493,40 @@ export function refreshLoggedInData(forceRemote = false): Promise<void> {
   return loadLoggedInData(forceRemote, beginRefresh())
 }
 
+/** 由请求层在每个写响应带回 data_version 时调用（接线见 appServices）。会话切换时清空。 */
+export function recordMutationDataVersion(version: string): void {
+  lastMutationVersion = version
+}
+
+/**
+ * 写入成功且结果已用服务端返回值应用到本地之后调用，替代无条件的整包重拉：
+ * 只请求一次 `/data/version`，若服务端版本正是本会话最后一次写入回报的版本、
+ * 数据集也没换，说明期间没有别的写入，本地状态即为最新，只更新版本号并落快照；
+ * 否则（别的标签页 / 设备写过、没有版本信息、有未完成的整包重拉）退回整包重拉。
+ */
+export function confirmLoggedInDataAfterLocalMutation(): Promise<void> {
+  return confirmAfterLocalMutation(beginRefresh())
+}
+
+async function confirmAfterLocalMutation(isCurrent: IsCurrent): Promise<void> {
+  if (!isCurrent() || !isLoggedIn()) return
+  const expected = lastMutationVersion
+  if (!expected || fullRefreshPending) return loadLoggedInData(true, isCurrent)
+  const requestToken = getAuthToken()
+  const remote = await api.data.version(true)
+  if (!isCurrent()) return
+  if (remote.version !== expected || remote.dataset_epoch !== get(adminStore).data.dataset_epoch) {
+    return loadLoggedInData(true, isCurrent)
+  }
+  await iconDevice.acceptMetadata(remote, requestToken, isCurrent)
+  if (!isCurrent()) return
+  currentDataVersion = remote.version
+  await persistCurrentAdminData(isCurrent)
+}
+
 async function loadLoggedInData(forceRemote: boolean, isCurrent: IsCurrent): Promise<void> {
   if (!isCurrent() || !isLoggedIn()) return
+  if (forceRemote) fullRefreshPending = true
   const requestToken = getAuthToken()
   // 后台预览私密对象图标需要短期授权 key。失败只降级成兜底图标，不影响数据刷新。
   void ensureIconAccessKey(() => api.auth.iconAccess())
@@ -516,6 +554,7 @@ async function loadLoggedInData(forceRemote: boolean, isCurrent: IsCurrent): Pro
     const data = await api.admin.getData({ keepSessionOnUnauthorized: true })
     if (!isCurrent()) return
     applyLoggedInData(data)
+    fullRefreshPending = false
     await iconDevice.acceptMetadata(data, requestToken, isCurrent)
     if (!isCurrent()) return
     await persistCurrentAdminData(isCurrent)

@@ -71,6 +71,7 @@
     persistCurrentAdminData,
     refreshBookmarkIconCacheInBackground,
     readAdminDataForEdit,
+    confirmLoggedInDataAfterLocalMutation,
     refreshLoggedInData,
     refreshPublicData,
     refreshVisibleData,
@@ -127,6 +128,7 @@
     resetAdminData: () => adminStore.reset(),
     clearCachedAdminData,
     refreshLoggedInData,
+    confirmLoggedInDataAfterLocalMutation,
     refreshPublicData,
     readAdminDataForEdit,
     persistCurrentAdminData,
@@ -137,6 +139,7 @@
     openLogin: () => authController.openLogin(),
     ensureLoggedInDataLoaded: () => authController.ensureLoggedInDataLoaded(),
     refreshAdminDataAfterMutation: () => authController.refreshAdminDataAfterMutation(),
+    confirmAdminDataAfterLocalMutation: () => authController.confirmAdminDataAfterLocalMutation(),
     resetCategories: () => categoryController.reset(),
     resetBookmarks: () => bookmarkController.reset(),
     setRootError: (message: string) => {

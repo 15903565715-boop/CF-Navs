@@ -67,6 +67,8 @@ export interface BookmarkControllerDeps {
   refreshBookmarkIconCacheInBackground: (bookmarkId: number) => void
   persistCurrentAdminData: () => Promise<void>
   refreshAdminDataAfterMutation: () => Promise<void>
+  /** 写入结果已用服务端返回值应用到本地之后调用：只确认版本，期间有别的写入才整包重拉。 */
+  confirmAdminDataAfterLocalMutation: () => Promise<void>
   refreshLoggedInData: (force?: boolean) => Promise<void>
   setRootError: (message: string) => void
 }
@@ -181,7 +183,7 @@ export function createBookmarkController(deps: BookmarkControllerDeps): Bookmark
         reset()
         await deps.applyLocalBookmarkUpsert(bookmark)
         if (!isCurrent()) return
-        await deps.refreshAdminDataAfterMutation()
+        await deps.confirmAdminDataAfterLocalMutation()
         if (isCurrent()) deps.refreshBookmarkIconCacheInBackground(bookmark.id)
       },
       successMessage: (bookmark) =>
@@ -211,7 +213,7 @@ export function createBookmarkController(deps: BookmarkControllerDeps): Bookmark
       onSuccess: async () => {
         reset()
         await deps.applyLocalBookmarkDelete(bookmarkId)
-        await deps.refreshAdminDataAfterMutation()
+        await deps.confirmAdminDataAfterLocalMutation()
       },
       successMessage: () => `书签「${bookmark.title}」已删除`,
       onError: (message) => {
@@ -266,7 +268,7 @@ export function createBookmarkController(deps: BookmarkControllerDeps): Bookmark
       applyLocalSort: (sortedIds) => deps.applyLocalBookmarkSort(sortedIds, false),
       saveRemoteSort: (sortedIds) => deps.api.bookmarks.sort(sortedIds),
       persist: deps.persistCurrentAdminData,
-      onSuccess: deps.refreshAdminDataAfterMutation,
+      onSuccess: deps.confirmAdminDataAfterLocalMutation,
       restoreOnError: () => deps.refreshLoggedInData(true),
       onError: (caught) => {
         error = getErrorMessage(caught)

@@ -75,6 +75,8 @@ import {
   getCurrentDataVersion,
   isLoggedIn,
   refreshLoggedInData,
+  confirmLoggedInDataAfterLocalMutation,
+  recordMutationDataVersion,
   readAdminDataForEdit,
   recordBookmarkClick,
   refreshBookmarkIconCacheInBackground,
@@ -375,6 +377,94 @@ describe('dataService.refreshLoggedInData', () => {
     expect(adminCache.readCachedAdminDataEntry).not.toHaveBeenCalled()
     expect(api.data.version).not.toHaveBeenCalled()
     expect(api.admin.getData).toHaveBeenCalledOnce()
+  })
+})
+
+describe('dataService.confirmLoggedInDataAfterLocalMutation', () => {
+  beforeEach(async () => {
+    authStore.setSession(null)
+    authStore.setSession(session)
+    api.admin.getData.mockResolvedValue(makeAdminData('v1'))
+    await refreshLoggedInData(true)
+    vi.clearAllMocks()
+    api.admin.getData.mockResolvedValue(makeAdminData('fresh'))
+  })
+
+  it('falls back to a full refresh when no write has reported a version', async () => {
+    await confirmLoggedInDataAfterLocalMutation()
+    expect(api.data.version).not.toHaveBeenCalled()
+    expect(api.admin.getData).toHaveBeenCalledOnce()
+    expect(getCurrentDataVersion()).toBe('fresh')
+  })
+
+  it('skips the full refetch when the server is exactly at the last reported write version', async () => {
+    recordMutationDataVersion('v2')
+    api.data.version.mockResolvedValue({ version: 'v2', site_title: 'CF-Navs', public_mode: true })
+
+    await confirmLoggedInDataAfterLocalMutation()
+
+    expect(api.data.version).toHaveBeenCalledOnce()
+    expect(api.data.version).toHaveBeenCalledWith(true)
+    expect(api.admin.getData).not.toHaveBeenCalled()
+    expect(getCurrentDataVersion()).toBe('v2')
+    expect(adminCache.writeCachedAdminData).toHaveBeenCalledOnce()
+    expect(adminCache.writeCachedAdminData.mock.calls[0]![1]).toBe('v2')
+  })
+
+  it('refetches when another writer moved the version past the last reported one', async () => {
+    recordMutationDataVersion('v2')
+    api.data.version.mockResolvedValue({ version: 'v3', site_title: 'CF-Navs', public_mode: true })
+
+    await confirmLoggedInDataAfterLocalMutation()
+
+    expect(api.admin.getData).toHaveBeenCalledOnce()
+    expect(getCurrentDataVersion()).toBe('fresh')
+  })
+
+  it('refetches when the dataset epoch changed even if the version matches', async () => {
+    recordMutationDataVersion('v2')
+    api.data.version.mockResolvedValue({ version: 'v2', dataset_epoch: 'e'.repeat(32), site_title: 'CF-Navs', public_mode: true })
+
+    await confirmLoggedInDataAfterLocalMutation()
+
+    expect(api.admin.getData).toHaveBeenCalledOnce()
+  })
+
+  it('refetches while an earlier forced full refresh has not completed', async () => {
+    let release!: (value: AdminData) => void
+    api.admin.getData.mockImplementationOnce(() => new Promise<AdminData>((resolve) => { release = resolve }))
+    const superseded = refreshLoggedInData(true)
+    await Promise.resolve()
+    recordMutationDataVersion('v2')
+    api.data.version.mockResolvedValue({ version: 'v2', site_title: 'CF-Navs', public_mode: true })
+
+    const confirming = confirmLoggedInDataAfterLocalMutation()
+    release(makeAdminData('stale'))
+    await Promise.all([superseded, confirming])
+
+    expect(api.data.version).not.toHaveBeenCalled()
+    expect(api.admin.getData).toHaveBeenCalledTimes(2)
+    expect(getCurrentDataVersion()).toBe('fresh')
+  })
+
+  it('forgets reported versions across a session change', async () => {
+    recordMutationDataVersion('v2')
+    authStore.setSession(null)
+    recordMutationDataVersion('v9')
+    authStore.setSession({ ...session, token: 'tok-2' })
+    api.data.version.mockResolvedValue({ version: 'v2', site_title: 'CF-Navs', public_mode: true })
+
+    await confirmLoggedInDataAfterLocalMutation()
+
+    expect(api.data.version).not.toHaveBeenCalled()
+    expect(api.admin.getData).toHaveBeenCalledOnce()
+  })
+
+  it('propagates a failed version probe so the caller can report it', async () => {
+    recordMutationDataVersion('v2')
+    api.data.version.mockRejectedValue(new Error('offline'))
+    await expect(confirmLoggedInDataAfterLocalMutation()).rejects.toThrow('offline')
+    expect(api.admin.getData).not.toHaveBeenCalled()
   })
 })
 

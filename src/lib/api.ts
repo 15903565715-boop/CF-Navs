@@ -70,6 +70,17 @@ const NO_CACHE_HEADERS = {
 }
 
 let apiBaseUrl = '/api'
+
+// 写接口在包络上附带本次提交后的 data_version。请求层只负责把它广播出去，
+// 由 dataService 判断写后是否还需要整包重拉（接线见 appServices）。
+const mutationVersionListeners = new Set<(version: string) => void>()
+function notifyMutationDataVersion(version: string): void {
+  for (const listener of mutationVersionListeners) listener(version)
+}
+export function subscribeMutationDataVersion(listener: (version: string) => void): () => void {
+  mutationVersionListeners.add(listener)
+  return () => { mutationVersionListeners.delete(listener) }
+}
 function isApiResponse<T>(value: unknown): value is ApiResponse<T> {
   if (!value || typeof value !== 'object') {
     return false
@@ -216,6 +227,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     })
   }
 
+  if (typeof envelope.data_version === 'string' && envelope.data_version) notifyMutationDataVersion(envelope.data_version)
   return envelope.data
 }
 

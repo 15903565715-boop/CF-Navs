@@ -122,6 +122,7 @@ function doubles(w: World, app: AppVars) {
     resetAdminData: () => { w.callSync('resetAdminData') },
     clearCachedAdminData: () => w.call<void>('clearCachedAdminData'),
     refreshLoggedInData: (...args: unknown[]) => w.call('refreshLoggedInData', ...args),
+    confirmLoggedInDataAfterLocalMutation: () => w.call('confirmLoggedInDataAfterLocalMutation'),
     refreshPublicData: (...args: unknown[]) => w.call('refreshPublicData', ...args),
     applyConfigFromSettings: (settings: Settings) => { w.callSync('applyConfigFromSettings', settings) },
     ensureLazyComponent: (name: string) => w.call('ensure', name),

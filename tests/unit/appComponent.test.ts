@@ -73,7 +73,7 @@ const DATA_SERVICE_FNS = [
   'applyConfigFromSettings', 'applyLocalBookmarkDelete', 'applyLocalBookmarkSort', 'applyLocalBookmarkUpsert',
   'applyLocalCategoryDelete', 'applyLocalCategorySort', 'applyLocalCategoryUpsert', 'applyLocalSettings',
   'applyLoggedInData', 'isLoggedIn', 'persistCurrentAdminData', 'refreshBookmarkIconCacheInBackground',
-  'readAdminDataForEdit', 'refreshLoggedInData', 'refreshPublicData', 'refreshVisibleData',
+  'readAdminDataForEdit', 'confirmLoggedInDataAfterLocalMutation', 'refreshLoggedInData', 'refreshPublicData', 'refreshVisibleData',
 ]
 vi.mock('../../src/lib/dataService', () => {
   const module: Record<string, unknown> = {

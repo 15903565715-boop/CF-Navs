@@ -157,6 +157,8 @@ export interface AuthControllerDeps {
   resetAdminData: () => void
   clearCachedAdminData: () => Promise<void>
   refreshLoggedInData: (force?: boolean) => Promise<unknown>
+  /** dataService.confirmLoggedInDataAfterLocalMutation。 */
+  confirmLoggedInDataAfterLocalMutation: () => Promise<unknown>
   refreshPublicData: () => Promise<unknown>
   applyConfigFromSettings: (settings: Settings) => void
   ensureLazyComponent: (name: 'LoginModal' | 'Admin') => Promise<unknown>
@@ -182,6 +184,8 @@ export interface AuthController {
   forgotPassword: () => void
   ensureLoggedInDataLoaded: () => Promise<boolean>
   refreshAdminDataAfterMutation: () => Promise<void>
+  /** 写入结果已在本地应用后的版本确认；失败同样只提示、不抛出。 */
+  confirmAdminDataAfterLocalMutation: () => Promise<void>
   selectAdminTab: (tab: AdminTab) => Promise<void>
 }
 
@@ -198,6 +202,7 @@ export function createAuthController(deps: AuthControllerDeps): AuthController {
     resetAdminData,
     clearCachedAdminData,
     refreshLoggedInData,
+    confirmLoggedInDataAfterLocalMutation,
     refreshPublicData,
     applyConfigFromSettings,
     ensureLazyComponent,
@@ -242,6 +247,14 @@ export function createAuthController(deps: AuthControllerDeps): AuthController {
       await refreshLoggedInData(true)
     } catch (error) {
       // 写入已经成功；刷新失败时保留本地即时结果，并提示用户稍后重试。
+      setRootError(getErrorMessage(error))
+    }
+  }
+
+  async function confirmAdminDataAfterLocalMutation(): Promise<void> {
+    try {
+      await confirmLoggedInDataAfterLocalMutation()
+    } catch (error) {
       setRootError(getErrorMessage(error))
     }
   }
@@ -382,6 +395,7 @@ export function createAuthController(deps: AuthControllerDeps): AuthController {
     forgotPassword,
     ensureLoggedInDataLoaded,
     refreshAdminDataAfterMutation,
+    confirmAdminDataAfterLocalMutation,
     selectAdminTab,
   }
 }

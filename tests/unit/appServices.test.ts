@@ -7,7 +7,9 @@ const h = vi.hoisted(() => ({
   clearIconAccessKey: vi.fn(),
   configure: vi.fn(),
   applyIconDescriptor: vi.fn(),
+  recordMutationDataVersion: vi.fn(),
   logout: vi.fn(),
+  versionListener: null as ((version: string) => void) | null,
 }))
 
 vi.mock('../../src/lib/iconDeviceState', () => ({
@@ -17,12 +19,13 @@ vi.mock('../../src/lib/iconAccessKey', () => ({
   clearIconAccessKey: () => { h.calls.push('clearIconAccessKey'); h.clearIconAccessKey() },
 }))
 vi.mock('../../src/lib/objectIconLoader', () => ({ objectIconLoader: { configure: h.configure } }))
-vi.mock('../../src/lib/dataService', () => ({ applyIconDescriptor: h.applyIconDescriptor }))
+vi.mock('../../src/lib/dataService', () => ({ applyIconDescriptor: h.applyIconDescriptor, recordMutationDataVersion: h.recordMutationDataVersion }))
 vi.mock('../../src/lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../src/lib/api')>()
   return {
     ...actual,
     authApi: { ...actual.authApi, logout: () => { h.calls.push('authApi.logout'); return h.logout() } },
+    subscribeMutationDataVersion: (listener: (version: string) => void) => { h.versionListener = listener; return () => { h.versionListener = null } },
   }
 })
 
@@ -51,7 +54,8 @@ async function load() {
 
 beforeEach(() => {
   h.calls.length = 0
-  for (const fn of [h.beginLogout, h.clearIconAccessKey, h.configure, h.applyIconDescriptor, h.logout]) fn.mockReset()
+  h.versionListener = null
+  for (const fn of [h.beginLogout, h.clearIconAccessKey, h.configure, h.applyIconDescriptor, h.recordMutationDataVersion, h.logout]) fn.mockReset()
   h.logout.mockResolvedValue({ revoked: true })
 })
 
@@ -96,6 +100,16 @@ describe('appServices wiring', () => {
     const listener = h.configure.mock.calls[0]![0] as (next: unknown, expected: unknown) => void
     listener('next', 'expected')
     expect(h.applyIconDescriptor).toHaveBeenCalledWith('next', 'expected')
+  })
+
+  it('forwards write-envelope data versions to dataService and stops on reset', async () => {
+    const { services } = await load()
+    expect(h.versionListener).toBeNull()
+    services.initAppServices()
+    h.versionListener?.('v42')
+    expect(h.recordMutationDataVersion).toHaveBeenCalledWith('v42')
+    services.resetAppServicesForTest()
+    expect(h.versionListener).toBeNull()
   })
 
   it('is idempotent and can be reset', async () => {

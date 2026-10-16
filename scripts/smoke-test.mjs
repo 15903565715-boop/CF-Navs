@@ -167,6 +167,51 @@ async function main() {
     check('排序后 bm2 在前', list[0]?.id === bm2.id, `first=${list[0]?.id}`)
   }
 
+  // 写后只确认版本的前提（代码审查三轮第 31 项）：写响应包络上的 data_version 就是随后
+  // /api/data/version 报告的版本，且写接口返回的行与 /api/admin/data 里的同一行一致。
+  section('写响应 data_version 与本地应用一致性')
+  {
+    const sameRow = (a, b) => {
+      if (!a || !b) return false
+      for (const key of Object.keys(a)) {
+        if (key === 'icon_blob' || key === 'version') continue
+        if (JSON.stringify(a[key]) !== JSON.stringify(b[key])) return `${key}: ${JSON.stringify(a[key])} != ${JSON.stringify(b[key])}`
+      }
+      return true
+    }
+    const versionAfter = async (label, r) => {
+      const remote = (await call('/api/data/version', { token })).json?.data?.version
+      check(`${label} 响应带 data_version 且等于服务端版本`, typeof r.json?.data_version === 'string' && r.json.data_version === remote, `resp=${r.json?.data_version} remote=${remote}`)
+    }
+    const adminData = async () => (await call('/api/admin/data', { token })).json?.data
+    const created = await call('/api/bookmarks', { method: 'POST', token, body: { category_id: catA.id, title: '一致性', url: 'https://example.org', open_method: 1 } })
+    await versionAfter('新建书签', created)
+    const createdRow = (await adminData())?.bookmarks?.find((row) => row.id === created.json?.data?.id)
+    const createdSame = sameRow(created.json?.data, createdRow)
+    check('新建书签响应行 = 后台数据行', createdSame === true, String(createdSame))
+    const updated = await call(`/api/bookmarks/${created.json?.data?.id}`, { method: 'PUT', token, body: { category_id: catA.id, title: '一致性(改)', url: 'https://example.org', open_method: 2 } })
+    await versionAfter('更新书签', updated)
+    const updatedRow = (await adminData())?.bookmarks?.find((row) => row.id === updated.json?.data?.id)
+    const updatedSame = sameRow(updated.json?.data, updatedRow)
+    check('更新书签响应行 = 后台数据行', updatedSame === true, String(updatedSame))
+    const sorted = await call('/api/bookmarks/sort', { method: 'POST', token, body: { ids: [created.json?.data?.id, bm2.id, bm1.id] } })
+    await versionAfter('书签排序', sorted)
+    const sortedRows = (await adminData())?.bookmarks ?? []
+    const sortOf = (id) => sortedRows.find((row) => row.id === id)?.sort
+    check('书签排序后 sort = 提交下标', sortOf(created.json?.data?.id) === 0 && sortOf(bm2.id) === 1 && sortOf(bm1.id) === 2, `sorts=${sortOf(created.json?.data?.id)},${sortOf(bm2.id)},${sortOf(bm1.id)}`)
+    const cat = await call('/api/categories', { method: 'POST', token, body: { title: '一致性分类' } })
+    await versionAfter('新建分类', cat)
+    const catRow = (await adminData())?.categories?.find((row) => row.id === cat.json?.data?.id)
+    const catSame = sameRow(cat.json?.data, catRow)
+    check('新建分类响应行 = 后台数据行', catSame === true, String(catSame))
+    const catDeleted = await call(`/api/categories/${cat.json?.data?.id}`, { method: 'DELETE', token })
+    await versionAfter('删除分类', catDeleted)
+    const removed = await call(`/api/bookmarks/${created.json?.data?.id}`, { method: 'DELETE', token })
+    await versionAfter('删除书签', removed)
+    const sortedBack = await call('/api/bookmarks/sort', { method: 'POST', token, body: { ids: [bm2.id, bm1.id] } })
+    check('恢复书签排序 code=0', sortedBack.json?.code === 0)
+  }
+
   // REQ-15: use only generated local data; this fixture is removed before later CRUD assertions.
   section('REQ-15 受保护图标副本协议')
   {
