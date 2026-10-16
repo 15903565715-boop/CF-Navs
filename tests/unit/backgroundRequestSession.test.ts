@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ErrCode } from '../../shared/types'
-import { api, getAuthToken, setApiBaseUrl, setStoredAuthSession } from '../../src/lib/api'
+import { api, setApiBaseUrl } from '../../src/lib/api'
+import { getAuthToken, setStoredAuthSession } from '../../src/lib/authSession'
 
 function stubBrowserStorage() {
   const store = new Map<string, string>()

@@ -2,7 +2,7 @@ import { objectIconLoader } from './objectIconLoader'
 import type { IconDescriptor } from '../../shared/iconLocalCopy'
 import { iconDevice } from './iconDeviceState'
 import { applyIconDisplayOverride, bookmarkIconDisplay } from './iconDisplayStore'
-import { getAuthToken } from './api'
+import { getAuthToken } from './authSession'
 // 前端数据编排层：公开/后台聚合数据的获取、版本确认、本地增量更新与浏览器快照持久化。
 // 只操作 store、API、缓存与本地图标缓存，不持有任何视图状态；需要向界面反馈的错误
 // 通过 configureDataService 注入的回调上报，视图切换/登录 UI 编排仍留在 App.svelte。
@@ -536,7 +536,7 @@ function scheduleIconSnapshot(): void {
   const valid = captureSession()
   iconSnapshotTimer = setTimeout(() => { iconSnapshotTimer = null; void persistCurrentAdminData(valid).catch(error => hooks.onRootError(getErrorMessage(error), error)) }, 250)
 }
-// 导出仅供测试与 refreshBookmarkIconCache；运行时由 objectIconLoader.configure 回调驱动。
+// 导出仅供测试与 refreshBookmarkIconCache；运行时由 objectIconLoader.configure 回调驱动（在 appServices.initAppServices() 里接线）。
 export function applyIconDescriptor(next: IconDescriptor, expected?: IconDescriptor): void {
   if (get(adminStore).data.dataset_epoch !== next.dataset_epoch) return
   if (next.object_type === 'category') {
@@ -588,4 +588,3 @@ function pruneBookmarkIconDisplay(datasetEpoch: string | undefined, bookmarks: B
     return value.dataset_epoch === datasetEpoch && Boolean(row) && (row!.icon_write_epoch ?? 0) <= value.icon_write_epoch
   })
 }
-objectIconLoader.configure((next, expected) => applyIconDescriptor(next, expected))

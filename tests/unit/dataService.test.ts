@@ -40,7 +40,7 @@ const { api, publicCache, adminCache, dataHooks } = vi.hoisted(() => ({
   },
 }))
 
-// stores.ts 也从 api.ts 导入 getStoredAuthSession，用 importOriginal 保留真实导出，只覆盖 api。
+// stores.ts 从 api.ts 导入 authApi / 错误工具，用 importOriginal 保留真实导出，只覆盖 api。
 vi.mock('../../src/lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../src/lib/api')>()
   return {

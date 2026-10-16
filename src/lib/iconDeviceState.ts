@@ -1,5 +1,5 @@
 import { ICON_COPY_PROTOCOL, iconSessionScope, type IconAuthReceipt, type IconCopyMetadata } from '../../shared/iconLocalCopy'
-import { AUTH_STORAGE_KEY, getStoredAuthSession, notifyBrowserStorageChange, refreshStoredAuthSession, subscribeBrowserStorageChanges } from './api'
+import { AUTH_STORAGE_KEY, getStoredAuthSession, notifyBrowserStorageChange, refreshStoredAuthSession, subscribeBrowserStorageChanges } from './authSession'
 import { iconLeaseUntil, iconPermissionFailure, iconScopeKey, type IconStorageLease, type IconStorageTotals } from './iconCachePolicy'
 import { createIconCopyStorage, IconStorageError, type IconCopyStorage } from './iconCopyStorage'
 import { LEGACY_ICON_LOCAL_STORAGE_PREFIX, migrateLegacyIconCopies } from './legacyIconCopyMigration'

@@ -10,11 +10,14 @@ import { toastStore } from './lib/toast'
 import { migrateLegacyIconCopies } from './lib/legacyIconCopyMigration'
 import App from './App.svelte'
 import { installBrowserThemeColor } from './lib/browserThemeColor'
+import { initAppServices } from './lib/appServices'
 
 const stopThemeColor = installBrowserThemeColor(document)
 if (import.meta.hot) import.meta.hot.dispose(stopThemeColor)
 
 initErrorReporting()
+// 模块之间的回调接线（会话生命周期 → 图标设备 / 图标 key，图标加载器 → dataService），须先于挂载。
+initAppServices()
 void migrateLegacyIconCopies()
 
 const app = mount(App, {
