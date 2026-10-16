@@ -92,7 +92,7 @@
   .confirm-backdrop {
     position: fixed;
     inset: 0;
-    z-index: 220;
+    z-index: 1300;
     display: grid;
     place-items: center;
     padding: 16px;
