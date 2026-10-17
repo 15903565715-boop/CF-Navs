@@ -1,7 +1,7 @@
 import type { AdminData, Bookmark, Category, PublicBookmark, PublicData, PublicSettings, Settings } from '../../shared/types'
 import { toPublicSettings } from '../../shared/settings'
 import { colorToRgbString } from './color'
-import { gradientPresets } from './themePresets'
+import { getPresetRenderTokens } from './themePresetRender'
 
 export { toPublicSettings } from '../../shared/settings'
 
@@ -253,7 +253,7 @@ export function buildHomeBackground(settings: PublicSettings | null, theme: 'lig
 
   const background = settings.backgrounds?.[theme] ?? settings.background
   const blur = Math.min(40, Math.max(0, Number(background.blur) || 0))
-  const mask = Math.min(1, Math.max(0, Number(background.mask) ?? 0.3))
+  const mask = Math.min(1, Math.max(0, Number(background.mask)))
   const maskColor = background.maskColor?.trim() || '#000000'
 
   let layer = background.value
@@ -262,7 +262,7 @@ export function buildHomeBackground(settings: PublicSettings | null, theme: 'lig
   }
   const backgroundFilter = blur > 0 ? `blur(${blur}px)` : 'none'
   const backgroundTransform = blur > 0 ? 'scale(1.06)' : 'none'
-  const activePreset = gradientPresets.find((preset) => preset.id === settings.background_preset_id)
+  const activePreset = getPresetRenderTokens(settings.background_preset_id)
   const storedCardColor = settings.card_background_color?.trim() || '#ffffff'
   const lightCardColor = activePreset?.surface === 'flat' && storedCardColor.toLowerCase() === '#ffffff'
     ? activePreset.cardBackgroundColor

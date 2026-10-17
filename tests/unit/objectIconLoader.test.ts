@@ -2,6 +2,7 @@ import { logoSurfIcon } from '../../src/lib/icons'
 import { decodeVersionedIcon, iconContentRevision } from '../../worker/lib/iconRevision'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createObjectIconLoader } from '../../src/lib/objectIconLoader'
+import type { fetchIconCopy } from '../../src/lib/api'
 import { iconBytesRevision, type IconDescriptor } from '../../shared/iconLocalCopy'
 import { ApiError } from '../../src/lib/api'
 import { IconStorageError } from '../../src/lib/iconCopyStorage'
@@ -32,7 +33,7 @@ async function fixture() {
     storage, refreshStats: vi.fn(async () => undefined), reportStorageError: vi.fn(),
   }
   const response = (descriptor = ready) => ({ protocol: 1 as const, persistence: 'session-scoped' as const, descriptor, image: { mime: icon.contentType, byte_length: icon.bytes.length, base64: icon.dataUri.split(',')[1] } })
-  const fetchCopy = vi.fn(async () => response())
+  const fetchCopy = vi.fn<typeof fetchIconCopy>(async () => response())
   let serial = 0
   const revoke = vi.fn()
   const decode = vi.fn(async () => undefined)
@@ -173,6 +174,30 @@ describe('versioned object icon orchestration', () => {
     const handle = f.loader.acquire({ ...f.ready, write_epoch: 1, content_revision: 'sha256-' + 'd'.repeat(64) })
     expect((await handle.result).status).toBe('blocked'); expect(f.data.has('bookmark:1')).toBe(false)
     handle.release()
+  })
+  it('reports a failed local removal after an authorization failure instead of swallowing it', async () => {
+    const f = await fixture()
+    const failure = new IconStorageError('unavailable')
+    f.storage.remove.mockRejectedValueOnce(failure)
+    f.fetchCopy.mockRejectedValue(new ApiError('forbidden', { status: 403 }))
+    const handle = f.loader.acquire(f.unknown)
+    expect((await handle.result).status).toBe('blocked')
+    expect(f.device.reportStorageError).toHaveBeenCalledWith(failure)
+    handle.release()
+  })
+  it('warns when the post-store stats refresh fails without failing the icon', async () => {
+    const f = await fixture()
+    const failure = new Error('stats unavailable')
+    f.device.refreshStats.mockRejectedValueOnce(failure)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    try {
+      const handle = f.loader.acquire(f.unknown)
+      expect((await handle.result).status).toBe('ready')
+      await vi.waitFor(() => expect(warn).toHaveBeenCalledWith('[CF-Navs] icon storage stats refresh failed', failure))
+      handle.release()
+    } finally {
+      warn.mockRestore()
+    }
   })
   it('drops a late network success after the device generation was revoked', async () => {
     const f = await fixture()

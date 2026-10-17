@@ -1,5 +1,7 @@
+<svelte:options runes />
+
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte'
+  import { untrack } from 'svelte'
   import {
     clampAlpha,
     cssColorIncludesAlpha,
@@ -11,64 +13,89 @@
     rgbToHsv,
   } from '../lib/color'
 
-  export let value = '#ffffff'
-  export let alpha: number | null = null
-  export let placeholder = '#ffffff'
-  export let inputLabel = '颜色值'
-  export let swatchTitle = '打开颜色选择器'
-  export let hueText = '色相'
-  export let alphaText = '透明度'
+  interface Props {
+    value?: string
+    // null = 透明度并入 value（rgba / 8 位 hex）；数字 = 独立透明度，value 保持 6 位 hex
+    alpha?: number | null
+    placeholder?: string
+    inputLabel?: string
+    swatchTitle?: string
+    hueText?: string
+    alphaText?: string
+    // 颜色变化后的 value（原 change 事件的 e.detail）；bind:value / bind:alpha 已在回调前写回。
+    onchange?: (value: string) => void
+  }
 
-  const dispatch = createEventDispatcher<{ change: string }>()
+  let {
+    value = $bindable('#ffffff'),
+    alpha = $bindable(null),
+    placeholder = '#ffffff',
+    inputLabel = '颜色值',
+    swatchTitle = '打开颜色选择器',
+    hueText = '色相',
+    alphaText = '透明度',
+    onchange,
+  }: Props = $props()
 
   type DragKind = 'area' | 'hue' | 'alpha'
 
-  let shellEl: HTMLDivElement
-  let pickerOpen = false
+  // 元素引用与拖动状态只在处理器里读，保持普通变量。
+  let shellEl: HTMLDivElement | undefined
+  let pickerOpen = $state(false)
   let dragging: DragKind | null = null
 
   // 组件内 HSV 是唯一真值源，避免 hsv→rgb→hex→reparse→hsv 的回灌漂移与灰度丢色相。
-  let hue = 0
-  let saturation = 0
-  let brightness = 100
-  let internalAlpha = 1
-  let hasParsedValue = false
+  let hue = $state(0)
+  let saturation = $state(0)
+  let brightness = $state(100)
+  let internalAlpha = $state(1)
+  let hasParsedValue = $state(false)
+  // 比较用变量：只在同步语句与处理器里读写，不驱动模板。
   let lastEmitted = ''
   let lastParsedAlphaMode: boolean | null = null
 
-  $: effectiveAlpha = alpha ?? internalAlpha
-
   // Sync external value or alpha-mode changes; ignore values emitted by this component.
-  $: if (value !== lastEmitted || (alpha === null) !== lastParsedAlphaMode) {
-    lastEmitted = value
-    lastParsedAlphaMode = alpha === null
-    const parsed = parseCssColor(value)
-    hasParsedValue = Boolean(parsed)
-    if (parsed) {
-      const next = rgbToHsv(parsed.red, parsed.green, parsed.blue)
-      // 灰度/黑色（s=0）时 rgbToHsv 的色相无意义，保留上一次色相避免指针跳回 0。
-      if (next.s !== 0) hue = next.h
-      saturation = next.s
-      brightness = next.v
-      if (alpha === null) {
-        internalAlpha = parsed.alpha
-      } else if (cssColorIncludesAlpha(value)) {
-        alpha = parsed.alpha
-        value = parsed.hex
-        lastEmitted = parsed.hex
+  // 原 `$:` 的语法依赖是 value / alpha（lastEmitted 等比较变量只随 value 一起变化）；
+  // 语句体会写回 value / alpha 与 HSV，放进 untrack，避免把写入目标变成依赖。
+  // 用 .pre：与原 `$:` 一样在同一次刷新中先于 DOM 更新执行（首次在挂载前同步执行）。
+  $effect.pre(() => {
+    const currentValue = value
+    const currentAlpha = alpha
+    untrack(() => {
+      if (currentValue !== lastEmitted || (currentAlpha === null) !== lastParsedAlphaMode) {
+        lastEmitted = currentValue
+        lastParsedAlphaMode = currentAlpha === null
+        const parsed = parseCssColor(currentValue)
+        hasParsedValue = Boolean(parsed)
+        if (parsed) {
+          const next = rgbToHsv(parsed.red, parsed.green, parsed.blue)
+          // 灰度/黑色（s=0）时 rgbToHsv 的色相无意义，保留上一次色相避免指针跳回 0。
+          if (next.s !== 0) hue = next.h
+          saturation = next.s
+          brightness = next.v
+          if (currentAlpha === null) {
+            internalAlpha = parsed.alpha
+          } else if (cssColorIncludesAlpha(currentValue)) {
+            alpha = parsed.alpha
+            value = parsed.hex
+            lastEmitted = parsed.hex
+          }
+        }
       }
-    }
-  }
+    })
+  })
 
-  $: areaRgb = hsvToRgb(hue, 100, 100)
-  $: solidRgb = hsvToRgb(hue, saturation, brightness)
-  $: areaBackground = `rgb(${areaRgb.red}, ${areaRgb.green}, ${areaRgb.blue})`
-  $: previewColor = hasParsedValue ? `rgba(${solidRgb.red}, ${solidRgb.green}, ${solidRgb.blue}, ${effectiveAlpha})` : 'transparent'
-  $: alphaFill = `linear-gradient(to right, rgba(${solidRgb.red}, ${solidRgb.green}, ${solidRgb.blue}, 0), rgb(${solidRgb.red}, ${solidRgb.green}, ${solidRgb.blue}))`
-  $: pointerLeft = saturation
-  $: pointerTop = 100 - brightness
-  $: hueLeft = (hue / 360) * 100
-  $: alphaLeft = effectiveAlpha * 100
+  // 原 `$:` 拓扑顺序：同步语句写 internalAlpha / alpha，故 effectiveAlpha 等排在其后。
+  const effectiveAlpha = $derived(alpha ?? internalAlpha)
+  const areaRgb = $derived(hsvToRgb(hue, 100, 100))
+  const solidRgb = $derived(hsvToRgb(hue, saturation, brightness))
+  const areaBackground = $derived(`rgb(${areaRgb.red}, ${areaRgb.green}, ${areaRgb.blue})`)
+  const previewColor = $derived(hasParsedValue ? `rgba(${solidRgb.red}, ${solidRgb.green}, ${solidRgb.blue}, ${effectiveAlpha})` : 'transparent')
+  const alphaFill = $derived(`linear-gradient(to right, rgba(${solidRgb.red}, ${solidRgb.green}, ${solidRgb.blue}, 0), rgb(${solidRgb.red}, ${solidRgb.green}, ${solidRgb.blue}))`)
+  const pointerLeft = $derived(saturation)
+  const pointerTop = $derived(100 - brightness)
+  const hueLeft = $derived((hue / 360) * 100)
+  const alphaLeft = $derived(effectiveAlpha * 100)
 
   function emit() {
     const rgb = hsvToRgb(hue, saturation, brightness)
@@ -82,7 +109,7 @@
     }
     hasParsedValue = true
     lastEmitted = value
-    dispatch('change', value)
+    onchange?.(value)
   }
 
   function setSaturationBrightness(nextS: number, nextV: number) {
@@ -167,7 +194,7 @@
     } else {
       value = nextValue
     }
-    dispatch('change', value)
+    onchange?.(value)
   }
 
   function handleAreaKeydown(event: KeyboardEvent) {
@@ -223,7 +250,7 @@
   }
 </script>
 
-<svelte:window on:keydown={handleKeydown} on:pointerdown={handleWindowPointerDown} />
+<svelte:window onkeydown={handleKeydown} onpointerdown={handleWindowPointerDown} />
 
 <div class="color-input-shell" bind:this={shellEl}>
   <div class="color-picker-row">
@@ -233,7 +260,7 @@
       {placeholder}
       maxlength="40"
       aria-label={inputLabel}
-      on:input={handleTextInput}
+      oninput={handleTextInput}
     />
     <button
       type="button"
@@ -242,7 +269,7 @@
       title={swatchTitle}
       aria-label={swatchTitle}
       aria-expanded={pickerOpen}
-      on:click={togglePicker}
+      onclick={togglePicker}
     ></button>
   </div>
 
@@ -258,12 +285,12 @@
         aria-valuenow={Math.round(saturation)}
         aria-valuetext="饱和度 {Math.round(saturation)}% 明度 {Math.round(brightness)}%"
         style="background-color: {areaBackground};"
-        on:pointerdown={(event) => handlePointerDown('area', event)}
-        on:pointermove={(event) => handlePointerMove('area', event)}
-        on:pointerup={handlePointerUp}
-        on:pointercancel={handlePointerCancel}
-        on:lostpointercapture={handlePointerCancel}
-        on:keydown={handleAreaKeydown}
+        onpointerdown={(event) => handlePointerDown('area', event)}
+        onpointermove={(event) => handlePointerMove('area', event)}
+        onpointerup={handlePointerUp}
+        onpointercancel={handlePointerCancel}
+        onlostpointercapture={handlePointerCancel}
+        onkeydown={handleAreaKeydown}
       >
         <div class="color-white-grad"></div>
         <div class="color-black-grad"></div>
@@ -281,12 +308,12 @@
             aria-valuemin="0"
             aria-valuemax="360"
             aria-valuenow={Math.round(hue)}
-            on:pointerdown={(event) => handlePointerDown('hue', event)}
-            on:pointermove={(event) => handlePointerMove('hue', event)}
-            on:pointerup={handlePointerUp}
-            on:pointercancel={handlePointerCancel}
-            on:lostpointercapture={handlePointerCancel}
-            on:keydown={handleHueKeydown}
+            onpointerdown={(event) => handlePointerDown('hue', event)}
+            onpointermove={(event) => handlePointerMove('hue', event)}
+            onpointerup={handlePointerUp}
+            onpointercancel={handlePointerCancel}
+            onlostpointercapture={handlePointerCancel}
+            onkeydown={handleHueKeydown}
           >
             <div class="slider-thumb" style="left: {hueLeft}%;"></div>
           </div>
@@ -302,12 +329,12 @@
             aria-valuemin="0"
             aria-valuemax="1"
             aria-valuenow={Number(effectiveAlpha.toFixed(2))}
-            on:pointerdown={(event) => handlePointerDown('alpha', event)}
-            on:pointermove={(event) => handlePointerMove('alpha', event)}
-            on:pointerup={handlePointerUp}
-            on:pointercancel={handlePointerCancel}
-            on:lostpointercapture={handlePointerCancel}
-            on:keydown={handleAlphaKeydown}
+            onpointerdown={(event) => handlePointerDown('alpha', event)}
+            onpointermove={(event) => handlePointerMove('alpha', event)}
+            onpointerup={handlePointerUp}
+            onpointercancel={handlePointerCancel}
+            onlostpointercapture={handlePointerCancel}
+            onkeydown={handleAlphaKeydown}
           >
             <div class="alpha-checkerboard"></div>
             <div class="alpha-fill" style="background-image: {alphaFill};"></div>

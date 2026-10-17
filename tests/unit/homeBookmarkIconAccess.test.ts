@@ -70,7 +70,7 @@ function stubIconEnvironment(): void {
   window.localStorage.clear()
 }
 
-function iconSrcByAlt(root: ParentNode): Map<string, string> {
+function iconSrcByAlt(root: Element): Map<string, string> {
   return new Map(
     Array.from(root.querySelectorAll('img')).map((img) => [img.getAttribute('alt') ?? '', sourceByBlob.get(img.getAttribute('src') ?? '') ?? img.getAttribute('src') ?? '']),
   )

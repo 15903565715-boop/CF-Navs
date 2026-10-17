@@ -156,7 +156,7 @@ Worker 和前端共同承担缓存：
 
 - `/api/config` 和 `/api/public/data` 使用短 TTL edge cache。
 - `/api/data/version` 始终 `no-store`，只读取轻量版本号和公开模式信息。
-- 前端已有本地快照时优先请求 `/api/data/version`；版本不同才发送完整聚合请求。完整聚合请求默认发送 no-cache 指令，服务端收到后会跳过 `/api/config`、`/api/public/data` edge cache 和 `/api/admin/data` 运行时聚合缓存，用于保证手动刷新时跨设备可见。
+- 前端已有本地快照时优先请求 `/api/data/version`；版本不同才发送完整聚合请求。匿名公开聚合请求带上刚确认的版本（`/api/public/data?v=<version>`），服务端按版本键命中 edge cache、忽略匿名请求的 no-cache 指令，跨设备可见性由版本换键保证；后台聚合 `/api/admin/data` 每次直读 D1。
 - 设置保存、数据导入和管理端写入会主动失效相关缓存。
 - `/assets/*` 构建产物设置一年 immutable 缓存。
 - HTML 和 `sw.js` 使用 no-cache 重验证。

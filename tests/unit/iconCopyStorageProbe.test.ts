@@ -4,7 +4,7 @@ import { iconBytesRevision } from '../../shared/iconLocalCopy'
 
 afterEach(() => vi.unstubAllGlobals())
 function database(body?: Blob, entry?: unknown, enabled = true, readError = false) {
-  const tx: any = { objectStore: vi.fn((store: string) => ({ get: vi.fn((key: string) => {
+  const tx: any = { objectStore: vi.fn((store: string) => ({ get: vi.fn((_key: string) => {
     const request: any = {}
     queueMicrotask(() => {
       if (readError) { request.error = new Error('read failed'); request.onerror() }
@@ -26,7 +26,7 @@ describe('native fixture copy storage evidence', () => {
     const result = await pageReadFixtureCopy('bookmark:12')
     expect(result).toEqual({available:true,enabled:true,entryPresent:true,bodyPresent:true,descriptor,bodyBytes:4,bodyRevision:revision})
     expect(db.transaction).toHaveBeenCalledWith(['control','entries','bodies'],'readonly')
-    expect(tx.objectStore.mock.calls.map(call => call[0])).toEqual(['control','entries','bodies'])
+    expect(tx.objectStore.mock.calls.map((call: unknown[]) => call[0])).toEqual(['control','entries','bodies'])
     expect(db.close).toHaveBeenCalledOnce()
     expect(JSON.stringify(result)).not.toContain('do-not-return')
   })

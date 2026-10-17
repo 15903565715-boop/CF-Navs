@@ -2,7 +2,6 @@ import { ICON_COPY_MAX_BYTES, ICON_COPY_PROTOCOL, isIconRevision, type IconCopyR
 import { getCategoryIconData, setCategoryIconBlob, type CategoryIconData } from './db/categories'
 import { decodeVersionedIcon, iconContentRevision } from './iconRevision'
 import { fetchIcon, iconBytesToDataUri } from './iconData'
-import { invalidateRuntimeDataCache } from './runtimeCache'
 
 export function categoryIconDescriptor(id: number, row: CategoryIconData): IconDescriptor {
   const image = Boolean(row.icon_blob || row.icon?.startsWith('data:image/') || /^https?:\/\//i.test(row.icon ?? '') || /^[a-z0-9-]+:[a-z0-9-]+$/i.test(row.icon ?? ''))
@@ -41,7 +40,6 @@ export async function obtainCategoryIconCopy(db: D1Database, input: IconCopyRequ
     if (!row) return { status: 404, data: { protocol: ICON_COPY_PROTOCOL, reason: 'not-found' } }
     descriptor = categoryIconDescriptor(input.object_id, row)
     if (!wrote || row.dataset_epoch !== input.dataset_epoch || row.icon_revision !== revision) return conflict()
-    invalidateRuntimeDataCache()
   }
   const dataUri = iconBytesToDataUri(icon)
   return { status: 200, data: { protocol: ICON_COPY_PROTOCOL, persistence: 'session-scoped', descriptor,

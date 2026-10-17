@@ -1,7 +1,8 @@
 import { objectIconLoader } from './objectIconLoader'
 import type { IconDescriptor } from '../../shared/iconLocalCopy'
 import { iconDevice } from './iconDeviceState'
-import { getAuthToken } from './api'
+import { applyIconDisplayOverride, bookmarkIconDisplay } from './iconDisplayStore'
+import { getAuthToken } from './authSession'
 // 前端数据编排层：公开/后台聚合数据的获取、版本确认、本地增量更新与浏览器快照持久化。
 // 只操作 store、API、缓存与本地图标缓存，不持有任何视图状态；需要向界面反馈的错误
 // 通过 configureDataService 注入的回调上报，视图切换/登录 UI 编排仍留在 App.svelte。
@@ -62,6 +63,10 @@ export function configureDataService(next: DataServiceHooks): void {
 
 // 当前已知的后端数据版本；由聚合获取与版本确认路径维护，仅本模块内部读写。
 let currentDataVersion: string | null = null
+// 本会话最近一次写接口回报的 data_version（见 recordMutationDataVersion），
+// 以及是否有一次整包重拉尚未成功完成（被新的刷新取代或失败）。
+let lastMutationVersion: string | null = null
+let fullRefreshPending = false
 
 // authStore owns identity; this module owns all visible-data refreshes. A session change
 // invalidates pending work synchronously, including anonymous -> login -> logout (ABA).
@@ -75,8 +80,11 @@ authStore.subscribe(({ session }) => {
   sessionEpoch += 1
   refreshEpoch += 1
   currentDataVersion = null
+  lastMutationVersion = null
+  fullRefreshPending = false
   adminStore.reset()
   publicStore.reset()
+  bookmarkIconDisplay.clear()
 })
 
 type IsCurrent = () => boolean
@@ -155,6 +163,7 @@ async function loadPublicData(progressive: boolean, isCurrent: IsCurrent): Promi
   }
 
   try {
+    let confirmedVersion: string | null = null
     if (cached?.version) {
       const remoteVersion = await api.data.version(false)
       if (!isCurrent()) return null
@@ -163,13 +172,15 @@ async function loadPublicData(progressive: boolean, isCurrent: IsCurrent): Promi
         public_mode: remoteVersion.public_mode,
       })
       currentDataVersion = remoteVersion.version
+      confirmedVersion = remoteVersion.version
 
       if (remoteVersion.version === cached.version) {
         return get(publicStore).data
       }
     }
 
-    const response = await api.public.getData(false)
+    // 已确认远端版本时按版本请求，命中该版本的 edge cache；冷启动没有快照时不为此额外请求版本。
+    const response = await api.public.getData(false, confirmedVersion)
     if (!isCurrent()) return null
     const data = applyPublicData(response, undefined, progressive)
     if (!isLoggedIn()) {
@@ -378,7 +389,10 @@ export async function refreshBookmarkIconCache(bookmarkId: number): Promise<stri
 }
 
 export function refreshBookmarkIconCacheInBackground(bookmarkId: number): void {
-  void refreshBookmarkIconCache(bookmarkId).catch(() => undefined)
+  // 保存书签后的后台补图是尽力而为：失败不打断用户操作，下次加载 / 显式刷新会重试。
+  void refreshBookmarkIconCache(bookmarkId).catch((error) => {
+    console.warn('[CF-Navs] background bookmark icon refresh failed', bookmarkId, error)
+  })
 }
 
 export async function applyLocalCategorySort(
@@ -440,6 +454,7 @@ export function applyLoggedInData(data: AdminData, version = getDataVersion(data
   if (!currentAdminState.loaded || mergedAdminData !== currentAdminState.data) {
     adminStore.replaceData(mergedAdminData)
   }
+  pruneBookmarkIconDisplay(mergedAdminData.dataset_epoch, mergedAdminData.bookmarks)
 
   const settings = mergedAdminData.settings
   if (!settings) {
@@ -451,7 +466,10 @@ export function applyLoggedInData(data: AdminData, version = getDataVersion(data
 }
 
 export async function persistCurrentAdminData(isCurrent: IsCurrent = captureSession()): Promise<void> {
-  const data = get(adminStore).data
+  const stored = get(adminStore).data
+  // 快照里带上图标显示覆盖，下次启动直接拿到已验证的图标身份。
+  const bookmarks = bookmarkIconDisplay.applyTo(stored.bookmarks)
+  const data = bookmarks === stored.bookmarks ? stored : { ...stored, bookmarks }
   if (isCurrent() && isLoggedIn() && data.settings) {
     await writeCachedAdminData(data, currentDataVersion, isCurrent)
   }
@@ -475,8 +493,40 @@ export function refreshLoggedInData(forceRemote = false): Promise<void> {
   return loadLoggedInData(forceRemote, beginRefresh())
 }
 
+/** 由请求层在每个写响应带回 data_version 时调用（接线见 appServices）。会话切换时清空。 */
+export function recordMutationDataVersion(version: string): void {
+  lastMutationVersion = version
+}
+
+/**
+ * 写入成功且结果已用服务端返回值应用到本地之后调用，替代无条件的整包重拉：
+ * 只请求一次 `/data/version`，若服务端版本正是本会话最后一次写入回报的版本、
+ * 数据集也没换，说明期间没有别的写入，本地状态即为最新，只更新版本号并落快照；
+ * 否则（别的标签页 / 设备写过、没有版本信息、有未完成的整包重拉）退回整包重拉。
+ */
+export function confirmLoggedInDataAfterLocalMutation(): Promise<void> {
+  return confirmAfterLocalMutation(beginRefresh())
+}
+
+async function confirmAfterLocalMutation(isCurrent: IsCurrent): Promise<void> {
+  if (!isCurrent() || !isLoggedIn()) return
+  const expected = lastMutationVersion
+  if (!expected || fullRefreshPending) return loadLoggedInData(true, isCurrent)
+  const requestToken = getAuthToken()
+  const remote = await api.data.version(true)
+  if (!isCurrent()) return
+  if (remote.version !== expected || remote.dataset_epoch !== get(adminStore).data.dataset_epoch) {
+    return loadLoggedInData(true, isCurrent)
+  }
+  await iconDevice.acceptMetadata(remote, requestToken, isCurrent)
+  if (!isCurrent()) return
+  currentDataVersion = remote.version
+  await persistCurrentAdminData(isCurrent)
+}
+
 async function loadLoggedInData(forceRemote: boolean, isCurrent: IsCurrent): Promise<void> {
   if (!isCurrent() || !isLoggedIn()) return
+  if (forceRemote) fullRefreshPending = true
   const requestToken = getAuthToken()
   // 后台预览私密对象图标需要短期授权 key。失败只降级成兜底图标，不影响数据刷新。
   void ensureIconAccessKey(() => api.auth.iconAccess())
@@ -504,6 +554,7 @@ async function loadLoggedInData(forceRemote: boolean, isCurrent: IsCurrent): Pro
     const data = await api.admin.getData({ keepSessionOnUnauthorized: true })
     if (!isCurrent()) return
     applyLoggedInData(data)
+    fullRefreshPending = false
     await iconDevice.acceptMetadata(data, requestToken, isCurrent)
     if (!isCurrent()) return
     await persistCurrentAdminData(isCurrent)
@@ -524,7 +575,8 @@ function scheduleIconSnapshot(): void {
   const valid = captureSession()
   iconSnapshotTimer = setTimeout(() => { iconSnapshotTimer = null; void persistCurrentAdminData(valid).catch(error => hooks.onRootError(getErrorMessage(error), error)) }, 250)
 }
-function applyIconDescriptor(next: IconDescriptor, expected?: IconDescriptor): void {
+// 导出仅供测试与 refreshBookmarkIconCache；运行时由 objectIconLoader.configure 回调驱动（在 appServices.initAppServices() 里接线）。
+export function applyIconDescriptor(next: IconDescriptor, expected?: IconDescriptor): void {
   if (get(adminStore).data.dataset_epoch !== next.dataset_epoch) return
   if (next.object_type === 'category') {
     const patch = <T extends Omit<Category, 'created_at'>>(rows: T[]): T[] => rows.map(row => {
@@ -544,19 +596,34 @@ function applyIconDescriptor(next: IconDescriptor, expected?: IconDescriptor): v
     }
     return
   }
-  const patch = <T extends Bookmark>(rows: T[]): T[] => rows.map(row => {
-    if (row.id !== next.object_id || (row.icon_write_epoch ?? 0) > next.write_epoch || expected && (row.icon_write_epoch ?? 0) !== expected.write_epoch && row.icon_revision !== next.content_revision) return row
-    const display = next.state === 'ready' || next.state === 'unknown' ? 'image' : next.state
-    if (row.icon_revision === next.content_revision && row.icon_write_epoch === next.write_epoch && row.icon_display === display) return row
-    return { ...row, icon_revision: next.content_revision, icon_write_epoch: next.write_epoch, icon_display: display, icon_cached: display === 'image',
-      ...(display === 'empty' ? { icon: null, icon_blob: null, icon_cached: false } : {}) }
-  })
-  const before = get(adminStore).data.bookmarks
-  const after = patch(before)
-  if (after.every((row, index) => row === before[index])) return
-  adminStore.setBookmarks(after)
-  const visible = get(publicStore).data
-  if (visible) publicStore.setData({ ...visible, bookmarks: patch(visible.bookmarks as Bookmark[]) })
+  // 书签：只写独立的图标显示表，不重建 bookmarks 数组（见 iconDisplayStore.ts）。
+  const row = bookmarkRowIndex(get(adminStore).data.bookmarks).get(next.object_id)
+  if (!row) return
+  const current = applyIconDisplayOverride(row, bookmarkIconDisplay.get(row.id))
+  if ((current.icon_write_epoch ?? 0) > next.write_epoch || expected && (current.icon_write_epoch ?? 0) !== expected.write_epoch && current.icon_revision !== next.content_revision) return
+  const display = next.state === 'ready' || next.state === 'unknown' ? 'image' : next.state
+  if (current.icon_revision === next.content_revision && current.icon_write_epoch === next.write_epoch && current.icon_display === display) return
+  bookmarkIconDisplay.set(row.id, { dataset_epoch: next.dataset_epoch, icon_revision: next.content_revision, icon_write_epoch: next.write_epoch, icon_display: display })
   scheduleIconSnapshot()
 }
-objectIconLoader.configure((next, expected) => applyIconDescriptor(next, expected))
+
+// 按数组身份缓存 id 索引：图标描述符逐个到达时不必每次线性查找。
+let bookmarkRowIndexSource: Bookmark[] | null = null
+let bookmarkRowIndexMemo = new Map<number, Bookmark>()
+function bookmarkRowIndex(rows: Bookmark[]): Map<number, Bookmark> {
+  if (rows !== bookmarkRowIndexSource) {
+    bookmarkRowIndexSource = rows
+    bookmarkRowIndexMemo = new Map(rows.map(row => [row.id, row]))
+  }
+  return bookmarkRowIndexMemo
+}
+
+// 结构数据替换后，丢弃不再适用的图标显示覆盖：换数据集、书签已删除、服务端已有更新的写入。
+function pruneBookmarkIconDisplay(datasetEpoch: string | undefined, bookmarks: Bookmark[]): void {
+  if (bookmarkIconDisplay.size === 0) return
+  const index = bookmarkRowIndex(bookmarks)
+  bookmarkIconDisplay.prune((id, value) => {
+    const row = index.get(id)
+    return value.dataset_epoch === datasetEpoch && Boolean(row) && (row!.icon_write_epoch ?? 0) <= value.icon_write_epoch
+  })
+}

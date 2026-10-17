@@ -18,6 +18,7 @@ This document records the current performance-sensitive behavior that should not
 ## Aggregate Data
 
 - `/api/admin/data` and `/api/public/data` should stay lightweight.
+- Anonymous `/api/public/data` must not let a request header force a D1 read: anonymous `no-cache` / `Pragma` directives are ignored and freshness comes from the versioned URL `/api/public/data?v=<data_version>`. A stale or forged `v` may cost at most the single settings version query before being answered from the current version's cached copy (`no-store`). Cold starts without a snapshot keep requesting the unversioned URL rather than adding a version probe.
 - Aggregate bookmark payloads should not include large icon blobs for normal authenticated/admin loading unless a specific workflow requires them.
 - The observed authenticated `/api/admin/data` transfer target is roughly 38 KB for the current 345-bookmark dataset.
 
@@ -30,12 +31,16 @@ This document records the current performance-sensitive behavior that should not
 - Failed icon handling should prefer stable fallback behavior over repeated retries in the same interaction path.
 - Anonymous icon proxies must perform the current public-visibility metadata gate **before every shared edge-cache lookup**. Cache hits now pay the gate's targeted metadata read; this is intentional for privacy revocation and must be measured by `perf:audit` rather than removed to recover the old hit count. The gate must fail closed.
 
+- Per-bookmark icon display state published by trusted-device icon loads (`icon_revision` / `icon_write_epoch` / `icon_display`) lives in the per-id store `src/lib/iconDisplayStore.ts` (`bookmarkIconDisplay`), consumed by the icon-rendering components (`BookmarkCard`, `SpotlightBookmarkIcon`, `CachedBookmarkIcon`). A single icon load must not replace the `adminStore` / `publicStore` bookmark arrays, so Home's sorted/grouped/search-index memos keep their identity; the overrides are merged back only when persisting the admin snapshot. Category icons still use the array patch path (few objects).
+- App root theme/background variables and the injected custom CSS are written through `src/lib/rootStyleWriter.ts` as two independent reactive writes that skip unchanged content; unrelated data changes (clicks, icon state, bookmark edits) must not rewrite `<style id="custom-css-inject">`.
+
 ## Trusted Device Icon Copies
 
 - Persistent object-icon copies are an explicit device opt-in and require a current authenticated receipt. Standard mode and anonymous visitors continue to use the ordinary `no-store` proxy path; ordinary proxy responses are never persisted.
 - Trusted bookmark copies are fetched only through the session-authenticated `/api/icon-local-copy` protocol and are stored in one IndexedDB database. The Service Worker, Cache Storage, aggregate snapshots, and `localStorage` must not mirror the image bodies.
 - The shared bookmark/category budget is 10 MiB of bodies, 1,000 entries, and 512 KiB of index metadata; one body is at most 512 KiB. LRU pressure evicts from the 10 MiB high-water mark to 8 MiB. Category icons do not yet use this storage path.
 - For an unchanged, warmed, authorized, non-evicted bookmark, refresh or same-profile reopen should issue zero icon-body requests. Version/authorization checks remain separately observable and are not counted as icon bodies.
+- Storage totals (entries / body bytes) are a separate store (`iconDevice.stats`) read only by the device panel; they must not ride on the main `iconDevice` snapshot, whose every update fans out to one trusted icon view per rendered card. `refreshStats()` coalesces calls within `ICON_STATS_REFRESH_DEBOUNCE_MS` (250 ms) into one `storage.state()` read, and unchanged totals are not re-broadcast. Trusted icon view signatures exclude the `icon` / `icon_blob` bodies (compared separately) so a device broadcast never re-serializes base64 payloads.
 - `npm run test:icon-storage` measures the native IndexedDB path with synthetic SVGs: 20-item first-batch samples and full-set stress sweeps at 100/500/1,000 entries, five rounds each. Its decode timings are a storage-layer baseline only; it does not measure actual viewport rendering, Worker/D1 queries, production edge behavior, or another browser.
 
 ## Service Worker And Storage
@@ -53,6 +58,7 @@ This document records the current performance-sensitive behavior that should not
 ## Admin Loading
 
 - The Admin route itself is lazy-loaded from the main app.
+- First-screen JS (`index-*.js`) must not statically include rarely used views: `Install` / `Recover` load on demand (the boot splash covers the load), `BookmarkContextMenu` (with `CategoryTreeSelect`) loads on first open and is idle-preloaded only for cards that can open it, and home rendering reads preset colors from `themePresetRender.ts` while the full `themePresets.ts` stays in the settings chunk. Measured with `npm run build` on 2026-10-12: index chunk 312.88 kB (gzip 104.94 kB) → 279.01 kB (gzip 94.73 kB); index CSS 99.19 kB (gzip 16.67 kB) → 82.14 kB (gzip 13.99 kB).
 - Heavy secondary admin UI should remain lazy where practical:
   - `SettingsPanel` loads only when the settings tab is opened.
   - `CategoryEditModal` loads only when the category modal is opened.

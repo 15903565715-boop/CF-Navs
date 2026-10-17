@@ -131,6 +131,7 @@ export function createObjectIconLoader(options: Options) {
       let source: LoadedObjectIcon['source'] = 'network'
       if (inline && requested.state === 'ready' && device.snapshot().inlineProtocol === 1) {
         const candidate = inlineIconBlob(inline)
+        // 内联正文解码 / 校验失败按「不可用」处理，下面改走网络副本，不是错误。
         if (candidate && await checkedBlob(candidate, requested).catch(() => false)) { blob = candidate; source = 'inline' }
       }
       try {
@@ -149,7 +150,8 @@ export function createObjectIconLoader(options: Options) {
               continue
             }
             if (error instanceof ApiError && (error.status === 401 || error.status === 403 || error.status === 404 && data?.protocol === 1 && 'reason' in data && data.reason === 'not-found')) {
-              await device.storage.remove(capture.lease, iconObjectKey(requested.object_type, requested.object_id), valid).catch(() => undefined)
+              // 失去授权后删本机副本失败不能静默：与 put 失败同路径上报（stale 由 reportStorageError 忽略）。
+              await device.storage.remove(capture.lease, iconObjectKey(requested.object_type, requested.object_id), valid).catch(device.reportStorageError)
               return { blob: null, descriptor: requested, status: 'blocked' }
             }
             return fallback()
@@ -172,7 +174,8 @@ export function createObjectIconLoader(options: Options) {
         try { await device.storage.put(capture.lease, descriptor, blob, valid) }
         catch (error) { if (error instanceof IconStorageError && error.reason === 'stale') return blocked(); device.reportStorageError(error) }
         if (!valid()) return blocked()
-        void device.refreshStats().catch(() => undefined)
+        // 统计只服务于设备面板，失败不影响本次图标；留下诊断线索。
+        void device.refreshStats().catch((error) => console.warn('[CF-Navs] icon storage stats refresh failed', error))
         return { blob, descriptor, status: 'ready', source }
       } catch { return fallback() }
     })

@@ -2,7 +2,7 @@ import { createObjectIconLoader } from '../../src/lib/objectIconLoader'
 import { iconBytesRevision, type IconCopyRequest, type IconDescriptor } from '../../shared/iconLocalCopy'
 import { iconFixture } from '../helpers/iconFixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createIconDeviceController, ICON_DEVICE_KEY } from '../../src/lib/iconDeviceState'
+import { createIconDeviceController, ICON_DEVICE_KEY, ICON_STATS_REFRESH_DEBOUNCE_MS } from '../../src/lib/iconDeviceState'
 import { IconStorageError, type IconCopyStorage } from '../../src/lib/iconCopyStorage'
 
 const dataset = 'c'.repeat(32)
@@ -573,5 +573,51 @@ describe('device-scoped icon permission lifecycle', () => {
     await f.device.setTrusted(true)
     expect(f.device.capture()).toBeNull()
     expect(f.storage.activate).not.toHaveBeenCalled()
+  })
+})
+
+// 代码审查二轮第 3 项：存储统计独立成 store、合并刷新，不再向所有图标视图广播。
+describe('icon storage stats broadcast', () => {
+  it('publishes stats on their own store without notifying device subscribers', async () => {
+    const f = setup(); await f.ready()
+    const device: unknown[] = []
+    const stats: unknown[] = []
+    const stopDevice = f.device.subscribe(value => device.push(value))
+    const stopStats = f.device.stats.subscribe(value => stats.push({ ...value }))
+    expect(stats).toEqual([{ bodyBytes: 0, entries: 0, indexBytes: 4096 }])
+    expect('stats' in f.device.snapshot()).toBe(false)
+    f.setControl({ entries: 1, bodyBytes: 100 })
+    await f.device.refreshStats()
+    expect(stats.at(-1)).toEqual({ bodyBytes: 100, entries: 1, indexBytes: 4096 })
+    expect(device).toHaveLength(1) // 只有订阅时的初始回调
+    await f.device.refreshStats() // 无变化不广播
+    expect(stats).toHaveLength(2)
+    stopDevice(); stopStats()
+  })
+
+  it('coalesces a burst of refreshes into one storage read', async () => {
+    const f = setup(); await f.ready()
+    vi.useFakeTimers()
+    const reads = (f.storage.state as ReturnType<typeof vi.fn>).mock.calls.length
+    f.setControl({ entries: 50, bodyBytes: 5000 })
+    const pending = Array.from({ length: 50 }, () => f.device.refreshStats())
+    expect((f.storage.state as ReturnType<typeof vi.fn>).mock.calls.length).toBe(reads)
+    await vi.advanceTimersByTimeAsync(ICON_STATS_REFRESH_DEBOUNCE_MS)
+    await Promise.all(pending)
+    expect((f.storage.state as ReturnType<typeof vi.fn>).mock.calls.length).toBe(reads + 1)
+    expect(f.device.statsSnapshot().entries).toBe(50)
+  })
+
+  it('settles pending refreshes on dispose and resets stats on cleanup', async () => {
+    const f = setup(); await f.ready()
+    f.setControl({ entries: 3, bodyBytes: 30 })
+    await f.device.refreshStats()
+    expect(f.device.statsSnapshot().entries).toBe(3)
+    await f.device.clearCopies()
+    expect(f.device.statsSnapshot()).toMatchObject({ entries: 0, bodyBytes: 0 })
+    vi.useFakeTimers()
+    const pending = f.device.refreshStats()
+    f.device.dispose()
+    await expect(pending).resolves.toBeUndefined()
   })
 })

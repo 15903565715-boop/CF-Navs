@@ -140,7 +140,7 @@ async function click(selector, button = 'left') {
     const r = e.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2
     const hit = document.elementFromPoint(x, y)
     return r.width && r.height && (hit === e || e.contains(hit)) ? { x, y } : null
-  }, [selector]).catch(async error => {
+  }, [selector]).catch(async () => {
     const diagnostic = await b.call(sel => [...document.querySelectorAll(sel)].map(e => { const r=e.getBoundingClientRect(); const hit=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2); return {tag:e.tagName,disabled:e.disabled,rect:{x:r.x,y:r.y,w:r.width,h:r.height},hit:hit?.tagName,hitClass:hit?.className} }), selector)
     throw new Error('Click failed '+selector+' '+JSON.stringify(diagnostic))
   })
@@ -600,7 +600,7 @@ try {
   const browserVersion = await b.send('Browser.getVersion')
   report.browserVersion = { product: browserVersion.product, protocolVersion: browserVersion.protocolVersion, jsVersion: browserVersion.jsVersion }
   await installPageInstrumentation()
-  b.on('Runtime.bindingCalled',(event,sessionId)=>{if(event.name==='__issueCopyObserved'){try{observedCopyResponses.push({sessionId,...JSON.parse(event.payload)})}catch{}}})
+  b.on('Runtime.bindingCalled',(event,sessionId)=>{if(event.name==='__issueCopyObserved'){try{observedCopyResponses.push({sessionId,...JSON.parse(event.payload)})}catch{/* 非 JSON 负载忽略 */}}})
   b.on('Log.entryAdded',({entry})=>{if(['warning','error'].includes(entry.level)) report.browserLog.push({stage,level:entry.level,source:entry.source,requestId:entry.networkRequestId,text:safe(entry.text)})})
   await recordBrowserOwnership('initial')
   b.on('Fetch.requestPaused', event => {
@@ -632,7 +632,7 @@ try {
         return [...css.matchAll(/url\(["']?([^"')]+)["']?\)/g)].some(match=>new URL(match[1],location.href).href===url)
       },e.request.url).then(matches=>{if(matches){for(const request of report.requests)if(request.requestId===row.requestId)request.resourceRole='site-background';row.resourceRole='site-background'}}).catch(()=>{})
     }
-    if(row.kind==='icon-copy') {try{const body=JSON.parse(e.request.postData);row.copyRequest={dataset_epoch:body.dataset_epoch,expected_write_epoch:body.expected_write_epoch,expected_content_revision:body.expected_content_revision}}catch{}}
+    if(row.kind==='icon-copy') {try{const body=JSON.parse(e.request.postData);row.copyRequest={dataset_epoch:body.dataset_epoch,expected_write_epoch:body.expected_write_epoch,expected_content_revision:body.expected_content_revision}}catch{/* 无可解析正文时不记录 */}}
     row.documentLoaderId=e.loaderId
     row.cdpSessionId=sessionId
     if(row.kind==='icon-body')row.signed=new URL(e.request.url).searchParams.has('key')

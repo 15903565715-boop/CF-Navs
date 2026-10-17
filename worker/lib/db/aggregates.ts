@@ -10,7 +10,6 @@ import {
   type PublicBookmark,
   type PublicCategory,
   type Settings,
-  type SiteConfig,
 } from '../../../shared/types'
 import {
   BOOKMARK_AGGREGATE_LIST_SQL,
@@ -24,7 +23,7 @@ import {
 import { withSchemaRetry } from './schema'
 import { settingsFromRows } from '../settingsData'
 
-export async function getPublicDataSource(db: D1Database, _siteConfig?: SiteConfig, includePrivate = false): Promise<{
+export async function getPublicDataSource(db: D1Database, includePrivate = false): Promise<{
   categories: PublicCategory[]
   bookmarks: PublicBookmark[]
   settings: Settings

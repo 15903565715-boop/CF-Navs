@@ -17,7 +17,7 @@ function publish(patch: Partial<IconDeviceSnapshot>) {
 }
 function pendingState() {
   harness.state = { trusted: true, enabledForPage: false, phase: 'pending-reload', epoch: 0, lease: null,
-    dataset: 'c'.repeat(32), leaseUntil: null, checkedAt: null, stats: { bodyBytes: 0, entries: 0, indexBytes: 0 }, error: null }
+    dataset: 'c'.repeat(32), leaseUntil: null, checkedAt: null, error: null }
 }
 describe('trusted icon activation for the current document', () => {
   it.each([true, 1])('recognizes legacy server image metadata without inline bytes or a revision: %s', icon_cached => {
@@ -215,5 +215,27 @@ describe('verified icon identity survives snapshot hydration',()=>{
       else f.view.set({...f.input,icon_revision:'sha256-'+'b'.repeat(64)})
       expect(f.release).toHaveBeenCalledOnce()
     } finally {f.view.destroy()}
+  })
+})
+
+// 代码审查二轮第 3 项：签名不再序列化大体积 icon / icon_blob，但内容变化仍会重新评估。
+describe('trusted icon view signature', () => {
+  it('compares embedded bodies without serializing them and still reacts to a changed body', async () => {
+    pendingState(); publish({ enabledForPage: true, phase: 'ready' })
+    harness.acquire.mockImplementation(() => ({ result: Promise.resolve({ status: 'ready', url: 'blob:x' }), release: vi.fn() }))
+    const big = 'data:image/png;base64,' + 'A'.repeat(200_000)
+    const input = { id: 9, icon: null, icon_blob: big, icon_display: 'image' as const, icon_revision: 'sha256-' + 'd'.repeat(64), visible: true }
+    const stringify = vi.spyOn(JSON, 'stringify')
+    const view = createTrustedIconView(vi.fn())
+    try {
+      view.set(input); await Promise.resolve()
+      expect(harness.acquire).toHaveBeenCalledTimes(1)
+      expect(stringify.mock.calls.some(([value]) => String(value).includes('AAAA'))).toBe(false)
+      // 设备状态广播（同一 epoch）与同值重设都不重新获取。
+      publish({ checkedAt: 123 }); view.set({ ...input }); await Promise.resolve()
+      expect(harness.acquire).toHaveBeenCalledTimes(1)
+      view.set({ ...input, icon_blob: big.slice(0, -1) + 'B', icon_revision: null }); await Promise.resolve()
+      expect(harness.acquire).toHaveBeenCalledTimes(2)
+    } finally { stringify.mockRestore(); view.destroy() }
   })
 })

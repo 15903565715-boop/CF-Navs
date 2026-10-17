@@ -30,6 +30,7 @@ function bookmark(id: number, categoryId: number): PublicBookmark {
     icon: null,
     icon_source: 'custom',
     icon_background_color: null,
+    icon_blob: null,
     description: null,
     description_mode: null,
     open_method: 1,

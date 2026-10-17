@@ -41,7 +41,7 @@ const bookmarks = [
   bookmark({ id: 3, category_id: 3, is_private: false }), // 私密祖先链下的公开书签 → 带 key
 ]
 
-const imgBySrc = (root: ParentNode, fragment: string): Element | undefined =>
+const imgBySrc = (root: Element, fragment: string): Element | undefined =>
   Array.from(root.querySelectorAll('img')).find((img) => (img.getAttribute('src') ?? '').includes(fragment))
 
 beforeEach(() => {

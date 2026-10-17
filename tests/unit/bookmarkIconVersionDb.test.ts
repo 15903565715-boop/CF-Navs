@@ -119,7 +119,7 @@ describe('bookmark image version database boundary', () => {
 
   it('migrates old schema idempotently without reading image bodies', async () => {
     const legacy = schema.split('-- Versioned bookmark images:')[0]
-      .replace(/^  icon_revision.*\n/m, '').replace(/^  icon_write_epoch.*\n/m, '')
+      .replace(/^ {2}icon_revision.*\n/m, '').replace(/^ {2}icon_write_epoch.*\n/m, '')
     const { db, sqlite, statements } = database(legacy)
     await ensureSchema(db)
     await ensureSchema(db, true)

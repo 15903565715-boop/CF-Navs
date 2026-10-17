@@ -2,7 +2,6 @@ import { ICON_COPY_MAX_BYTES, ICON_COPY_PROTOCOL, isIconRevision, type IconCopyR
 import { getBookmarkIconData, setIconBlob, type BookmarkIconData } from './db/bookmarks'
 import { decodeVersionedIcon, iconContentRevision } from './iconRevision'
 import { fetchIcon, iconBytesToDataUri } from './iconData'
-import { invalidateRuntimeDataCache } from './runtimeCache'
 
 export function bookmarkIconDescriptor(id: number, row: BookmarkIconData): IconDescriptor {
   const hasImage = Boolean(row.icon_blob || row.icon?.startsWith('data:image/') || /^https?:/i.test(row.icon ?? ''))
@@ -46,7 +45,6 @@ export async function obtainBookmarkIconCopy(db: D1Database, input: IconCopyRequ
     if (!row) return { status: 404, data: { protocol: ICON_COPY_PROTOCOL, reason: 'not-found' } }
     descriptor = bookmarkIconDescriptor(input.object_id, row)
     if (!wrote || row.dataset_epoch !== input.dataset_epoch || row.icon_revision !== revision) return conflict()
-    invalidateRuntimeDataCache()
   }
   return { status: 200, data: {
     protocol: ICON_COPY_PROTOCOL, persistence: 'session-scoped', descriptor,
