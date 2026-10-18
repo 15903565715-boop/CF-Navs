@@ -67,6 +67,10 @@ jobs:
         id: translate
         if: ${{ !inputs.preview }}
         env:
+          # Kilo's OpenAI-compatible free router currently works with the
+          # compatibility backend; the default Agent Framework parser rejects
+          # its valid chat-completion response shape.
+          CO_OP_TRANSLATOR_MODEL_CLIENT: semantic-kernel
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_CHAT_MODEL_ID: ${{ secrets.OPENAI_CHAT_MODEL_ID }}
           OPENAI_ORG_ID: ${{ secrets.OPENAI_ORG_ID }}
@@ -83,7 +87,7 @@ jobs:
 
       - name: Review README translation
         id: review
-        if: ${{ !cancelled() && !inputs.preview && steps.preview.outcome == 'success' }}
+        if: ${{ !cancelled() && !inputs.preview && steps.translate.outcome == 'success' }}
         shell: bash
         run: |
           set -o pipefail
