@@ -18,6 +18,10 @@ const DB_VERSION = 1
 const ICON_STORE = 'icons'
 const META_STORE = 'meta'
 const EPOCH_META_KEY = 'epoch'
+/** localStorage 提示位：'1' = 本地库里（可能）有图标；不存在 = 从未写入过（首次访问）。 */
+export const ICON_LOCAL_HINT_KEY = 'cf-navs-icons-v2:has-entries'
+/** 打开并读出本地库的最长等待；超时（个别浏览器 open 永不回调）退回内存，本页照常下载。 */
+export const ICON_LOCAL_READY_TIMEOUT_MS = 3000
 
 export type IconObjectType = 'bookmark' | 'category'
 
@@ -42,6 +46,34 @@ export interface IconLocalBackend {
 }
 
 export class IconQuotaError extends Error {}
+
+/** 本地库是否有内容的同步提示。get 返回 null 表示未知（读不到 localStorage），按「可能有」处理。 */
+export interface IconLocalHint {
+  get(): boolean | null
+  set(hasEntries: boolean): void
+}
+
+export function createLocalStorageIconHint(key = ICON_LOCAL_HINT_KEY): IconLocalHint {
+  return {
+    get() {
+      try {
+        if (typeof localStorage === 'undefined') return null
+        return localStorage.getItem(key) === '1'
+      } catch {
+        return null
+      }
+    },
+    set(hasEntries) {
+      try {
+        if (typeof localStorage === 'undefined') return
+        if (hasEntries) localStorage.setItem(key, '1')
+        else localStorage.removeItem(key)
+      } catch {
+        // 存储被禁用：提示位只是优化，失败时下次照旧等待本地库。
+      }
+    },
+  }
+}
 
 function requestToPromise<T>(request: IDBRequest<T>): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -135,6 +167,8 @@ interface StoreOptions {
   createUrl?: (blob: Blob) => string
   revokeUrl?: (url: string) => void
   requestPersist?: () => Promise<unknown>
+  hint?: IconLocalHint | null
+  readyTimeoutMs?: number
   now?: () => number
   warn?: (message: string, error: unknown) => void
 }
@@ -147,6 +181,11 @@ export function createIconLocalStore(options: StoreOptions) {
   const now = options.now ?? Date.now
   const warn = options.warn ?? ((message, error) => console.warn('[CF-Navs] ' + message, error))
   let backend = options.backend
+  const hint = options.hint ?? null
+  const readyTimeoutMs = options.readyTimeoutMs ?? ICON_LOCAL_READY_TIMEOUT_MS
+  // 首次访问（提示位明确为「没写过」）时，下载不必等本地库打开：库里不可能有可用条目。
+  const skipReadyWait = Boolean(backend) && hint?.get() === false
+  let hintSet = false
   const memory = new Map<string, MemoryEntry>()
   const inflight = new Map<string, Promise<string | null>>()
   let storedEpoch: string | null = null
@@ -157,8 +196,12 @@ export function createIconLocalStore(options: StoreOptions) {
 
   const ready: Promise<void> = (async () => {
     if (!backend) { loaded = true; return }
+    let timer: ReturnType<typeof setTimeout> | undefined
     try {
-      const { entries, epoch } = await backend.loadAll()
+      const timeout = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error('icon local store open timed out')), readyTimeoutMs)
+      })
+      const { entries, epoch } = await Promise.race([backend.loadAll(), timeout])
       storedEpoch = epoch
       for (const entry of entries) {
         if (entry && typeof entry.key === 'string' && typeof entry.version === 'string' && entry.blob instanceof Blob && !memory.has(entry.key)) {
@@ -169,6 +212,7 @@ export function createIconLocalStore(options: StoreOptions) {
       warn('icon local store unavailable; using memory only', error)
       backend = null
     } finally {
+      clearTimeout(timer)
       loaded = true
     }
   })()
@@ -211,21 +255,28 @@ export function createIconLocalStore(options: StoreOptions) {
         void (options.requestPersist?.() ?? Promise.resolve()).catch(() => undefined)
       }
       const { url: _url, ...record } = entry
-      try {
-        if (own === generation && memory.get(key) === entry) await backend.put(record)
-        // put 落盘期间被 clear/prune 删掉了：把磁盘上的这条也删掉。
-        if (own !== generation && memory.get(key) !== entry) persistDelete([key])
-      } catch (error) {
-        // 配额满 / 写失败：保留内存副本，本页继续使用，不打扰用户。
-        if (!(error instanceof IconQuotaError)) warn('icon local write failed', error)
-      }
+      const target = backend
+      // 落盘不阻塞显示：先把 blob URL 交给页面，写入在后台完成。
+      void (async () => {
+        try {
+          if (own === generation && memory.get(key) === entry) {
+            await target.put(record)
+            if (!hintSet) { hintSet = true; hint?.set(true) }
+          }
+          // put 落盘期间被 clear/prune 删掉了：把磁盘上的这条也删掉。
+          if (own !== generation && memory.get(key) !== entry) persistDelete([key])
+        } catch (error) {
+          // 配额满 / 写失败：保留内存副本，本页继续使用，不打扰用户。
+          if (!(error instanceof IconQuotaError)) warn('icon local write failed', error)
+        }
+      })()
     }
     return url
   }
 
   /** 本地有同版本就直接返回；否则下载一次（同键同版本合并），成功的真实图片落盘。 */
   async function resolve(key: string, version: string, fetchUrl: string, isPrivate: boolean): Promise<string | null> {
-    await ready
+    if (!skipReadyWait) await ready
     const hit = peek(key, version)
     if (hit) return hit
     const id = key + '\n' + version + '\n' + (isPrivate ? 'p' : 'a')
@@ -304,11 +355,17 @@ let defaultStore: IconLocalStore | null = null
 export function iconLocalStore(): IconLocalStore {
   defaultStore ??= createIconLocalStore({
     backend: createIndexedDbIconBackend(),
+    hint: createLocalStorageIconHint(),
     // 复用普通对象图标的有界调度器（并发 4、同 URL 合并、10s 超时）。
     fetchPayload: fetchScheduledObjectIconPayload,
     requestPersist: () => (typeof navigator !== 'undefined' && navigator.storage?.persist ? navigator.storage.persist() : Promise.resolve(false)),
   })
   return defaultStore
+}
+
+/** 启动时调用：提前打开并读出本地库，与数据包请求、首屏渲染并行，而不是等第一个图标出现。 */
+export function warmIconLocalStore(): void {
+  void iconLocalStore().ready
 }
 
 /** 由数据包或 /data/version 带回的元数据组成标志位；缺字段（旧服务端）返回空串，不触发清理。 */
