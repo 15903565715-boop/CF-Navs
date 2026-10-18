@@ -212,36 +212,36 @@ async function main() {
     check('恢复书签排序 code=0', sortedBack.json?.code === 0)
   }
 
-  // REQ-15: use only generated local data; this fixture is removed before later CRUD assertions.
-  section('REQ-15 受保护图标副本协议')
+  // 图标本地优先 v2：全局 icon_epoch 只随图标相关变化递增；可信设备副本接口已移除。
+  section('图标全局标志位 icon_epoch')
   {
+    const epochOf = async () => (await call('/api/data/version', { token })).json?.data?.icon_epoch
     const icon = 'data:image/svg+xml;base64,' + Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><rect width="16" height="16" fill="red"/></svg>').toString('base64')
-    const created = await call('/api/bookmarks', { method: 'POST', token, body: { category_id: catA.id, title: 'Local copy fixture', url: 'https://example.com', icon, icon_source: 'custom', is_private: true } })
-    check('副本 fixture 创建成功', created.json?.code === 0 && Boolean(created.json?.data?.id))
+    const before = await epochOf()
+    check('版本接口返回整数 icon_epoch', Number.isInteger(before), String(before))
+    const created = await call('/api/bookmarks', { method: 'POST', token, body: { category_id: catA.id, title: 'Icon epoch fixture', url: 'https://example.com', icon, icon_source: 'custom', is_private: true } })
+    check('icon_epoch fixture 创建成功', created.json?.code === 0 && Boolean(created.json?.data?.id))
     const id = created.json?.data?.id
     if (id) {
       try {
-        const version = await call('/api/data/version', { token })
-        check('公开模式的版本接口提供真实会话回执', version.json?.data?.auth_receipt?.expires_at > Date.now() && /^[a-f0-9]{64}$/.test(version.json?.data?.auth_receipt?.cache_scope ?? ''))
-        const request = { protocol: 1, object_type: 'bookmark', object_id: id, dataset_epoch: version.json?.data?.dataset_epoch, expected_write_epoch: created.json?.data?.icon_write_epoch, expected_content_revision: null }
-        const anonymous = await call('/api/icon-local-copy', { method: 'POST', body: request })
-        check('副本接口匿名拒绝且不缓存', anonymous.status === 401 && anonymous.headers.get('cache-control') === 'private, no-store')
-        const copy = await call('/api/icon-local-copy', { method: 'POST', token, body: request })
-        check('副本协议返回授权成功图片及真实版本', copy.status === 200 && copy.json?.data?.persistence === 'session-scoped' && /^sha256-[a-f0-9]{64}$/.test(copy.json?.data?.descriptor?.content_revision ?? ''))
-        check('副本传输禁止浏览器与 CDN 自动缓存', copy.headers.get('cache-control') === 'private, no-store' && copy.headers.get('cdn-cache-control') === 'no-store')
-        check('副本正文与长度一致', Buffer.from(copy.json?.data?.image?.base64 ?? '', 'base64').byteLength === copy.json?.data?.image?.byte_length)
+        const afterCreate = await epochOf()
+        check('新增书签递增 icon_epoch', afterCreate > before, `${before} -> ${afterCreate}`)
         const admin = await call('/api/admin/data', { token, headers: { 'cache-control': 'no-cache' } })
+        check('后台聚合携带同一 icon_epoch', admin.json?.data?.icon_epoch === afterCreate)
         const row = admin.json?.data?.bookmarks?.find(item => item.id === id)
-        check('聚合返回轻量版本而非完整 icon_blob', row?.icon_blob === null && row?.icon_revision === copy.json?.data?.descriptor?.content_revision && admin.json?.data?.dataset_epoch === request.dataset_epoch)
-        const changed = await call('/api/bookmarks/' + id, { method: 'PUT', token, body: { category_id: catA.id, title: 'Changed local fixture', url: 'https://example.com', icon: null, is_private: true } })
+        check('聚合返回轻量版本而非完整 icon_blob', row !== undefined && row.icon_blob === null)
+        await call('/api/public/bookmarks/' + id + '/click', { method: 'POST' })
+        check('点击不递增 icon_epoch', await epochOf() === afterCreate)
+        const changed = await call('/api/bookmarks/' + id, { method: 'PUT', token, body: { category_id: catA.id, title: 'Changed epoch fixture', url: 'https://example.com', icon: null, is_private: true } })
         check('清空图片成功', changed.json?.code === 0)
-        const conflict = await call('/api/icon-local-copy', { method: 'POST', token, body: request })
-        check('旧描述请求不能保存到新对象版本', conflict.status === 409 && conflict.json?.data?.reason === 'conflict' && !conflict.json?.data?.image)
-        const empty = await call('/api/icon-local-copy', { method: 'POST', token, body: { ...request, expected_write_epoch: changed.json?.data?.icon_write_epoch } })
-        check('清空与失败语义分离', empty.status === 200 && empty.json?.data?.descriptor?.state === 'empty' && empty.json?.data?.image === null)
+        check('修改图标递增 icon_epoch', await epochOf() > afterCreate)
+        const removedRoute = await call('/api/icon-local-copy', { method: 'POST', token, body: {} })
+        check('可信副本接口已移除', removedRoute.json?.code !== 0 || removedRoute.status === 404, String(removedRoute.status))
       } finally {
+        const mid = await epochOf()
         const removed = await call('/api/bookmarks/' + id, { method: 'DELETE', token })
-        check('副本 fixture 已清理', removed.json?.code === 0)
+        check('icon_epoch fixture 已清理', removed.json?.code === 0)
+        check('删除书签递增 icon_epoch', await epochOf() > mid)
       }
     }
   }

@@ -16,7 +16,6 @@ import faviconRoutes from './routes/favicon'
 import installRoutes from './routes/install'
 import recoverRoutes from './routes/recover'
 import { iconProtectedRoutes, iconRoutes } from './routes/icon'
-import { iconLocalCopyHeaders, iconLocalCopyRoutes } from './routes/iconLocalCopy'
 import publicRoutes from './routes/public'
 import settingsRoutes from './routes/settings'
 import type { HonoEnv } from './types'
@@ -58,7 +57,6 @@ publicApi.route('/', iconRoutes)
 // 透传中间件：先于受保护子应用执行，使 401 响应同样带上这些头。
 publicApi.options('/browser-sync/bookmarks', () => corsPreflight())
 publicApi.use('/browser-sync/*', corsHeaders)
-publicApi.use('/icon-local-copy', iconLocalCopyHeaders)
 
 export const protectedApi = new Hono<HonoEnv>()
 
@@ -70,7 +68,6 @@ protectedApi.route('/bookmarks', bookmarksRoutes)
 protectedApi.route('/browser-sync', browserSyncRoutes)
 protectedApi.route('/', faviconRoutes) // /fetch-favicon、/fetch-site-meta
 protectedApi.route('/', iconProtectedRoutes) // /icon-access、/iconify-search
-protectedApi.route('/', iconLocalCopyRoutes)
 protectedApi.route('/settings', settingsRoutes)
 protectedApi.route('/', dataRoutes) // /import
 

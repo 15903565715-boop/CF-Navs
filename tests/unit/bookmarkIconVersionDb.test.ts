@@ -126,7 +126,7 @@ describe('bookmark image version database boundary', () => {
     const columns = sqlite.prepare('PRAGMA table_info(bookmarks)').all().map(row => row.name)
     expect(columns).toContain('icon_revision')
     expect(columns).toContain('icon_write_epoch')
-    expect(sqlite.prepare("SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'bookmark_icon_%'").all()).toHaveLength(3)
+    expect(sqlite.prepare("SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'bookmark_icon_%' AND name NOT LIKE 'bookmark_icon_epoch_%'").all()).toHaveLength(3)
     expect(statements.some(sql => /^SELECT.*icon_blob/i.test(sql))).toBe(false)
     expect(schema).toContain(INITIALIZE_ICON_DATASET_SQL)
     for (const trigger of BOOKMARK_ICON_TRIGGERS) expect(schema).toContain(trigger)

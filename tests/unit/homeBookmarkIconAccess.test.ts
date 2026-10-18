@@ -5,6 +5,7 @@ import CategorySection from '../../src/components/CategorySection.svelte'
 import Home from '../../src/views/Home.svelte'
 import { iconAccessKey } from '../../src/lib/iconAccessKey'
 import type { PublicBookmark, PublicCategory } from '../../shared/types'
+vi.mock('../../src/lib/localIconView', () => import('../helpers/inactiveLocalIconView'))
 
 // Issue #28：首页私密书签的图标必须经带 key 的代理 URL 才能拿到真实图标；公开书签保持匿名 URL，
 // 对象代理客户端统一 no-store，公开正文复用由 Worker edge cache 承担，Service Worker 不接管对象代理。

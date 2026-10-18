@@ -161,12 +161,13 @@ export function getDataVersion(data: { version?: string } | null | undefined): s
 }
 
 export function stripPublicDataVersion(data: PublicData): PublicData {
-  const { version: _version, auth_receipt: _receipt, ...rest } = data
+  // auth_receipt：旧版服务端 / 旧快照的字段，丢弃。
+  const { version: _version, auth_receipt: _receipt, ...rest } = data as PublicData & { auth_receipt?: unknown }
   return rest as PublicData
 }
 
 export function stripAdminDataVersion(data: AdminData): AdminData {
-  const { version: _version, auth_receipt: _receipt, ...rest } = data
+  const { version: _version, auth_receipt: _receipt, ...rest } = data as AdminData & { auth_receipt?: unknown }
   return rest as AdminData
 }
 
@@ -219,7 +220,7 @@ export function mergePublicData(current: PublicData | null, next: PublicData): P
   const settings = jsonEqual(current.settings, next.settings) ? current.settings : next.settings
 
   if (categories === current.categories && bookmarks === current.bookmarks && settings === current.settings &&
-    current.dataset_epoch === next.dataset_epoch && current.icon_local_copy_protocol === next.icon_local_copy_protocol && current.icon_inline_copy_protocol === next.icon_inline_copy_protocol) {
+    current.dataset_epoch === next.dataset_epoch && current.icon_epoch === next.icon_epoch) {
     return current
   }
 
@@ -232,7 +233,7 @@ export function mergeAdminData(current: AdminData, next: AdminData): AdminData {
   const settings = jsonEqual(current.settings, next.settings) ? current.settings : next.settings
 
   if (categories === current.categories && bookmarks === current.bookmarks && settings === current.settings &&
-    current.dataset_epoch === next.dataset_epoch && current.icon_local_copy_protocol === next.icon_local_copy_protocol && current.icon_inline_copy_protocol === next.icon_inline_copy_protocol) {
+    current.dataset_epoch === next.dataset_epoch && current.icon_epoch === next.icon_epoch) {
     return current
   }
 
@@ -241,7 +242,8 @@ export function mergeAdminData(current: AdminData, next: AdminData): AdminData {
 
 export function adminDataToPublicData(data: AdminData, settings: Settings): PublicData {
   return {
-    ...(data.dataset_epoch ? { dataset_epoch: data.dataset_epoch, icon_local_copy_protocol: data.icon_local_copy_protocol, icon_inline_copy_protocol: data.icon_inline_copy_protocol } : {}),
+    ...(data.dataset_epoch ? { dataset_epoch: data.dataset_epoch } : {}),
+    ...(data.icon_epoch !== undefined ? { icon_epoch: data.icon_epoch } : {}),
     categories: data.categories,
     bookmarks: toPublicBookmarks(data.bookmarks),
     settings: toPublicSettings(settings),

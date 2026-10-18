@@ -62,7 +62,7 @@ describe('route auth by construction', () => {
     for (const expected of [
       'GET /admin/data', 'POST /bookmarks', 'PUT /bookmarks/:id', 'DELETE /categories/:id', 'PUT /settings',
       'POST /import', 'GET /fetch-favicon', 'GET /fetch-site-meta', 'GET /icon-access', 'GET /iconify-search',
-      'POST /icon-local-copy', 'POST /browser-sync/bookmarks', 'POST /logout', 'POST /password', 'GET /me',
+      'POST /browser-sync/bookmarks', 'POST /logout', 'POST /password', 'GET /me',
     ]) {
       expect(keys).toContain(expected)
     }
@@ -119,8 +119,5 @@ describe('route auth by construction', () => {
     const sync = await anonymous('POST', '/browser-sync/bookmarks')
     expect(sync.status).toBe(401)
     expect(sync.headers.get('Access-Control-Allow-Origin')).toBe('*')
-    const copy = await anonymous('POST', '/icon-local-copy')
-    expect(copy.status).toBe(401)
-    expect(copy.headers.get('Cache-Control')).toBe('private, no-store')
   })
 })

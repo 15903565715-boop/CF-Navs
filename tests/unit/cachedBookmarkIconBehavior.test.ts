@@ -17,9 +17,9 @@ const h = vi.hoisted(() => {
   }
 })
 
-vi.mock('../../src/lib/trustedIconView', () => ({
-  emptyTrustedIcon: { active: false, url: '', pending: false },
-  createTrustedIconView: (onChange: (value: { active: boolean; url: string; pending: boolean }) => void) => {
+vi.mock('../../src/lib/localIconView', () => ({
+  emptyLocalIcon: { active: false, url: '', pending: false },
+  createLocalIconView: (onChange: (value: { active: boolean; url: string; pending: boolean }) => void) => {
     const view = { set: vi.fn(), failed: vi.fn(), destroy: vi.fn(), publish: onChange }
     h.views.push(view)
     return view
@@ -140,7 +140,7 @@ describe('CachedBookmarkIcon', () => {
     expect(cache.fetchCachedBookmarkIconUrl).not.toHaveBeenCalled()
   })
 
-  it('feeds the trusted view and prefers its URL while active; errors go to the trusted owner', async () => {
+  it('feeds the local icon view and prefers its URL while active; errors go to the local icon owner', async () => {
     const rendered = render(CachedBookmarkIcon, { id: '12', icon: ' https://e.com/a.png ', iconCached: true, iconRevision: 'r1', iconWriteEpoch: 3, iconDisplay: 'image', src: 'https://e.com/a.png' })
     expect(view().set).toHaveBeenLastCalledWith(expect.objectContaining({
       id: 12, icon: 'https://e.com/a.png', icon_blob: '', icon_revision: 'r1', icon_cached: true, icon_write_epoch: 3, icon_display: 'image', visible: false, online_url: 'https://e.com/a.png',

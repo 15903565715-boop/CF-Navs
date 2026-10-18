@@ -1,8 +1,6 @@
 <svelte:options runes />
 
 <script lang="ts">
-  import { startIconDevice } from './lib/iconDeviceState'
-  let stopIconDevice: (() => void) | undefined
   import { onDestroy, onMount, tick } from 'svelte'
   import { get } from 'svelte/store'
   import { fade } from 'svelte/transition'
@@ -425,7 +423,6 @@
   })
 
   onMount(() => {
-    stopIconDevice = startIconDevice()
     preferredThemeMode = readPreferredThemeMode()
     customScriptController = createCustomScriptController(createBrowserCustomScriptHost())
 
@@ -442,7 +439,6 @@
   })
 
   onDestroy(() => {
-    stopIconDevice?.()
     stopSystemDark?.()
     // 不 revoke 的话每次重建都会漏一个 blob URL。
     customScriptController?.destroy()
@@ -548,7 +544,6 @@
         onBatchDeleteBookmarks={bookmarkController.batchRemove}
         onBatchMoveBookmarks={bookmarkController.batchMove}
         onSubmitSettings={settingsController.submit}
-        onVerifyDevice={() => refreshLoggedInData(true)}
         onChangePassword={settingsController.changePassword}
         onSortCategories={categoryController.sort}
         onSortBookmarks={bookmarkController.sort}

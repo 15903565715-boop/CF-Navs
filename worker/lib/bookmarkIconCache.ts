@@ -1,5 +1,5 @@
 import type { IconSource } from '../../shared/types'
-import { ICON_COPY_MAX_BYTES } from '../../shared/iconLocalCopy'
+import { ICON_MAX_BYTES } from '../../shared/iconDescriptor'
 import { fetchIcon, iconBytesToDataUri } from './iconData'
 import { getBookmarkIconData, setIconBlob } from './db'
 import type { MutationReceipt } from './db/mutation'
@@ -26,7 +26,7 @@ export async function cacheBookmarkIconBlob(
   if (iconUrl?.startsWith('data:image/')) {
     blob = iconUrl
   } else if (iconUrl && /^https?:\/\//i.test(iconUrl)) {
-    const outcome = await fetchIcon(iconUrl, timeoutMs, ICON_COPY_MAX_BYTES)
+    const outcome = await fetchIcon(iconUrl, timeoutMs, ICON_MAX_BYTES)
     if (!outcome.ok) return unchanged
     blob = iconBytesToDataUri(outcome.icon)
   }

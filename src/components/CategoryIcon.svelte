@@ -13,7 +13,7 @@
     normalizeCategoryIcon,
   } from '../lib/categoryIconDisplay'
   import { withIconAccessKey } from '../lib/iconAccessKey'
-  import { createTrustedIconView, emptyTrustedIcon, type TrustedIconState } from '../lib/trustedIconView'
+  import { createLocalIconView, emptyLocalIcon, type LocalIconState } from '../lib/localIconView'
 
   interface Props {
     category: CategoryIconValue
@@ -35,12 +35,12 @@
     preview = false,
   }: Props = $props()
 
-  // 可信图标视图每次发布新对象；不做深层代理。
-  let trustedState: TrustedIconState = $state.raw(emptyTrustedIcon)
-  const trustedView = createTrustedIconView(value => { trustedState = value })
+  // 本地图标视图每次发布新对象；不做深层代理。
+  let localState: LocalIconState = $state.raw(emptyLocalIcon)
+  const localView = createLocalIconView(value => { localState = value })
 
   // One native source owns its retry budget. Blob failures remain with the
-  // trusted-copy owner; native fallbacks also need recovery while it is active.
+  // local-icon owner; native fallbacks also need recovery while it is active.
   let sourceUrl = $state('')
   let retryUrl = $state('')
   let failedUrl = $state('')
@@ -60,9 +60,9 @@
     const input = { object_type: 'category' as const, id: Number(category.id), icon: category.icon, icon_blob: category.icon_blob,
       icon_revision: category.icon_revision, icon_write_epoch: category.icon_write_epoch, icon_display: category.icon_display,
       visible: true, preview, online_url: nextImageUrl }
-    untrack(() => trustedView.set(input))
+    untrack(() => localView.set(input))
   })
-  const selectedUrl = $derived(trustedState.active ? trustedState.url : nextImageUrl)
+  const selectedUrl = $derived(localState.active ? localState.url : nextImageUrl)
   // 换源时复位重试与失败标记；只依赖 selectedUrl，先于 DOM 更新。
   $effect.pre(() => {
     const nextUrl = selectedUrl
@@ -76,12 +76,12 @@
     })
   })
   const nativeSource = $derived(!preview && sourceUrl.startsWith('/api/category-icon/'))
-  const isTrustedBlob = $derived(trustedState.active && sourceUrl.startsWith('blob:'))
+  const isLocalBlob = $derived(localState.active && sourceUrl.startsWith('blob:'))
   const imageUrl = $derived(nativeSource ? retryUrl || sourceUrl : sourceUrl)
   const textIcon = $derived(getCategoryTextIcon(category))
 
   function handleImageError(): void {
-    if (isTrustedBlob) { trustedView.failed(); return }
+    if (isLocalBlob) { localView.failed(); return }
     failedUrl = imageUrl
     if (nativeSource) nativeRetry.failed()
   }
@@ -105,7 +105,7 @@
     return { update, destroy: () => watchdog?.destroy() }
   }
 
-  onDestroy(() => { nativeRetry.dispose(); trustedView.destroy() })
+  onDestroy(() => { nativeRetry.dispose(); localView.destroy() })
 </script>
 
 {#if iconValue}
@@ -116,7 +116,7 @@
     aria-hidden={label ? undefined : 'true'}
     aria-label={label || undefined}
   >
-    {#if imageUrl && (isTrustedBlob || imageUrl !== failedUrl)}
+    {#if imageUrl && (isLocalBlob || imageUrl !== failedUrl)}
       <img src={imageUrl} alt="" loading={imageLoading} decoding="async" use:watchNativeImage={imageUrl} onload={handleImageLoad} onerror={handleImageError} />
     {:else if textIcon}
       <span class="category-icon-text">{textIcon}</span>

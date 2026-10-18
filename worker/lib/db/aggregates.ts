@@ -1,5 +1,5 @@
-import type { IconCopyMetadata } from '../../../shared/iconLocalCopy'
-import { iconMetadataFromRows } from '../iconCopyMetadata'
+import type { IconDataMetadata } from '../../../shared/iconDescriptor'
+import { iconMetadataFromRows } from '../iconMetadata'
 import { dataVersionFromValue } from './settings'
 // 跨表聚合读取：公开首页数据源与后台聚合数据
 
@@ -28,7 +28,7 @@ export async function getPublicDataSource(db: D1Database, includePrivate = false
   bookmarks: PublicBookmark[]
   settings: Settings
   version: string
-} & IconCopyMetadata> {
+} & IconDataMetadata> {
   return await withSchemaRetry(db, async () => {
     // Visibility and its version must come from the same batch, not an earlier config cache.
     const settingsSql = PUBLIC_DATA_SETTINGS_LIST_SQL

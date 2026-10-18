@@ -7,7 +7,7 @@ import {
   registerServiceWorker,
 } from './lib/serviceWorkerClient'
 import { toastStore } from './lib/toast'
-import { migrateLegacyIconCopies } from './lib/legacyIconCopyMigration'
+import { deleteLegacyTrustedIconDatabase, migrateLegacyIconCopies } from './lib/legacyIconCopyMigration'
 import App from './App.svelte'
 import { installBrowserThemeColor } from './lib/browserThemeColor'
 import { initAppServices } from './lib/appServices'
@@ -16,9 +16,10 @@ const stopThemeColor = installBrowserThemeColor(document)
 if (import.meta.hot) import.meta.hot.dispose(stopThemeColor)
 
 initErrorReporting()
-// 模块之间的回调接线（会话生命周期 → 图标设备 / 图标 key，图标加载器 → dataService），须先于挂载。
+// 模块之间的回调接线（会话生命周期 → 本地图标库 / 图标 key），须先于挂载。
 initAppServices()
 void migrateLegacyIconCopies()
+void deleteLegacyTrustedIconDatabase()
 
 const app = mount(App, {
   target: document.getElementById('app')!,

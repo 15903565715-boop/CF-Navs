@@ -1,4 +1,4 @@
-import type { IconCopyMetadata } from './iconLocalCopy'
+import type { IconDataMetadata } from './iconDescriptor'
 
 // CF-Navs 前后端共享类型与 API 契约（单一事实来源）
 // 前端 src/ 与后端 worker/ 都从这里 import，禁止各自重新定义。
@@ -265,7 +265,7 @@ export interface RecoverReq {
 }
 
 // GET /api/public/data  （公开只读聚合）
-export interface PublicData extends IconCopyMetadata {
+export interface PublicData extends IconDataMetadata {
   categories: PublicCategory[]
   bookmarks: PublicBookmark[]
   settings: PublicSettings
@@ -273,7 +273,7 @@ export interface PublicData extends IconCopyMetadata {
 }
 
 // GET /api/admin/data  登录态后台聚合数据
-export interface AdminData extends IconCopyMetadata {
+export interface AdminData extends IconDataMetadata {
   categories: Category[]
   bookmarks: Bookmark[]
   settings: Settings | null
@@ -281,7 +281,7 @@ export interface AdminData extends IconCopyMetadata {
 }
 
 // GET /api/data/version  lightweight data version check
-export interface DataVersionResp extends IconCopyMetadata {
+export interface DataVersionResp extends IconDataMetadata {
   version: string
   site_title: string
   public_mode: boolean

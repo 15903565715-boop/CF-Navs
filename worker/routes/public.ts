@@ -1,4 +1,3 @@
-import { iconAuthReceipt } from '../lib/iconCopyMetadata'
 import { Hono } from 'hono'
 import {
   ErrCode,
@@ -106,7 +105,6 @@ publicRoutes.get('/data/version', async (c) => {
   const data: DataVersionResp = {
     version,
     ...iconMetadata,
-    ...(session && token ? { auth_receipt: await iconAuthReceipt(token, session.exp) } : {}),
     site_title: siteConfig.site_title,
     public_mode: siteConfig.public_mode,
   }
@@ -144,10 +142,7 @@ publicRoutes.get('/public/data', async (c) => {
     c.set('username', session.username)
     c.set('sessionExpiresAt', session.exp)
     const source = await getPublicDataSource(c.env.DB, true)
-    const data: PublicData = {
-      ...publicDataPayload(source),
-      auth_receipt: await iconAuthReceipt(token, session.exp),
-    }
+    const data: PublicData = publicDataPayload(source)
     return c.json(ok(data), 200, { 'Cache-Control': 'no-store' })
   }
 
@@ -207,7 +202,8 @@ function publicDataPayload(source: Awaited<ReturnType<typeof getPublicDataSource
     bookmarks: source.bookmarks,
     settings: toPublicSettings(source.settings),
     version: source.version,
-    ...(source.dataset_epoch ? { dataset_epoch: source.dataset_epoch, icon_local_copy_protocol: source.icon_local_copy_protocol, icon_inline_copy_protocol: source.icon_inline_copy_protocol } : {}),
+    ...(source.dataset_epoch ? { dataset_epoch: source.dataset_epoch } : {}),
+    ...(source.icon_epoch !== undefined ? { icon_epoch: source.icon_epoch } : {}),
   }
 }
 

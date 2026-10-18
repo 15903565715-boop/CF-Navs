@@ -5,6 +5,7 @@ import BookmarkCard from '../../src/components/BookmarkCard.svelte'
 import SpotlightBookmarkIcon from '../../src/components/SpotlightBookmarkIcon.svelte'
 import type { PublicBookmark } from '../../shared/types'
 import { bookmarkIconDisplay } from '../../src/lib/iconDisplayStore'
+vi.mock('../../src/lib/localIconView', () => import('../helpers/inactiveLocalIconView'))
 
 const bookmark: PublicBookmark = {
   id: 42, category_id: 1, title: 'Recovery', url: 'https://example.test',

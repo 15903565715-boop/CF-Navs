@@ -17,6 +17,12 @@ const TRIGGERS = [
   'category_icon_legacy_body',
   'category_icon_legacy_source',
   'category_icon_publish',
+  'bookmark_icon_epoch_insert',
+  'bookmark_icon_epoch_delete',
+  'bookmark_icon_epoch_update',
+  'category_icon_epoch_insert',
+  'category_icon_epoch_delete',
+  'category_icon_epoch_update',
 ]
 
 const open: ReturnType<typeof createSqliteD1>[] = []

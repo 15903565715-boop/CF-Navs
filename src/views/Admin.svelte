@@ -61,7 +61,6 @@
     onBatchDeleteBookmarks?: (ids: number[]) => AsyncVoid
     onBatchMoveBookmarks?: (payload: BookmarkBatchMoveReq) => AsyncVoid
     onSubmitSettings?: (payload: SettingsFormValue) => AsyncVoid
-    onVerifyDevice?: () => Promise<void>
     onChangePassword?: (payload: ChangePasswordReq) => AsyncVoid
     onSortCategories?: CategorySortHandler
     onSortBookmarks?: SortHandler
@@ -109,7 +108,6 @@
     onBatchDeleteBookmarks = undefined,
     onBatchMoveBookmarks = undefined,
     onSubmitSettings = undefined,
-    onVerifyDevice = undefined,
     onChangePassword = undefined,
     onSortCategories = undefined,
     onSortBookmarks = undefined,
@@ -223,7 +221,6 @@
       {onBatchDeleteBookmarks}
       {onBatchMoveBookmarks}
       {onSubmitSettings}
-      {onVerifyDevice}
       {onChangePassword}
       {onSortCategories}
       {onSortBookmarks}

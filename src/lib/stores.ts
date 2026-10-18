@@ -124,10 +124,10 @@ function createPublicStore() {
   }
 }
 
-// 会话生命周期钩子：authStore 不直接依赖图标设备或图标访问 key，
+// 会话生命周期钩子：authStore 不直接依赖本地图标库或图标访问 key，
 // 由 appServices.initAppServices() 在启动时接上（见 main.ts）。没接时为空操作。
 export interface AuthLifecycleHooks {
-  /** 登出开始时调用（先于撤销请求），用于让设备副本进入退出流程。 */
+  /** 登出开始时调用（先于撤销请求），用于删除本机私密图标条目。 */
   onLogoutStart: () => void
   /** 本地会话消失时调用（登出、401、其它标签页退出），用于清理跟会话绑定的凭据。 */
   onSessionCleared: () => void

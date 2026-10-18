@@ -1,5 +1,3 @@
-import { extractBearerToken } from '../middleware/auth'
-import { iconAuthReceipt } from '../lib/iconCopyMetadata'
 import { Hono } from 'hono'
 import { getAdminData } from '../lib/db'
 import { ok } from '../lib/response'
@@ -12,9 +10,8 @@ export const adminRoutes = new Hono<HonoEnv>()
 // 却要求每个写路由记得失效。后台聚合始终直读一次 D1 batch。
 adminRoutes.get('/data', async (c) => {
   try {
-    const receipt = await iconAuthReceipt(extractBearerToken(c.req.header('Authorization'))!, c.get('sessionExpiresAt'))
     const data = await getAdminData(c.env.DB)
-    return c.json(ok({ ...data, auth_receipt: receipt }), 200, {
+    return c.json(ok(data), 200, {
       'Cache-Control': 'no-store',
     })
   } catch (error) {

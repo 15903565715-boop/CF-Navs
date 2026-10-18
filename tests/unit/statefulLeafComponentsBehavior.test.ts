@@ -15,6 +15,7 @@ import type { SearchEngineSetting } from '../../shared/types'
 import BackupPanelBindHarness from '../helpers/statefulLeaf/BackupPanelBindHarness.svelte'
 import SearchBoxBindHarness from '../helpers/statefulLeaf/SearchBoxBindHarness.svelte'
 import TreeSelectBindHarness from '../helpers/statefulLeaf/TreeSelectBindHarness.svelte'
+vi.mock('../../src/lib/localIconView', () => import('../helpers/inactiveLocalIconView'))
 
 // 代码审查三轮第 21 项（APP_SPLIT_PLAN 第 8d 步）：9 个层级 0 有状态组件迁移到 runes 之前的行为基线。
 // 在 legacy 实现上写成并通过，迁移时不改一行。CachedBookmarkIcon 见 cachedBookmarkIconBehavior.test.ts；

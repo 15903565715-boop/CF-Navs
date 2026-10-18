@@ -1,11 +1,11 @@
 <svelte:options runes />
 
 <script lang="ts">
-  import { createTrustedIconView, emptyTrustedIcon } from '../lib/trustedIconView'
+  import { createLocalIconView, emptyLocalIcon } from '../lib/localIconView'
   import { applyIconDisplayOverride, bookmarkIconDisplay } from '../lib/iconDisplayStore'
-  // 可信图标视图每次发布新对象；不做深层代理。
-  let trustedImage = $state.raw(emptyTrustedIcon)
-  const trustedView = createTrustedIconView(value => { trustedImage = value })
+  // 本地图标视图每次发布新对象；不做深层代理。
+  let localImage = $state.raw(emptyLocalIcon)
+  const localView = createLocalIconView(value => { localImage = value })
   import { onDestroy, onMount, untrack } from 'svelte'
   import { on } from 'svelte/events'
   import type { Attachment } from 'svelte/attachments'
@@ -138,7 +138,7 @@
   // watch 对同一 id 返回同一个 store，`$iconDisplayOverride` 不会反复重订阅。
   const iconDisplayOverride = $derived(bookmarkIconDisplay.watch(bookmark.id))
   const iconBookmark = $derived(applyIconDisplayOverride(bookmark, $iconDisplayOverride))
-  // 原拓扑顺序：iconBaseState 先于依赖它的 trustedView.set 计算。
+  // 原拓扑顺序：iconBaseState 先于依赖它的 localView.set 计算。
   const iconBaseState = $derived(deriveBookmarkCardIconBase({
     bookmark: iconBookmark,
     iconInView,
@@ -148,20 +148,20 @@
   // 与原 `$:` 一样先于 DOM 更新、在状态键判断之前执行；set 内部按签名去重，只在入参依赖变化时调用。
   $effect.pre(() => {
     const input = { ...iconBookmark, visible: iconInView, preview, online_url: iconBaseState.proxiedHttpIconUrl }
-    untrack(() => trustedView.set(input))
+    untrack(() => localView.set(input))
   })
   const iconText = $derived(iconBaseState.iconText)
-  const nextIconStateKey = $derived(iconBaseState.nextIconStateKey + ':' + trustedImage.active)
+  const nextIconStateKey = $derived(iconBaseState.nextIconStateKey + ':' + localImage.active)
   const localCacheKey = $derived(iconBaseState.localCacheKey)
   const syncLocalCachedIconUrl = $derived(iconInView && !iconBaseState.hasEmbeddedIcon
     ? readCachedBookmarkIconDataUri(localCacheKey) ?? ''
     : '')
-  // 状态键变化时复位并重新加载；原语句的语法依赖是 nextIconStateKey 与 iconBaseState / trustedImage
+  // 状态键变化时复位并重新加载；原语句的语法依赖是 nextIconStateKey 与 iconBaseState / localImage
   // （三者都已含在键里或随键变化），被调用函数里读写的 localCachedIconUrl 等不作为依赖。
   $effect.pre(() => {
     const key = nextIconStateKey
     const baseState = iconBaseState
-    const trustedActive = trustedImage.active
+    const localActive = localImage.active
     untrack(() => {
       if (key === iconStateKey) return
       iconStateKey = key
@@ -170,7 +170,7 @@
       localIconReady = false
       iconRetry.reset()
       resetLocalCachedIconUrl()
-      if (baseState.shouldReadLocalIconCache && !trustedActive) {
+      if (baseState.shouldReadLocalIconCache && !localActive) {
         void loadLocalCachedIcon(
           baseState.localCacheKey,
           baseState.shouldWaitForLocalIconCache,
@@ -191,8 +191,8 @@
     localCachedIconUrl,
     localCachePending,
   }))
-  const iconUrl = $derived(trustedImage.active ? trustedImage.url : iconUrlState.iconUrl)
-  const hasRenderableIcon = $derived(trustedImage.active ? Boolean(trustedImage.url) : iconUrlState.hasRenderableIcon)
+  const iconUrl = $derived(localImage.active ? localImage.url : iconUrlState.iconUrl)
+  const hasRenderableIcon = $derived(localImage.active ? Boolean(localImage.url) : iconUrlState.hasRenderableIcon)
   const infoCardHeight = $derived(height > 0 ? height : 70)
   const safeInfoCardWidth = $derived(getInfoCardTrackWidth(width))
   const infoIconInset = $derived(infoCardHeight <= 56 ? 6 : 8)
@@ -224,7 +224,7 @@
   }
 
   async function loadLocalCachedIcon(cacheKey: string, waitForLocalCache: boolean, remoteUrl: string) {
-    if (trustedImage.active) return
+    if (localImage.active) return
     if (waitForLocalCache) {
       localCachePending = true
     }
@@ -266,7 +266,7 @@
   }
 
   function handleIconError() {
-    if (trustedImage.active) { trustedView.failed(); return }
+    if (localImage.active) { localView.failed(); return }
     if (localCachedIconUrl) {
       resetLocalCachedIconUrl()
       localIconReady = false
@@ -505,7 +505,7 @@
   })
 
   onDestroy(() => {
-    trustedView.destroy()
+    localView.destroy()
     iconRetry.dispose()
     localCacheRequest.current += 1
     disconnectIconObserver()

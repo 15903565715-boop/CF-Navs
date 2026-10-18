@@ -58,6 +58,7 @@ vi.mock('../../src/lib/adminDataCache', () => adminCache)
 vi.mock('../../src/lib/localBookmarkIconCache', () => ({
   createBookmarkIconCacheKey: () => 'key',
   writeBookmarkIconDataUri: vi.fn(),
+  fetchScheduledObjectIconPayload: vi.fn(async () => ({ blob: null, status: 'retryable' })),
 }))
 
 import {
