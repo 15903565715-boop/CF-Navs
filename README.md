@@ -24,6 +24,8 @@
   </a>
 </div>
 
+**Languages:** [English](translations/en/README.md)
+
 ---
 
 ## 功能
