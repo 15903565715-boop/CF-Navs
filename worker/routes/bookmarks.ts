@@ -1,4 +1,4 @@
-import { bookmarkIconDescriptor } from '../lib/bookmarkIconCopy'
+import { bookmarkIconDescriptor } from '../lib/bookmarkIconDescriptor'
 import { Hono } from 'hono'
 import {
  ErrCode,

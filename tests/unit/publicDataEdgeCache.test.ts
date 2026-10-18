@@ -148,7 +148,7 @@ describe('authenticated /api/public/data', () => {
     const body = await authed.json() as any
     expect(authed.headers.get('Cache-Control')).toBe('no-store')
     expect(body.data.bookmarks.map((bookmark: any) => bookmark.id).sort()).toEqual([1, 2])
-    expect(body.data.auth_receipt).toBeDefined()
+    expect(body.data.auth_receipt).toBeUndefined()
     expect([...store.keys()]).toEqual(keys)
 
     const invalid = await get('/public/data?v=v1', { authorization: 'Bearer invalid-fixture-token' })

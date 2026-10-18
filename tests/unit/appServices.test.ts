@@ -3,23 +3,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const h = vi.hoisted(() => ({
   calls: [] as string[],
-  beginLogout: vi.fn(),
+  clearPrivate: vi.fn(),
   clearIconAccessKey: vi.fn(),
-  configure: vi.fn(),
-  applyIconDescriptor: vi.fn(),
   recordMutationDataVersion: vi.fn(),
   logout: vi.fn(),
   versionListener: null as ((version: string) => void) | null,
 }))
 
-vi.mock('../../src/lib/iconDeviceState', () => ({
-  iconDevice: { beginLogout: () => { h.calls.push('beginLogout'); h.beginLogout(); return Promise.resolve() } },
+vi.mock('../../src/lib/iconLocalStore', () => ({
+  iconLocalStore: () => ({ clearPrivate: () => { h.calls.push('clearPrivate'); h.clearPrivate(); return Promise.resolve() } }),
 }))
 vi.mock('../../src/lib/iconAccessKey', () => ({
   clearIconAccessKey: () => { h.calls.push('clearIconAccessKey'); h.clearIconAccessKey() },
 }))
-vi.mock('../../src/lib/objectIconLoader', () => ({ objectIconLoader: { configure: h.configure } }))
-vi.mock('../../src/lib/dataService', () => ({ applyIconDescriptor: h.applyIconDescriptor, recordMutationDataVersion: h.recordMutationDataVersion }))
+vi.mock('../../src/lib/dataService', () => ({ recordMutationDataVersion: h.recordMutationDataVersion }))
 vi.mock('../../src/lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../src/lib/api')>()
   return {
@@ -55,7 +52,7 @@ async function load() {
 beforeEach(() => {
   h.calls.length = 0
   h.versionListener = null
-  for (const fn of [h.beginLogout, h.clearIconAccessKey, h.configure, h.applyIconDescriptor, h.recordMutationDataVersion, h.logout]) fn.mockReset()
+  for (const fn of [h.clearPrivate, h.clearIconAccessKey, h.recordMutationDataVersion, h.logout]) fn.mockReset()
   h.logout.mockResolvedValue({ revoked: true })
 })
 
@@ -66,21 +63,20 @@ describe('appServices wiring', () => {
     const { stores } = await load()
     stores.authStore.setSession(session())
     await stores.authStore.logout()
-    expect(h.beginLogout).not.toHaveBeenCalled()
+    expect(h.clearPrivate).not.toHaveBeenCalled()
     expect(h.clearIconAccessKey).not.toHaveBeenCalled()
-    expect(h.configure).not.toHaveBeenCalled()
   })
 
-  it('logout starts the device logout before the revoke request, then clears the icon key', async () => {
+  it('logout clears private local icons before the revoke request, then clears the icon key', async () => {
     const { services, stores } = await load()
     services.initAppServices()
     stores.authStore.setSession(session())
     h.calls.length = 0
     await stores.authStore.logout()
-    expect(h.calls[0]).toBe('beginLogout')
+    expect(h.calls[0]).toBe('clearPrivate')
     expect(h.calls.indexOf('authApi.logout')).toBeGreaterThan(0)
     expect(h.calls.lastIndexOf('clearIconAccessKey')).toBeGreaterThan(h.calls.indexOf('authApi.logout'))
-    expect(h.beginLogout).toHaveBeenCalledTimes(1)
+    expect(h.clearPrivate).toHaveBeenCalledTimes(1)
   })
 
   it('clears the icon key when the stored session disappears (401 or another tab)', async () => {
@@ -90,16 +86,7 @@ describe('appServices wiring', () => {
     h.clearIconAccessKey.mockClear()
     authSession.clearStoredAuthSession()
     expect(h.clearIconAccessKey).toHaveBeenCalled()
-    expect(h.beginLogout).not.toHaveBeenCalled()
-  })
-
-  it('forwards icon descriptors from the loader to dataService', async () => {
-    const { services } = await load()
-    services.initAppServices()
-    expect(h.configure).toHaveBeenCalledTimes(1)
-    const listener = h.configure.mock.calls[0]![0] as (next: unknown, expected: unknown) => void
-    listener('next', 'expected')
-    expect(h.applyIconDescriptor).toHaveBeenCalledWith('next', 'expected')
+    expect(h.clearPrivate).not.toHaveBeenCalled()
   })
 
   it('forwards write-envelope data versions to dataService and stops on reset', async () => {
@@ -116,13 +103,17 @@ describe('appServices wiring', () => {
     const { services, stores } = await load()
     services.initAppServices()
     services.initAppServices()
-    expect(h.configure).toHaveBeenCalledTimes(1)
+    stores.authStore.setSession(session())
+    await stores.authStore.logout()
+    expect(h.clearPrivate).toHaveBeenCalledTimes(1)
     services.resetAppServicesForTest()
     stores.authStore.setSession(session())
     await stores.authStore.logout()
-    expect(h.beginLogout).not.toHaveBeenCalled()
+    expect(h.clearPrivate).toHaveBeenCalledTimes(1)
     services.initAppServices()
-    expect(h.configure).toHaveBeenCalledTimes(3)
+    stores.authStore.setSession(session())
+    await stores.authStore.logout()
+    expect(h.clearPrivate).toHaveBeenCalledTimes(2)
   })
 })
 
@@ -130,7 +121,7 @@ describe('state-layer boundaries (source guard)', () => {
   const src = (path: string) => readFileSync(new URL(`../../src/${path}`, import.meta.url), 'utf8')
 
   it('stores.ts does not reach into icon modules', () => {
-    expect(src('lib/stores.ts')).not.toMatch(/from '\.\/(iconDeviceState|iconAccessKey)'/)
+    expect(src('lib/stores.ts')).not.toMatch(/from '\.\/(iconLocalStore|iconAccessKey)'/)
   })
 
   it('api.ts no longer owns session persistence', () => {
@@ -139,8 +130,7 @@ describe('state-layer boundaries (source guard)', () => {
     expect(api).not.toMatch(/export const AUTH_STORAGE_KEY/)
   })
 
-  it('dataService registers no loader callback at module load; main.ts wires services before mount', () => {
-    expect(src('lib/dataService.ts')).not.toMatch(/^objectIconLoader\.configure/m)
+  it('main.ts wires services before mount', () => {
     const main = src('main.ts')
     expect(main.indexOf('initAppServices()')).toBeGreaterThan(-1)
     expect(main.indexOf('initAppServices()')).toBeLessThan(main.indexOf('mount(App'))

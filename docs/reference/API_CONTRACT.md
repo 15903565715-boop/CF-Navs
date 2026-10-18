@@ -35,7 +35,6 @@
 | `POST /api/public/bookmarks/:id/click` | **400** / **404** | `1002` / `1003` | 非法 id / 书签不存在或为私密 |
 | `POST /api/error-report` | **400** / **413** / **429** | `1002` / `1002` / `1004` | 无效 payload / 请求体超限 / 限流 |
 | `GET /api/iconify-search` | **400** / **502** | `1002` / `1500` | 查询词非法 / 上游 Iconify 搜索失败 |
-| `POST /api/icon-local-copy` | **400** / **403** / 404 / 409 / 503 | `1002` / `1005` / `0` | 无效请求 / 跨域；404、409、503 为成功包络（`code=0`）+ `data.reason`（`not-found` / `conflict` / `unavailable`），见下文「可信设备图标数据协议」 |
 
 新增端点默认用前半张表的 helper（HTTP 200 + `code`）。只有调用方必须靠 HTTP 语义区分结果（鉴权、跨域、`sendBeacon` 式上报、带协议的图标副本、上游代理失败）时才返回真实状态，并同步本表与 `tests/unit/errorConvention.test.ts` 的非 200 快照——该测试扫描 `worker/` 中全部 `c.json(fail(ErrCode.X, …), <status>)`，并钉住 `badRequest` / `serverError` / `authRequired` / `onError` 的状态与 `code`。
 
@@ -57,7 +56,7 @@
   - 未带 `v` 的旧客户端请求继续可用：使用无版本键（写操作失效的就是这一个），未命中时同时写入无版本键与版本键。跨 colo 场景下无版本键最多滞后一个 edge TTL（120 秒）；响应自带 `version`，前端下一次版本确认即自愈。
   - 缓存未命中且未带版本时，先复用 `/api/config` edge cache，仍未命中才读取轻量 `site_title/public_mode`；公开模式关闭时匿名请求返回 `code=1005`，该轻量 1005 响应短时写入本次请求的缓存键（过期 `v` 不写）。
   - 带 Bearer 的请求从不读写共享缓存：先校验会话，无效返回 401，有效则返回包含私密书签的数据（`no-store`）。
-- `/api/data/version`：用一次 `settings` 查询读取 `site_title`、`public_mode`、内部 `data_version` 与图标数据集代次。带 Bearer 时始终校验会话（包括公开模式），成功才返回 `auth_receipt`；无效会话返回 401，不能退回匿名成功。无 Bearer 的公开访问不产生认证回执，私有站点仍返回 `code=1005`。单次版本元数据查询是热路径契约；既有会话验证的 D1/KV 成本单独计量。
+- `/api/data/version`：用一次 `settings` 查询读取 `site_title`、`public_mode`、内部 `data_version`、图标数据集代次 `dataset_epoch` 与全局图标标志位 `icon_epoch`。带 Bearer 时始终校验会话（包括公开模式）；无效会话返回 401，不能退回匿名成功。私有站点的匿名访问仍返回 `code=1005`。单次版本元数据查询是热路径契约；既有会话验证的 D1/KV 成本单独计量。
 
 ## 公开接口
 
@@ -345,17 +344,15 @@ HTTP(S) 图标抓取成功后，代理会直接返回图片字节并写入 Cloud
 
 导入在写入前验证分类深度、父级引用和书签分类引用。覆盖和合并都会先建立旧分类 ID 到新分类 ID 的映射，按一级分类、二级分类、书签的顺序重建，并同时重写二级分类 `parent_id` 与书签 `category_id`。设置仅在覆盖导入中写入受支持的公开配置 key，不触碰管理员账号字段。`ImportResp` 包含导入数量和导入后的 `AdminData`，前端使用该响应更新本地数据并显式同步导入状态。
 
-## 可信设备图标数据协议
+## 图标版本元数据
 
-共享类型见 `shared/iconLocalCopy.ts`。本节描述服务端数据协议，不代表任意浏览器已开启可信持久化。
+共享类型见 `shared/iconDescriptor.ts`。
 
-- `POST /api/icon-local-copy` 必须通过 Bearer 会话鉴权；一期只接受 `object_type=bookmark`。请求为 `IconCopyRequest`：protocol=1、对象类型/ID、dataset_epoch、expected_write_epoch、expected_content_revision（未知为 null）。请求体最多 4 KiB，同源 Origin 检查，不接受图标 key 或摘要代替会话。
-- 成功为统一包络内的 `IconCopyResult`，携带 protocol=1、persistence=session-scoped、当前描述及 image（MIME、byte_length、base64）；empty/text 返回 image=null。图片上限 512 KiB，版本是规范 MIME 与实际字节的 SHA-256，不是 URL 或应用构建号。
-- 401 为未通过认证；未知对象 404；描述冲突 409 且只返回当前描述；无效/不支持请求 400；暂时无法取得真实成功图片 503。正文中 reason 可区分 conflict/unavailable/unsupported。所有结果均禁止共享及不可控 HTTP 缓存。
-- 传输使用 private/no-store、CDN no-store；只有已知协议的成功应用数据可在本机许可内物化，不克隆原 HTTP 响应。普通对象代理 no-store 拒收与 SW 不接管策略不变。
-- 聚合和版本响应在迁移完成后附 dataset_epoch 与 icon_local_copy_protocol=1。已鉴权响应的 auth_receipt 含 cache_scope、checked_at、expires_at（毫秒）；cache_scope 是非凭据会话标识，不能独立授权。图片下载不续租，图标 key 不续租；回执遵循原有会话撤销缓存窗口。
+- 公开聚合、后台聚合与 `/api/data/version` 都附 `dataset_epoch`（数据集身份，导入 / 恢复时更换）与 `icon_epoch`（整数，全局图标标志位）。`icon_epoch` 由 D1 触发器维护：书签 / 分类的新增、删除，图标来源、正文、`icon_revision` 变化，`is_private`、书签所属分类、分类父级变化，以及参与图标 URL 版本的标题 / 链接变化都会递增；排序与点击计数不递增。旧库在 schema 第 4 步迁移时补齐计数与触发器。
+- 客户端用 `dataset_epoch:icon_epoch:视角` 判断是否需要对照数据清理本地图标；单个图标是否重下由其代理 URL 的 `v=` 版本决定。
 - 书签轻量字段 icon_revision/icon_write_epoch 与聚合数据的 version、dataset_epoch 同批读取。内部数据集代次不进入用户 Settings 或可信备份输入；导入重建表时原子更换代次，返回带新身份的聚合数据。当前 merge 也通过重建/重映射实现，因此同样更换代次。
-- setIconBlob 条件提交保护数据集、源、代次和预期正文/版本；legacy SQL 改正文时摘要失效，改源时同时清旧正文。已发布内容变化与 data_version 在同一数据库更新边界发布；匿名图标代理与可信副本协议仅补充未知摘要时不逐图触发全量刷新。管理员显式调用 `POST /api/bookmarks/:id/icon-cache/refresh` 时，只要可观察的图标身份（`icon_revision` 或是否有正文 `icon_cached`）发生变化（包括「未知摘要 → 已知摘要」），就在同一 batch 里提升 data_version 并随响应返回 `data_version`；同一字节的不同编码不提升。
+- setIconBlob 条件提交保护数据集、源、代次和预期正文/版本；legacy SQL 改正文时摘要失效，改源时同时清旧正文。已发布内容变化与 data_version 在同一数据库更新边界发布；匿名图标代理仅补充未知摘要时不逐图触发全量刷新。管理员显式调用 `POST /api/bookmarks/:id/icon-cache/refresh` 时，只要可观察的图标身份（`icon_revision` 或是否有正文 `icon_cached`）发生变化（包括「未知摘要 → 已知摘要」），就在同一 batch 里提升 data_version 并随响应返回 `data_version`；同一字节的不同编码不提升。
+- 已移除：`POST /api/icon-local-copy` 与 `auth_receipt`（可信设备协议）。
 
 ## HTML 入口响应策略
 

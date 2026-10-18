@@ -64,8 +64,8 @@ describe('versioned schema migrations', () => {
     // 触发器由 schema.sql 本身建好（不靠迁移补齐）：安装 batch 中即包含完整的 CREATE TRIGGER。
     // （之后的修复模式 ensureSchema 会幂等重跑第 2 步，故只看首条 schema_version 语句之前的安装 batch。）
     const installBatch = instance.statements.slice(0, instance.statements.findIndex((sql) => sql.includes('schema_version')))
-    expect(installBatch.filter((sql) => /^CREATE TRIGGER/i.test(sql) && /\bEND$/i.test(sql))).toHaveLength(6)
-    expect(instance.sqlite.prepare("SELECT count(*) AS n FROM sqlite_master WHERE type = 'trigger'").get()).toEqual({ n: 6 })
+    expect(installBatch.filter((sql) => /^CREATE TRIGGER/i.test(sql) && /\bEND$/i.test(sql))).toHaveLength(12)
+    expect(instance.sqlite.prepare("SELECT count(*) AS n FROM sqlite_master WHERE type = 'trigger'").get()).toEqual({ n: 12 })
   })
 
   it('fresh install from the full schema.sql (db:init) reaches the latest version without ALTER', async () => {
@@ -92,7 +92,7 @@ describe('versioned schema migrations', () => {
     expect(storedVersion(instance)).toBe(LATEST_SCHEMA_VERSION)
     expect(columns(instance, 'categories')).toEqual(expect.arrayContaining(['parent_id', 'is_private', 'icon_blob', 'icon_revision', 'icon_write_epoch']))
     expect(columns(instance, 'bookmarks')).toEqual(expect.arrayContaining(['icon_source', 'icon_blob', 'icon_background_color', 'description_mode', 'is_private', 'click_count', 'icon_revision', 'icon_write_epoch']))
-    expect(instance.sqlite.prepare("SELECT count(*) AS n FROM sqlite_master WHERE type = 'trigger'").get()).toEqual({ n: 6 })
+    expect(instance.sqlite.prepare("SELECT count(*) AS n FROM sqlite_master WHERE type = 'trigger'").get()).toEqual({ n: 12 })
     expect(instance.sqlite.prepare("SELECT value FROM settings WHERE key = 'site_title'").get()).toEqual({ value: '"Old"' })
     expect(instance.sqlite.prepare("SELECT 1 FROM settings WHERE key = 'icon_dataset_epoch'").get()).toBeTruthy()
     expect(instance.sqlite.prepare('SELECT title, click_count FROM bookmarks').all()).toEqual([{ title: 'A', click_count: 0 }])

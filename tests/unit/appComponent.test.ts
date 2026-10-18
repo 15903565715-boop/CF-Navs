@@ -31,7 +31,6 @@ const h = vi.hoisted(() => ({
   auth: { deps: null as any, ctrl: null as any },
   data: { callbacks: null as any, fns: {} as Record<string, any> },
   media: { dark: false, reduced: false, darkCb: null as null | ((dark: boolean) => void), stopDark: null as any },
-  icon: { starts: 0, stop: null as any },
   focus: { installs: 0, cb: null as null | (() => unknown), stop: null as any },
   script: { hosts: [] as unknown[], apply: null as any, destroy: null as any },
   writer: { theme: [] as unknown[], css: [] as string[] },
@@ -154,16 +153,6 @@ vi.mock('../../src/lib/appMediaPreferences', () => ({
     return h.media.stopDark
   },
 }))
-vi.mock('../../src/lib/iconDeviceState', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../src/lib/iconDeviceState')>()
-  return {
-    ...actual,
-    startIconDevice: () => {
-      h.icon.starts += 1
-      return h.icon.stop
-    },
-  }
-})
 vi.mock('../../src/lib/publicDataFocusRefresh', () => ({
   installPublicDataFocusRefresh: (refresh: () => unknown) => {
     h.focus.installs += 1
@@ -319,8 +308,6 @@ beforeEach(() => {
   h.media.reduced = false
   h.media.darkCb = null
   h.media.stopDark = vi.fn()
-  h.icon.starts = 0
-  h.icon.stop = vi.fn()
   h.focus.installs = 0
   h.focus.cb = null
   h.focus.stop = vi.fn()
@@ -512,9 +499,7 @@ describe('App boot splash and view switching', () => {
     expect(admin.bookmarks).toEqual([])
     expect(admin.categories).toEqual([{ id: 1, parent_id: null, title: 'Tools', icon: 'tool', sort: 0, bookmarkCount: 0 }])
 
-    // onVerifyDevice 强制刷新登录态数据；onSwitchToHome 改路径并回到首页
-    ;(admin.onVerifyDevice as () => void)()
-    expect(h.data.fns.refreshLoggedInData).toHaveBeenCalledWith(true)
+    // onSwitchToHome 改路径并回到首页
     window.history.replaceState(null, '', '/admin')
     ;(admin.onSwitchToHome as () => void)()
     flushSync()
@@ -1133,15 +1118,13 @@ describe('App confirm dialog, root error and data service callbacks', () => {
 })
 
 describe('App mount / destroy lifecycle', () => {
-  it('starts the icon device, media subscription, boot and focus refresh on mount and cleans up on destroy', async () => {
+  it('starts the media subscription, boot and focus refresh on mount and cleans up on destroy', async () => {
     const result = await mountApp({ publicData: makePublicData() })
-    expect(h.icon.starts).toBe(1)
     expect(h.boot.ctrl.start).toHaveBeenCalledTimes(1)
     expect(h.focus.installs).toBe(1)
     h.focus.cb!()
     expect(h.data.fns.refreshVisibleData).toHaveBeenCalledTimes(1)
     result.unmount()
-    expect(h.icon.stop).toHaveBeenCalledTimes(1)
     expect(h.media.stopDark).toHaveBeenCalledTimes(1)
     expect(h.script.destroy).toHaveBeenCalledTimes(1)
     expect(h.focus.stop).toHaveBeenCalledTimes(1)
@@ -1153,7 +1136,6 @@ describe('App mount / destroy lifecycle', () => {
     expect(h.boot.ctrl.start).toHaveBeenCalledTimes(1)
     expect(h.focus.installs).toBe(0)
     result.unmount()
-    expect(h.icon.stop).toHaveBeenCalledTimes(1)
     expect(h.focus.stop).not.toHaveBeenCalled()
   })
 

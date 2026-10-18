@@ -7,6 +7,10 @@
 
 ## [Unreleased]
 
+### 变更
+
+- **图标本地优先缓存 v2（取代可信设备）**：所有对象图标（书签 / 分类，公开 / 私密）成功取到真实图片后保存到一个 IndexedDB 库（`cf-navs-icons-v2`），匿名访客同样保存，无需任何开关。每个对象一条，版本取图标代理 URL（去掉 `key`）；同版本直接本地显示、零网络请求，版本变化只重下这一张。新增全局图标标志位 `icon_epoch`（schema 第 4 步，D1 触发器在对象增删、图标 / 可见性 / 所属分类 / 标题链接变化时递增），随 `/api/data/version` 与两类聚合返回；标志位变化时客户端对照当前数据清理已不存在的对象条目。取消 10 MiB / 1000 条 / LRU 总预算，只受浏览器配额约束；保留三个兜底：单图 > 512 KiB 只显示不落盘、首次写入申请 `navigator.storage.persist()`、配额满或 IndexedDB 不可用退回内存且不报错。登出与会话失效只删私密条目。移除可信设备开关与「设备缓存」设置页、`/api/icon-local-copy`、`auth_receipt`、设备状态机与旧副本存储（约 2000 行），启动时删除旧库 `cf-navs-object-icons-v1`；随之删除依赖可信设备的浏览器回归脚本（`issue-browser-regression`、`icon-ui-regression`、`category-icon-{perf,prod}-regression`、`icon-display-prod-regression`、`test:icon-storage`）。服务端 edge 可见性闸门与 edge cache 不变。新增 `iconLocalStore` / `localIconView` / `iconEpoch` / `bookmarkCardLocalFirst` 测试。
+
 ### 修复
 
 - **首页书签删除确认弹窗**：确认层级提高到编辑窗口之上，避免右键编辑书签后点击删除时，二次确认被编辑窗口遮挡。

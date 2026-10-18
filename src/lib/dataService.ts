@@ -1,8 +1,6 @@
-import { objectIconLoader } from './objectIconLoader'
-import type { IconDescriptor } from '../../shared/iconLocalCopy'
-import { iconDevice } from './iconDeviceState'
+import type { IconDescriptor } from '../../shared/iconDescriptor'
+import { iconEpochToken, iconLocalStore, iconObjectKey } from './iconLocalStore'
 import { applyIconDisplayOverride, bookmarkIconDisplay } from './iconDisplayStore'
-import { getAuthToken } from './authSession'
 // 前端数据编排层：公开/后台聚合数据的获取、版本确认、本地增量更新与浏览器快照持久化。
 // 只操作 store、API、缓存与本地图标缓存，不持有任何视图状态；需要向界面反馈的错误
 // 通过 configureDataService 注入的回调上报，视图切换/登录 UI 编排仍留在 App.svelte。
@@ -75,8 +73,10 @@ let sessionEpoch = 0
 let refreshEpoch = 0
 authStore.subscribe(({ session }) => {
   if (session === activeSession) return
+  const loggedOut = Boolean(activeSession) && !session
   activeSession = session
-  iconDevice.authChanged()
+  // 登出 / 会话过期：只删除本机私密图标条目，公开图标继续复用。
+  if (loggedOut) void iconLocalStore().clearPrivate()
   sessionEpoch += 1
   refreshEpoch += 1
   currentDataVersion = null
@@ -115,6 +115,25 @@ export function applyConfigFromSettings(settings: Pick<Settings, 'site_title' | 
   })
 }
 
+type IconEpochSource = { dataset_epoch?: string; icon_epoch?: number }
+type IconObjects = { bookmarks: Array<{ id: number }>; categories: Array<{ id: number }> }
+
+/**
+ * 服务端图标标志位与本机记录不同时，按当前可见数据清理已不存在 / 不再可见的本地图标条目。
+ * 版本变化的图标在显示时按 URL 版本比对重新下载，这里不逐个下载。
+ */
+function reconcileLocalIcons(metadata: IconEpochSource, data: IconObjects | null | undefined): void {
+  if (!data) return
+  const token = iconEpochToken(metadata, isLoggedIn() ? 'admin' : 'anonymous')
+  if (!token) return
+  const store = iconLocalStore()
+  if (store.epoch() === token) return
+  const live = new Set<string>()
+  for (const row of data.bookmarks) live.add(iconObjectKey('bookmark', row.id))
+  for (const row of data.categories) live.add(iconObjectKey('category', row.id))
+  void store.reconcile(token, live).catch((error) => console.warn('[CF-Navs] icon reconcile failed', error))
+}
+
 function applyConfigFromPublicData(data: PublicData): void {
   configStore.setData({
     site_title: data.settings.site_title,
@@ -123,7 +142,6 @@ function applyConfigFromPublicData(data: PublicData): void {
 }
 
 export function applyPublicData(data: PublicData, version = getDataVersion(data), progressive = false): PublicData {
-  iconDevice.setDataset(data.dataset_epoch)
   const cleanData = stripPublicDataVersion(data)
   const currentState = get(publicStore)
   const merged = mergePublicData(currentState.data, cleanData)
@@ -175,6 +193,7 @@ async function loadPublicData(progressive: boolean, isCurrent: IsCurrent): Promi
       confirmedVersion = remoteVersion.version
 
       if (remoteVersion.version === cached.version) {
+        reconcileLocalIcons(remoteVersion, get(publicStore).data)
         return get(publicStore).data
       }
     }
@@ -183,6 +202,7 @@ async function loadPublicData(progressive: boolean, isCurrent: IsCurrent): Promi
     const response = await api.public.getData(false, confirmedVersion)
     if (!isCurrent()) return null
     const data = applyPublicData(response, undefined, progressive)
+    reconcileLocalIcons(response, data)
     if (!isLoggedIn()) {
       await writeCachedPublicData(data, currentDataVersion)
     }
@@ -381,10 +401,6 @@ export async function refreshBookmarkIconCache(bookmarkId: number): Promise<stri
   const descriptor = result.icon_descriptor
   if (descriptor) applyIconDescriptor(descriptor)
   if (result.icon_update !== 'unavailable') await applyLocalBookmarkIconBlob(bookmarkId, result.icon_blob)
-  if (isCurrent() && descriptor?.state === 'ready' && result.icon_blob && iconDevice.capture()) {
-    const handle = objectIconLoader.acquire(descriptor, result.icon_blob)
-    try { await handle.result } finally { handle.release() }
-  }
   return result.icon_blob
 }
 
@@ -443,7 +459,6 @@ export async function applyLocalSettings(settings: Settings): Promise<void> {
 }
 
 export function applyLoggedInData(data: AdminData, version = getDataVersion(data)): void {
-  iconDevice.setDataset(data.dataset_epoch)
   const cleanData = stripAdminDataVersion(data)
   if (!cleanData.settings) {
     throw new Error('failed to load admin settings')
@@ -512,14 +527,12 @@ async function confirmAfterLocalMutation(isCurrent: IsCurrent): Promise<void> {
   if (!isCurrent() || !isLoggedIn()) return
   const expected = lastMutationVersion
   if (!expected || fullRefreshPending) return loadLoggedInData(true, isCurrent)
-  const requestToken = getAuthToken()
   const remote = await api.data.version(true)
   if (!isCurrent()) return
   if (remote.version !== expected || remote.dataset_epoch !== get(adminStore).data.dataset_epoch) {
     return loadLoggedInData(true, isCurrent)
   }
-  await iconDevice.acceptMetadata(remote, requestToken, isCurrent)
-  if (!isCurrent()) return
+  reconcileLocalIcons(remote, get(adminStore).data)
   currentDataVersion = remote.version
   await persistCurrentAdminData(isCurrent)
 }
@@ -527,7 +540,6 @@ async function confirmAfterLocalMutation(isCurrent: IsCurrent): Promise<void> {
 async function loadLoggedInData(forceRemote: boolean, isCurrent: IsCurrent): Promise<void> {
   if (!isCurrent() || !isLoggedIn()) return
   if (forceRemote) fullRefreshPending = true
-  const requestToken = getAuthToken()
   // 后台预览私密对象图标需要短期授权 key。失败只降级成兜底图标，不影响数据刷新。
   void ensureIconAccessKey(() => api.auth.iconAccess())
   const cached = !forceRemote ? await readCachedAdminDataEntry(isCurrent) : null
@@ -542,10 +554,9 @@ async function loadLoggedInData(forceRemote: boolean, isCurrent: IsCurrent): Pro
     if (cached?.version) {
       const remoteVersion = await api.data.version(true)
       if (!isCurrent()) return
-      await iconDevice.acceptMetadata(remoteVersion, requestToken, isCurrent)
-      if (!isCurrent()) return
       currentDataVersion = remoteVersion.version
       if (remoteVersion.version === cached.version && remoteVersion.dataset_epoch === cached.data.dataset_epoch) {
+        reconcileLocalIcons(remoteVersion, get(adminStore).data)
         return
       }
     }
@@ -555,8 +566,7 @@ async function loadLoggedInData(forceRemote: boolean, isCurrent: IsCurrent): Pro
     if (!isCurrent()) return
     applyLoggedInData(data)
     fullRefreshPending = false
-    await iconDevice.acceptMetadata(data, requestToken, isCurrent)
-    if (!isCurrent()) return
+    reconcileLocalIcons(data, data)
     await persistCurrentAdminData(isCurrent)
   } catch (error) {
     if (!isCurrent()) return
@@ -575,7 +585,7 @@ function scheduleIconSnapshot(): void {
   const valid = captureSession()
   iconSnapshotTimer = setTimeout(() => { iconSnapshotTimer = null; void persistCurrentAdminData(valid).catch(error => hooks.onRootError(getErrorMessage(error), error)) }, 250)
 }
-// 导出仅供测试与 refreshBookmarkIconCache；运行时由 objectIconLoader.configure 回调驱动（在 appServices.initAppServices() 里接线）。
+// 由 refreshBookmarkIconCache 用服务端返回的图标描述符更新显示状态（也供测试）。
 export function applyIconDescriptor(next: IconDescriptor, expected?: IconDescriptor): void {
   if (get(adminStore).data.dataset_epoch !== next.dataset_epoch) return
   if (next.object_type === 'category') {

@@ -1,5 +1,5 @@
 import { CLICK_RATE_LIMIT_SCHEMA } from './clickRateLimitSchema'
-import { BOOKMARK_ICON_TRIGGERS, CATEGORY_ICON_TRIGGERS, INITIALIZE_ICON_DATASET_SQL } from './iconSchema'
+import { BOOKMARK_ICON_TRIGGERS, CATEGORY_ICON_TRIGGERS, ICON_EPOCH_TRIGGERS, INITIALIZE_ICON_DATASET_SQL, INITIALIZE_ICON_EPOCH_SQL } from './iconSchema'
 
 // 版本化 schema 迁移（代码审查三轮第 2 项）。
 //
@@ -79,6 +79,16 @@ export const SCHEMA_STEPS: readonly SchemaStep[] = [
     name: 'click rate limits',
     async statements(db) {
       return CLICK_RATE_LIMIT_SCHEMA.map((sql) => db.prepare(sql))
+    },
+  },
+  {
+    version: 4,
+    name: 'global icon epoch',
+    async statements(db) {
+      return [
+        db.prepare(INITIALIZE_ICON_EPOCH_SQL),
+        ...ICON_EPOCH_TRIGGERS.map((sql) => db.prepare(sql)),
+      ]
     },
   },
 ]

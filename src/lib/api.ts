@@ -1,5 +1,5 @@
 import { readBoundedBody } from '../../shared/boundedBody'
-import type { IconCopyRequest, IconCopyResult, IconDescriptor } from '../../shared/iconLocalCopy'
+import type { IconDescriptor } from '../../shared/iconDescriptor'
 import {
   ErrCode,
   type AdminData,
@@ -355,8 +355,3 @@ export const api = {
 
 export default api
 
-/** Only this known protocol can materialize an authenticated no-store data response. */
-export function fetchIconCopy(payload: IconCopyRequest, signal?: AbortSignal): Promise<IconCopyResult> {
-  return request<IconCopyResult>('/icon-local-copy', { auth: true, method: 'POST', cache: 'no-store', signal,
-    headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload), maxResponseBytes: 768 * 1024 })
-}

@@ -100,11 +100,11 @@ describe('8g: level-1 home and bookmark components in runes mode', () => {
     expect(menu).toMatch(/<CategoryTreeSelect[^>]*\bbind:value=\{moveCategoryId\}/)
   })
 
-  it('does not deep-proxy replaced Sets, observers or trusted-icon snapshots', () => {
+  it('does not deep-proxy replaced Sets, observers or local-icon snapshots', () => {
     const sidebar = read('src/components/Sidebar.svelte')
     expect(sidebar).toContain('let expandedParentIds = $state.raw(new Set<string>())')
     expect(sidebar).toContain('let resizeObserver: ResizeObserver | null = $state.raw(null)')
-    expect(read('src/components/SpotlightBookmarkIcon.svelte')).toContain('let trustedImage = $state.raw(emptyTrustedIcon)')
+    expect(read('src/components/SpotlightBookmarkIcon.svelte')).toContain('let localImage = $state.raw(emptyLocalIcon)')
   })
 })
 

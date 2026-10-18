@@ -1,5 +1,5 @@
-import type { IconCopyMetadata } from '../../../shared/iconLocalCopy'
-import { iconMetadataFromRows } from '../iconCopyMetadata'
+import type { IconDataMetadata } from '../../../shared/iconDescriptor'
+import { iconMetadataFromRows } from '../iconMetadata'
 // settings 聚合读取、单键读写、data_version 维护与部分更新
 
 import { type Settings, type SiteConfig } from '../../../shared/types'
@@ -34,9 +34,9 @@ export async function getSiteConfig(db: D1Database): Promise<SiteConfig> {
 // getDataVersion，两条串行的 D1 往返读的都是 settings 表。合并成一条。
 export async function getSiteConfigWithDataVersion(
   db: D1Database,
-): Promise<{ config: SiteConfig; version: string } & IconCopyMetadata> {
+): Promise<{ config: SiteConfig; version: string } & IconDataMetadata> {
   const { results } = await db
-    .prepare(`SELECT key, value FROM settings WHERE key IN ('site_title', 'public_mode', '${DATA_VERSION_KEY}', 'icon_dataset_epoch')`)
+    .prepare(`SELECT key, value FROM settings WHERE key IN ('site_title', 'public_mode', '${DATA_VERSION_KEY}', 'icon_dataset_epoch', 'icon_epoch')`)
     .all<{ key: string; value: string | null }>()
 
   const rows = results ?? []

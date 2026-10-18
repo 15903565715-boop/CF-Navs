@@ -37,7 +37,6 @@ const MIGRATED = [
   'BookmarkLinkModal',
   'BookmarkModalActions',
   'BookmarkModalHeader',
-  'DeviceIconCachePanel',
   'HomeContentSummary',
   'HomeEmptyPanel',
   'LogoSchemeSelector',
@@ -74,25 +73,19 @@ describe('level-0 presentational and stateful components in runes mode', () => {
     expect(read('src/components/BookmarkContextMenu.svelte')).toMatch(/<CategoryTreeSelect[^>]*\bbind:value=\{moveCategoryId\}/)
   })
 
-  it('does not deep-proxy replaced Sets or trusted-icon snapshots', () => {
+  it('does not deep-proxy replaced Sets or local-icon snapshots', () => {
     const read = (path: string) => readFileSync(path, 'utf8')
     expect(read('src/components/BackupPanel.svelte')).toContain('let selectedCategoryIds = $state.raw(')
     expect(read('src/components/BackupPanel.svelte')).toContain('let expandedRootIds = $state.raw(')
     expect(read('src/components/CategoryTreeSelect.svelte')).toContain('let expandedRootIds = $state.raw(')
-    expect(read('src/components/CachedBookmarkIcon.svelte')).toContain('let trustedImage = $state.raw(emptyTrustedIcon)')
-    expect(read('src/components/CategoryIcon.svelte')).toContain('let trustedState: TrustedIconState = $state.raw(emptyTrustedIcon)')
+    expect(read('src/components/CachedBookmarkIcon.svelte')).toContain('let localImage = $state.raw(emptyLocalIcon)')
+    expect(read('src/components/CategoryIcon.svelte')).toContain('let localState: LocalIconState = $state.raw(emptyLocalIcon)')
   })
 
   it('keeps the form two-way bindable for SettingsPanel', () => {
     const footer = readFileSync('src/components/settings/FooterSettingsSection.svelte', 'utf8')
     expect(footer).toContain('form = $bindable()')
     expect(readFileSync('src/components/SettingsPanel.svelte', 'utf8')).toContain('<FooterSettingsSection bind:form {saving} />')
-  })
-
-  it('keeps the device panel busy / error flags reactive', () => {
-    const panel = readFileSync('src/components/DeviceIconCachePanel.svelte', 'utf8')
-    expect(panel).toContain('let busy = $state(false)')
-    expect(panel).toContain("let localError = $state('')")
   })
 
   it('replaces dispatched events with callback props and slots with snippets', () => {
