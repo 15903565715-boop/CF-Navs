@@ -139,3 +139,60 @@ describe('local-first icon store', () => {
     expect(rows.size).toBe(0)
   })
 })
+
+describe('cold-start fast path', () => {
+  function hintOf(initial: boolean | null) {
+    const state = { value: initial, sets: [] as boolean[] }
+    return { state, hint: { get: () => state.value, set: (v: boolean) => { state.sets.push(v); state.value = v } } }
+  }
+  function slowBackend() {
+    const base = memoryBackend()
+    let release!: () => void
+    const gate = new Promise<void>(resolve => { release = resolve })
+    const backend: IconLocalBackend = { ...base.backend, loadAll: async () => { await gate; return base.backend.loadAll() } }
+    return { ...base, backend, release }
+  }
+
+  it('downloads without waiting for the database on a first visit (hint says empty)', async () => {
+    const { backend, rows, release } = slowBackend()
+    const { hint, state } = hintOf(false)
+    const fetchPayload = vi.fn(async () => ({ blob: png(), status: 'ready' as const }))
+    const local = createIconLocalStore({ backend, fetchPayload, hint, createUrl: () => 'blob:x', revokeUrl: () => undefined, requestPersist: async () => true, warn: () => undefined })
+    expect(await local.resolve('bookmark:1', '/api/icon/1?v=a', '/api/icon/1?v=a', false)).toBe('blob:x')
+    expect(fetchPayload).toHaveBeenCalledTimes(1)
+    expect(rows.get('bookmark:1')?.version).toBe('/api/icon/1?v=a')
+    expect(state.sets).toEqual([true])
+    release()
+    await local.ready
+    expect(local.peek('bookmark:1', '/api/icon/1?v=a')).toBe('blob:x')
+  })
+
+  it('still waits for the database when the hint says entries may exist or is unknown', async () => {
+    for (const initial of [true, null]) {
+      const { backend, release } = slowBackend()
+      const fetchPayload = vi.fn(async () => ({ blob: png(), status: 'ready' as const }))
+      const local = createIconLocalStore({ backend, fetchPayload, hint: hintOf(initial).hint, createUrl: () => 'blob:y', revokeUrl: () => undefined, warn: () => undefined })
+      const pending = local.resolve('bookmark:2', '/api/icon/2?v=a', '/api/icon/2?v=a', false)
+      await new Promise(resolve => setTimeout(resolve, 0))
+      expect(fetchPayload).not.toHaveBeenCalled()
+      release()
+      await pending
+      expect(fetchPayload).toHaveBeenCalledTimes(1)
+    }
+  })
+
+  it('falls back to memory when the database never opens', async () => {
+    vi.useFakeTimers()
+    try {
+      const backend: IconLocalBackend = { ...memoryBackend().backend, loadAll: () => new Promise(() => undefined), put: vi.fn(async () => undefined) }
+      const fetchPayload = vi.fn(async () => ({ blob: png(), status: 'ready' as const }))
+      const local = createIconLocalStore({ backend, fetchPayload, readyTimeoutMs: 100, createUrl: () => 'blob:z', revokeUrl: () => undefined, warn: () => undefined })
+      const pending = local.resolve('bookmark:3', '/api/icon/3?v=a', '/api/icon/3?v=a', false)
+      await vi.advanceTimersByTimeAsync(100)
+      expect(await pending).toBe('blob:z')
+      expect(backend.put).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
