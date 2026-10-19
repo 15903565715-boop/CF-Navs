@@ -86,8 +86,8 @@
 
   .guide-frame-wrap {
     position: relative;
-    width: min(720px, 100%);
-    height: min(640px, 92vh);
+    width: min(760px, 100%);
+    height: min(800px, 94vh);
     background: var(--color-surface, #fff);
     border-radius: 1rem;
     overflow: hidden;

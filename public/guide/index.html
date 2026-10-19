@@ -48,7 +48,7 @@
     cursor: pointer; line-height: 1; padding: 0.25rem 0.5rem; border-radius: 0.5rem;
   }
   .close-btn:hover { background: var(--accent-soft); color: var(--fg); }
-  .guide-body { flex: 1; overflow-y: auto; padding: 1.25rem 1rem 1rem; }
+  .guide-body { flex: 1; overflow-y: auto; padding: 1rem 1rem 0.75rem; }
   .step { display: none; max-width: 640px; margin: 0 auto; }
   .step.active { display: block; animation: fadeIn 0.25s ease; }
   @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
@@ -56,6 +56,8 @@
     width: 100%; border: 1px solid var(--border); border-radius: 0.75rem;
     box-shadow: 0 4px 18px rgba(0,0,0,0.08); margin-bottom: 1rem; display: block;
     background: var(--accent-soft);
+    /* 图片过高时等比缩小，保证整步内容一屏内放下、不出滚动条 */
+    max-height: 46vh; object-fit: contain;
   }
   .step-num {
     display: inline-flex; align-items: center; justify-content: center;

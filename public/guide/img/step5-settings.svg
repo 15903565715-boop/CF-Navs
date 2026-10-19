@@ -8,26 +8,57 @@
     
     <rect x="20" y="84" width="1240" height="696" rx="16" fill="#ffffff" stroke="#e2e8f0" stroke-width="2"/>
     
-    <rect x="20" y="84" width="1240" height="696" rx="16" fill="#000000" opacity="0.08"/>
-    <rect x="730" y="120" width="480" height="560" rx="16" fill="#ffffff" stroke="#e2e8f0" stroke-width="2"/>
-    <text x="760" y="165" font-size="20" font-weight="700" fill="#0f172a" font-family="Noto Sans CJK SC, sans-serif">设置</text>
-    <text x="760" y="210" font-size="16" fill="#64748b" font-family="Noto Sans CJK SC, sans-serif">主题</text>
-    <rect x="760" y="225" width="130" height="44" rx="22" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
-    <text x="825" y="253" font-size="15" text-anchor="middle" fill="#2563eb" font-family="Noto Sans CJK SC, sans-serif">浅色</text>
-    <rect x="900" y="225" width="130" height="44" rx="22" fill="#f1f5f9"/>
-    <text x="965" y="253" font-size="15" text-anchor="middle" fill="#64748b" font-family="Noto Sans CJK SC, sans-serif">深色</text>
-    <text x="760" y="310" font-size="16" fill="#64748b" font-family="Noto Sans CJK SC, sans-serif">背景</text>
-    <rect x="760" y="325" width="200" height="90" rx="10" fill="#0ea5e9"/>
-    <rect x="975" y="325" width="200" height="90" rx="10" fill="#8b5cf6"/>
-    <text x="760" y="460" font-size="16" fill="#64748b" font-family="Noto Sans CJK SC, sans-serif">搜索引擎</text>
-    <rect x="760" y="475" width="420" height="48" rx="10" fill="#f1f5f9"/>
-    <text x="780" y="505" font-size="16" fill="#0f172a" font-family="Noto Sans CJK SC, sans-serif">Bing ▾</text>
+    <rect x="20" y="84" width="1240" height="696" rx="16" fill="#000000" opacity="0.06"/>
+    <rect x="40" y="110" width="1200" height="580" rx="16" fill="#ffffff" stroke="#e2e8f0" stroke-width="2"/>
+    <text x="60" y="148" font-size="15" fill="#64748b" font-family="Noto Sans CJK SC, sans-serif">设置</text>
+    <rect x="60" y="150" width="190" height="42" rx="8" fill="transparent"/><text x="76" y="177" font-size="15" fill="#0f172a" font-weight="normal" font-family="Noto Sans CJK SC, sans-serif">站点设置</text><rect x="60" y="202" width="190" height="42" rx="8" fill="#eff6ff"/><text x="76" y="229" font-size="15" fill="#2563eb" font-weight="bold" font-family="Noto Sans CJK SC, sans-serif">外观与卡片</text><rect x="60" y="254" width="190" height="42" rx="8" fill="transparent"/><text x="76" y="281" font-size="15" fill="#0f172a" font-weight="normal" font-family="Noto Sans CJK SC, sans-serif">高级与视觉</text><rect x="60" y="306" width="190" height="42" rx="8" fill="transparent"/><text x="76" y="333" font-size="15" fill="#0f172a" font-weight="normal" font-family="Noto Sans CJK SC, sans-serif">布局与导航</text><rect x="60" y="358" width="190" height="42" rx="8" fill="transparent"/><text x="76" y="385" font-size="15" fill="#0f172a" font-weight="normal" font-family="Noto Sans CJK SC, sans-serif">搜索设置</text>
+    <text x="300" y="165" font-size="19" font-weight="700" fill="#0f172a" font-family="Noto Sans CJK SC, sans-serif">配色方案</text>
+    <text x="300" y="192" font-size="14" fill="#64748b" font-family="Noto Sans CJK SC, sans-serif">挑选一套渐变配色，一键换掉整站氛围</text>
     
-    <defs><marker id="ah5" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
-      <path d="M0,0 L8,3 L0,6 Z" fill="#ef4444"/></marker></defs>
-    <line x1="110" y1="140" x2="760" y2="200" stroke="#ef4444" stroke-width="6" marker-end="url(#ah5)"/>
-    <circle cx="110" cy="140" r="22" fill="#ef4444"/>
-    <text x="110" y="148" font-size="24" font-weight="bold" fill="#fff" text-anchor="middle" font-family="Noto Sans CJK SC, sans-serif">5</text>
+    <rect x="300" y="215" width="180" height="96" rx="10" fill="url(#g深海蔚蓝)" stroke="#2563eb" stroke-width="3"/>
+    <defs><linearGradient id="g深海蔚蓝" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0ea5e9"/><stop offset="1" stop-color="#10b981"/>
+    </linearGradient></defs>
+    <text x="390" y="333" font-size="14" fill="#0f172a" text-anchor="middle" font-family="Noto Sans CJK SC, sans-serif">深海蔚蓝</text>
+    <circle cx="468" cy="233" r="12" fill="#2563eb"/><text x="468" y="238" font-size="14" fill="#fff" text-anchor="middle" font-family="Noto Sans CJK SC, sans-serif">✓</text>
+    
+    
+    <rect x="500" y="215" width="180" height="96" rx="10" fill="url(#g紫晶破晓)" stroke="#e2e8f0" stroke-width="2"/>
+    <defs><linearGradient id="g紫晶破晓" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#a78bfa"/><stop offset="1" stop-color="#f9a8d4"/>
+    </linearGradient></defs>
+    <text x="590" y="333" font-size="14" fill="#0f172a" text-anchor="middle" font-family="Noto Sans CJK SC, sans-serif">紫晶破晓</text>
+    
+    
+    
+    <rect x="700" y="215" width="180" height="96" rx="10" fill="url(#g余烬夜航)" stroke="#e2e8f0" stroke-width="2"/>
+    <defs><linearGradient id="g余烬夜航" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f87171"/><stop offset="1" stop-color="#34d399"/>
+    </linearGradient></defs>
+    <text x="790" y="333" font-size="14" fill="#0f172a" text-anchor="middle" font-family="Noto Sans CJK SC, sans-serif">余烬夜航</text>
+    
+    
+    
+    <rect x="900" y="215" width="180" height="96" rx="10" fill="url(#g极光苔原)" stroke="#e2e8f0" stroke-width="2"/>
+    <defs><linearGradient id="g极光苔原" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#a3e635"/><stop offset="1" stop-color="#67e8f9"/>
+    </linearGradient></defs>
+    <text x="990" y="333" font-size="14" fill="#0f172a" text-anchor="middle" font-family="Noto Sans CJK SC, sans-serif">极光苔原</text>
+    
+    
+    <text x="300" y="390" font-size="15" fill="#64748b" font-family="Noto Sans CJK SC, sans-serif">深色 / 浅色跟随系统，也可在右上角一键切换</text>
+    
+    <g>
+      <animateTransform attributeName="transform" type="translate"
+        values="0 0; 13.0 5.3; 0 0" dur="1.6s" repeatCount="indefinite"/>
+      <defs><marker id="ah5" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+        <path d="M0,0 L8,3 L0,6 Z" fill="#ef4444"/></marker></defs>
+      <line x1="150" y1="130" x2="420" y2="240" stroke="#ef4444" stroke-width="6" marker-end="url(#ah5)"/>
+      <circle cx="150" cy="130" r="22" fill="#ef4444">
+        <animate attributeName="r" values="22;26;22" dur="1.6s" repeatCount="indefinite"/>
+      </circle>
+      <text x="150" y="138" font-size="24" font-weight="bold" fill="#fff" text-anchor="middle" font-family="Noto Sans CJK SC, sans-serif">5</text>
+    </g>
     
 
     </svg>
