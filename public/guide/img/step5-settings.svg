@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="800" viewBox="0 0 1280 800">
+    <rect width="1280" height="800" fill="#f1f5f9"/>
+    
+    <rect x="0" y="0" width="1280" height="64" fill="#e2e8f0"/>
+    <circle cx="28" cy="32" r="8" fill="#f87171"/><circle cx="52" cy="32" r="8" fill="#fbbf24"/><circle cx="76" cy="32" r="8" fill="#34d399"/>
+    <rect x="110" y="16" width="600" height="32" rx="16" fill="#ffffff"/>
+    <text x="130" y="38" font-size="16" fill="#64748b" font-family="Noto Sans CJK SC, sans-serif">cf-navs.pages.dev</text>
+    
+    <rect x="20" y="84" width="1240" height="696" rx="16" fill="#ffffff" stroke="#e2e8f0" stroke-width="2"/>
+    
+    <rect x="20" y="84" width="1240" height="696" rx="16" fill="#000000" opacity="0.08"/>
+    <rect x="730" y="120" width="480" height="560" rx="16" fill="#ffffff" stroke="#e2e8f0" stroke-width="2"/>
+    <text x="760" y="165" font-size="20" font-weight="700" fill="#0f172a" font-family="Noto Sans CJK SC, sans-serif">设置</text>
+    <text x="760" y="210" font-size="16" fill="#64748b" font-family="Noto Sans CJK SC, sans-serif">主题</text>
+    <rect x="760" y="225" width="130" height="44" rx="22" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
+    <text x="825" y="253" font-size="15" text-anchor="middle" fill="#2563eb" font-family="Noto Sans CJK SC, sans-serif">浅色</text>
+    <rect x="900" y="225" width="130" height="44" rx="22" fill="#f1f5f9"/>
+    <text x="965" y="253" font-size="15" text-anchor="middle" fill="#64748b" font-family="Noto Sans CJK SC, sans-serif">深色</text>
+    <text x="760" y="310" font-size="16" fill="#64748b" font-family="Noto Sans CJK SC, sans-serif">背景</text>
+    <rect x="760" y="325" width="200" height="90" rx="10" fill="#0ea5e9"/>
+    <rect x="975" y="325" width="200" height="90" rx="10" fill="#8b5cf6"/>
+    <text x="760" y="460" font-size="16" fill="#64748b" font-family="Noto Sans CJK SC, sans-serif">搜索引擎</text>
+    <rect x="760" y="475" width="420" height="48" rx="10" fill="#f1f5f9"/>
+    <text x="780" y="505" font-size="16" fill="#0f172a" font-family="Noto Sans CJK SC, sans-serif">Bing ▾</text>
+    
+    <defs><marker id="ah5" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#ef4444"/></marker></defs>
+    <line x1="110" y1="140" x2="760" y2="200" stroke="#ef4444" stroke-width="6" marker-end="url(#ah5)"/>
+    <circle cx="110" cy="140" r="22" fill="#ef4444"/>
+    <text x="110" y="148" font-size="24" font-weight="bold" fill="#fff" text-anchor="middle" font-family="Noto Sans CJK SC, sans-serif">5</text>
+    
+
+    </svg>

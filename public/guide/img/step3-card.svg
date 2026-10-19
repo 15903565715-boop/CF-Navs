@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="800" viewBox="0 0 1280 800">
+    <rect width="1280" height="800" fill="#f1f5f9"/>
+    
+    <rect x="0" y="0" width="1280" height="64" fill="#e2e8f0"/>
+    <circle cx="28" cy="32" r="8" fill="#f87171"/><circle cx="52" cy="32" r="8" fill="#fbbf24"/><circle cx="76" cy="32" r="8" fill="#34d399"/>
+    <rect x="110" y="16" width="600" height="32" rx="16" fill="#ffffff"/>
+    <text x="130" y="38" font-size="16" fill="#64748b" font-family="Noto Sans CJK SC, sans-serif">cf-navs.pages.dev</text>
+    
+    <rect x="20" y="84" width="1240" height="696" rx="16" fill="#ffffff" stroke="#e2e8f0" stroke-width="2"/>
+    
+    <rect x="40" y="100" width="230" height="620" rx="12" fill="#ffffff" stroke="#e2e8f0" stroke-width="2"/><rect x="52" y="116" width="206" height="44" rx="8" fill="#eff6ff"/><text x="68" y="144" font-size="17" fill="#2563eb" font-weight="bold" font-family="Noto Sans CJK SC, sans-serif">常用工具</text><rect x="52" y="172" width="206" height="44" rx="8" fill="transparent"/><text x="68" y="200" font-size="17" fill="#0f172a" font-weight="normal" font-family="Noto Sans CJK SC, sans-serif">开发资源</text><rect x="52" y="228" width="206" height="44" rx="8" fill="transparent"/><text x="68" y="256" font-size="17" fill="#0f172a" font-weight="normal" font-family="Noto Sans CJK SC, sans-serif">学习阅读</text><rect x="52" y="284" width="206" height="44" rx="8" fill="transparent"/><text x="68" y="312" font-size="17" fill="#0f172a" font-weight="normal" font-family="Noto Sans CJK SC, sans-serif">娱乐休闲</text>
+    
+    <rect x="340" y="200" width="200" height="120" rx="12" fill="#ffffff" stroke="#2563eb" stroke-width="3"/>
+    <text x="364" y="252" font-size="32" font-family="Noto Sans CJK SC, sans-serif">G</text>
+    <text x="410" y="248" font-size="17" font-weight="600" fill="#0f172a" font-family="Noto Sans CJK SC, sans-serif">GitHub</text>
+    <text x="410" y="272" font-size="13" fill="#64748b" font-family="Noto Sans CJK SC, sans-serif">github.com</text>
+    
+    
+    <rect x="560" y="200" width="200" height="120" rx="12" fill="#ffffff" stroke="#e2e8f0" stroke-width="2"/>
+    <text x="584" y="252" font-size="32" font-family="Noto Sans CJK SC, sans-serif">M</text>
+    <text x="630" y="248" font-size="17" font-weight="600" fill="#0f172a" font-family="Noto Sans CJK SC, sans-serif">MDN</text>
+    <text x="630" y="272" font-size="13" fill="#64748b" font-family="Noto Sans CJK SC, sans-serif">github.com</text>
+    
+    
+    <rect x="780" y="200" width="200" height="120" rx="12" fill="#ffffff" stroke="#e2e8f0" stroke-width="2"/>
+    <text x="804" y="252" font-size="32" font-family="Noto Sans CJK SC, sans-serif">V</text>
+    <text x="850" y="248" font-size="17" font-weight="600" fill="#0f172a" font-family="Noto Sans CJK SC, sans-serif">Vite</text>
+    <text x="850" y="272" font-size="13" fill="#64748b" font-family="Noto Sans CJK SC, sans-serif">github.com</text>
+    
+    <rect x="380" y="340" width="170" height="150" rx="10" fill="#ffffff" stroke="#e2e8f0" stroke-width="2"/>
+    <text x="400" y="375" font-size="16" fill="#0f172a" font-family="Noto Sans CJK SC, sans-serif">编辑</text>
+    <text x="400" y="415" font-size="16" fill="#0f172a" font-family="Noto Sans CJK SC, sans-serif">换图标</text>
+    <text x="400" y="455" font-size="16" fill="#dc2626" font-family="Noto Sans CJK SC, sans-serif">删除</text>
+    
+    <defs><marker id="ah3" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#ef4444"/></marker></defs>
+    <line x1="1050" y1="180" x2="480" y2="260" stroke="#ef4444" stroke-width="6" marker-end="url(#ah3)"/>
+    <circle cx="1050" cy="180" r="22" fill="#ef4444"/>
+    <text x="1050" y="188" font-size="24" font-weight="bold" fill="#fff" text-anchor="middle" font-family="Noto Sans CJK SC, sans-serif">3</text>
+    
+
+    </svg>

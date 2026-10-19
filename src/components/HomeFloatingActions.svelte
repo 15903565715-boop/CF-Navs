@@ -22,6 +22,7 @@
     searchBoxVisible?: boolean
     searchBoxShow?: boolean
     onOpenSearch?: () => AsyncVoid
+    onOpenGuide?: () => AsyncVoid
   }
 
   let {
@@ -39,6 +40,7 @@
     searchBoxVisible = false,
     searchBoxShow = true,
     onOpenSearch,
+    onOpenGuide,
   }: Props = $props()
 
   let showBackToTop = $state(false)
@@ -50,6 +52,11 @@
   function handleOpenSearch() {
     closeMenu()
     void onOpenSearch?.()
+  }
+
+  function handleOpenGuide() {
+    closeMenu()
+    void onOpenGuide?.()
   }
 
   // 移动端把整组操作收进一个「更多」触发器，点开后向下弹出；桌面端仍平铺（纯 CSS @media 切换）。
@@ -179,6 +186,16 @@
         <circle cx="11" cy="11" r="7" />
         <path d="m20 20-3.5-3.5" />
       </svg>
+    </button>
+    <button
+      type="button"
+      class="icon-button guide-button"
+      data-testid="home-guide-button"
+      onclick={handleOpenGuide}
+      title="使用指南"
+      aria-label="使用指南"
+    >
+      ?
     </button>
     <button
       type="button"
@@ -400,6 +417,11 @@
     color: #bfdbfe;
     background: rgba(30, 58, 138, 0.55);
     border-color: rgba(96, 165, 250, 0.5);
+  }
+
+  .guide-button {
+    font-weight: 800;
+    font-size: 1.05rem;
   }
 
   .theme-toggle-button {

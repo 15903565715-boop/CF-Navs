@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="800" viewBox="0 0 1280 800">
+    <rect width="1280" height="800" fill="#f1f5f9"/>
+    
+    <rect x="0" y="0" width="1280" height="64" fill="#e2e8f0"/>
+    <circle cx="28" cy="32" r="8" fill="#f87171"/><circle cx="52" cy="32" r="8" fill="#fbbf24"/><circle cx="76" cy="32" r="8" fill="#34d399"/>
+    <rect x="110" y="16" width="600" height="32" rx="16" fill="#ffffff"/>
+    <text x="130" y="38" font-size="16" fill="#64748b" font-family="Noto Sans CJK SC, sans-serif">cf-navs.pages.dev</text>
+    
+    <rect x="20" y="84" width="1240" height="696" rx="16" fill="#ffffff" stroke="#e2e8f0" stroke-width="2"/>
+    
+    <text x="640" y="240" font-size="54" font-weight="800" fill="#0f172a" text-anchor="middle" font-family="Noto Sans CJK SC, sans-serif">CF-Navs</text>
+    <text x="640" y="285" font-size="20" fill="#64748b" text-anchor="middle" font-family="Noto Sans CJK SC, sans-serif">把常用网站收进自己的起始页</text>
+    
+    <rect x="360.0" y="330" width="560" height="56" rx="28" fill="#ffffff" stroke="#2563eb" stroke-width="3"/>
+    <text x="388.0" y="366" font-size="18" fill="#64748b" font-family="Noto Sans CJK SC, sans-serif">搜索书签或输入网址…</text>
+    
+    <rect x="240" y="480" width="800" height="180" rx="12" fill="#f1f5f9"/>
+    <text x="640" y="570" font-size="18" fill="#64748b" text-anchor="middle" font-family="Noto Sans CJK SC, sans-serif">书签卡片区域…</text>
+    
+    <defs><marker id="ah1" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#ef4444"/></marker></defs>
+    <line x1="1080" y1="220" x2="920" y2="350" stroke="#ef4444" stroke-width="6" marker-end="url(#ah1)"/>
+    <circle cx="1080" cy="220" r="22" fill="#ef4444"/>
+    <text x="1080" y="228" font-size="24" font-weight="bold" fill="#fff" text-anchor="middle" font-family="Noto Sans CJK SC, sans-serif">1</text>
+    
+
+    </svg>
