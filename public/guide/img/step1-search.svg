@@ -22,31 +22,40 @@
     
     
     <g opacity="0">
-      <animate attributeName="opacity" values="0;1;1;1;0" keyTimes="0;0.06;0.88;0.94;1"
-        dur="4.2s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0;1;1;1;0" keyTimes="0;0.04;0.84;0.92;1"
+        dur="5s" repeatCount="indefinite"/>
       <g>
-        <animateMotion dur="4.2s" repeatCount="indefinite" calcMode="spline"
-          keyTimes="0;0.34;1" keySplines="0.35 0 0.25 1;0 0 1 1"
-          path="M1120,180 C1010.0,179.0 1010.0,179.0 640,358"/>
+        <animateMotion dur="5s" repeatCount="indefinite" calcMode="spline"
+          keyTimes="0;0.32;1" keySplines="0.22 0.61 0.21 1;0 0 1 1"
+          path="M1150,200 Q883.9,243.3 640,358"/>
         <g>
-          <animateTransform attributeName="transform" type="scale"
-            values="1;1;0.78;1;1" keyTimes="0;0.36;0.42;0.50;1"
-            dur="4.2s" repeatCount="indefinite"/>
-          <path d="M0,0 L0,24 L6.5,17.5 L9.5,25 L13,23.2 L10,15.5 L16.5,15.5 Z"
-            fill="#ffffff" stroke="#1e293b" stroke-width="1.8" stroke-linejoin="round"/>
+          <!-- 悬停微调：落点后 2px 漂移 -->
+          <animateTransform attributeName="transform" type="translate"
+            values="0 0;0 0;2 1;0 0;0 0" keyTimes="0;0.32;0.36;0.40;1"
+            dur="5s" repeatCount="indefinite" additive="sum"/>
+          <g>
+            <!-- 轻点：0.94 微缩，0.15s -->
+            <animateTransform attributeName="transform" type="scale"
+              values="1;1;0.94;1;1" keyTimes="0;0.375;0.405;0.44;1"
+              dur="5s" repeatCount="indefinite"/>
+            <path d="M0,0 L0,24 L6.5,17.5 L9.5,25 L13,23.2 L10,15.5 L16.5,15.5 Z"
+              fill="#ffffff" stroke="#1e293b" stroke-width="1.8" stroke-linejoin="round"/>
+          </g>
         </g>
       </g>
-      <circle cx="640" cy="358" r="6" fill="none" stroke="#2563eb" stroke-width="3">
-        <animate attributeName="r" values="6;6;36;36" keyTimes="0;0.42;0.58;1"
-          dur="4.2s" repeatCount="indefinite"/>
-        <animate attributeName="opacity" values="0;0;0.85;0" keyTimes="0;0.42;0.46;0.62"
-          dur="4.2s" repeatCount="indefinite"/>
+      <!-- 点击波纹：与轻点同步 -->
+      <circle cx="640" cy="358" r="5" fill="none" stroke="#2563eb" stroke-width="2.5">
+        <animate attributeName="r" values="5;5;30;30" keyTimes="0;0.405;0.55;1"
+          dur="5s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" values="0;0;0.7;0" keyTimes="0;0.405;0.44;0.58"
+          dur="5s" repeatCount="indefinite"/>
       </circle>
-      <circle cx="640" cy="358" r="6" fill="none" stroke="#2563eb" stroke-width="2">
-        <animate attributeName="r" values="6;6;24;24" keyTimes="0;0.44;0.58;1"
-          dur="4.2s" repeatCount="indefinite"/>
-        <animate attributeName="opacity" values="0;0;0.5;0" keyTimes="0;0.44;0.48;0.60"
-          dur="4.2s" repeatCount="indefinite"/>
+      <!-- 落点闪点 -->
+      <circle cx="640" cy="358" r="3" fill="#2563eb">
+        <animate attributeName="opacity" values="0;0;0.9;0" keyTimes="0;0.405;0.43;0.50"
+          dur="5s" repeatCount="indefinite"/>
+        <animate attributeName="r" values="3;3;5;5" keyTimes="0;0.405;0.46;1"
+          dur="5s" repeatCount="indefinite"/>
       </circle>
     </g>
     
