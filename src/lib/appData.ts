@@ -250,6 +250,21 @@ export function adminDataToPublicData(data: AdminData, settings: Settings): Publ
   }
 }
 
+function resolveCustomAccentColor(settings: PublicSettings, theme: 'light' | 'dark'): string {
+  if (settings.background_preset_id !== 'custom') return ''
+  return (theme === 'dark' ? settings.custom_dark_accent_color : settings.custom_accent_color)?.trim() ?? ''
+}
+
+export function resolveThemeAccentColor(settings: PublicSettings | null, theme: 'light' | 'dark'): string {
+  const activePreset = settings ? getPresetRenderTokens(settings.background_preset_id) : undefined
+  const customAccentColor = settings ? resolveCustomAccentColor(settings, theme) : ''
+  const fallbackAccentColor = theme === 'dark' ? '#7dd3fc' : '#2563eb'
+
+  return activePreset
+    ? (theme === 'dark' ? activePreset.darkAccentColor : activePreset.accentColor)
+    : (customAccentColor || fallbackAccentColor)
+}
+
 export function buildHomeBackground(settings: PublicSettings | null, theme: 'light' | 'dark'): string {
   if (!settings) return ''
 
@@ -272,16 +287,9 @@ export function buildHomeBackground(settings: PublicSettings | null, theme: 'lig
   const cardColor = activePreset?.surface === 'flat' && theme === 'dark'
     ? activePreset.darkCardBackgroundColor
     : lightCardColor
-  const customAccentColor = settings.background_preset_id === 'custom'
-    ? settings.custom_accent_color?.trim()
-    : ''
-  const customDarkAccentColor = settings.background_preset_id === 'custom'
-    ? settings.custom_dark_accent_color?.trim()
-    : ''
+  const customAccentColor = resolveCustomAccentColor(settings, theme)
   const fallbackAccentColor = theme === 'dark' ? '#7dd3fc' : '#2563eb'
-  const accentColor = activePreset
-    ? (theme === 'dark' ? activePreset.darkAccentColor : activePreset.accentColor)
-    : (theme === 'dark' ? customDarkAccentColor || fallbackAccentColor : customAccentColor || fallbackAccentColor)
+  const accentColor = resolveThemeAccentColor(settings, theme)
   const customCardTextColor = settings.card_text_color?.trim()
   const cardTitleColor = customCardTextColor || (
     activePreset
@@ -301,7 +309,7 @@ export function buildHomeBackground(settings: PublicSettings | null, theme: 'lig
   return [
     `--home-background: ${layer};`,
     `--home-background-blur: ${blur}px;`,
-    `--custom-accent-color: ${theme === 'dark' ? customDarkAccentColor || fallbackAccentColor : customAccentColor || fallbackAccentColor};`,
+    `--custom-accent-color: ${customAccentColor || fallbackAccentColor};`,
     `--home-background-filter: ${backgroundFilter};`,
     `--home-background-transform: ${backgroundTransform};`,
     `--home-background-mask: ${mask};`,

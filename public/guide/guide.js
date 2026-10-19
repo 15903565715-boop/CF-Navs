@@ -6,25 +6,43 @@
       var currentStep = 0;
       var currentLang = "zh";
       var animSeed = 0;
-      var toastTimer = null;
+      var guideConfig = window.__CF_NAVS_GUIDE_CONFIG__ || null;
+      var appearanceParams = new URLSearchParams(window.location.search);
+      var isEmbedded = Boolean(guideConfig && guideConfig.embedded) ||
+        (appearanceParams.get("embedded") === "1" && window.parent !== window);
+      var currentCardStyle = "info";
 
-      // Sample Bookmark Data matching CF-Navs 示例站点
-      var sampleBookmarks = [
-        { title: "CF-Navs 项目地址", desc: "CF-Navs 项目主页", cat: "cf", color: "#24292f", icon: "GH" },
-        { title: "IDC", desc: "linuxdo分论坛", cat: "forum", color: "#3d7a52", icon: "ID" },
-        { title: "ChatGPT", desc: "OpenAI 官方对话服务", cat: "ai", color: "#10a37f", icon: "AI" },
-        { title: "Claude", desc: "Anthropic 智能助手", cat: "ai", color: "#d97757", icon: "CL" },
-        { title: "Cloudflare 控制台", desc: "Workers & D1 数据库", cat: "cf", color: "#f38020", icon: "CF" },
-        { title: "Svelte 4 文档", desc: "轻量响应式前端框架", cat: "dev", color: "#ff3e00", icon: "SV" },
-        { title: "MDN Web Docs", desc: "Web 开发者权威参考文档", cat: "study", color: "#2563eb", icon: "M" },
-        { title: "Raycast", desc: "Mac 效率启动器工具", cat: "mac", color: "#e11d48", icon: "RC" }
-      ];
+      function applyGuideAppearance() {
+        var root = document.documentElement;
+        var backdrop = document.getElementById("guideBackdrop");
+        var guideRoot = document.getElementById("guideRoot");
+        var themeValue = guideConfig ? guideConfig.theme : appearanceParams.get("theme");
+        var cardStyleValue = guideConfig ? guideConfig.cardStyle : appearanceParams.get("cardStyle");
+        var theme = themeValue === "dark" ? "dark" : "light";
+        var cardStyle = cardStyleValue === "icon" ? "icon" : "info";
+        var accent = guideConfig ? guideConfig.accentColor || "" : appearanceParams.get("accent") || "";
 
-      var engines = [
-        { name: "Google", placeholder: "输入关键词搜索（当前引擎：Google）" },
-        { name: "Bing", placeholder: "输入关键词搜索（当前引擎：Bing）" }
-      ];
-      var currentEngineIdx = 0;
+        currentCardStyle = cardStyle;
+        root.setAttribute("data-guide-theme", theme);
+        if (backdrop) backdrop.setAttribute("data-theme", theme);
+        if (guideRoot) guideRoot.setAttribute("data-card-style", cardStyle);
+        if (/^#(?:[\da-f]{3}|[\da-f]{6}|[\da-f]{8})$/i.test(accent)) {
+          if (backdrop) backdrop.style.setProperty("--accent", accent);
+        }
+      }
+
+      function applyGuideSvgTheme(svg) {
+        return svg
+          .replaceAll("#3d7a52", "var(--accent)")
+          .replaceAll("#235334", "var(--accent-strong)")
+          .replaceAll("#1f2d22", "var(--text-primary)")
+          .replaceAll("#4a5d4d", "var(--text-secondary)")
+          .replaceAll("#647868", "var(--text-muted)")
+          .replaceAll("#d7e4d3", "var(--stage-bg)")
+          .replaceAll("#e6f2ea", "var(--accent-soft)")
+          .replaceAll("rgba(61,122,82,0.16)", "var(--accent-soft)")
+          .replaceAll("rgba(61,122,82,0.35)", "var(--accent-glow)");
+      }
 
       // Six guide steps, with the examples kept separate from live account data.
       var stepsData = [
@@ -108,17 +126,6 @@
         }
       ];
 
-      function showToast(msg) {
-        var el = document.getElementById("simToast");
-        if (!el) return;
-        el.textContent = msg;
-        el.classList.add("show");
-        if (toastTimer) clearTimeout(toastTimer);
-        toastTimer = setTimeout(function () {
-          el.classList.remove("show");
-        }, 2600);
-      }
-
       // Reusable SVG Cursor + Click Ripples
       function renderCursorGroup(cursorClass, r1Class, r2Class, r1Cx, r1Cy, r2Cx, r2Cy) {
         var ripples = "";
@@ -139,6 +146,8 @@
       // Build Animated SVG for Each Step — Visually Verified & 100% Bilingual
       function getStepSvg(stepIndex, lang) {
         var isEn = lang === "en";
+        var detailCardActive = currentCardStyle === "info";
+        var iconCardActive = currentCardStyle === "icon";
 
         if (stepIndex === 0) {
           // STEP 1: HomeHeroSearch — Clean search input, right engine callout, live match count, always-visible cards
@@ -170,8 +179,8 @@
               '<text x="134" y="109" font-size="11.5" font-weight="700" fill="#1f2d22">Google ▾</text>' +
 
               /* Search Keyword Input Area (Clean typed keyword + caret) */
-              '<text x="238" y="110" font-size="14" font-weight="700" fill="#1f2d22">IDC</text>' +
-              '<line x1="266" y1="95" x2="266" y2="115" stroke="#3d7a52" stroke-width="2" />' +
+              '<text x="238" y="110" font-size="14" font-weight="700" fill="#1f2d22">NodeLoc</text>' +
+              '<line x1="297" y1="95" x2="297" y2="115" stroke="#3d7a52" stroke-width="2" />' +
 
               /* Clear (×) Button + Search Submit Button */
               '<circle cx="484" cy="105" r="9" fill="#edf3ee" />' +
@@ -200,9 +209,9 @@
               /* Card 1 (Matched & Highlighted) */
               '<rect class="anim-card-s1" x="42" y="208" width="214" height="58" rx="12" fill="#ffffff" stroke="#3d7a52" stroke-width="2" />' +
               '<rect x="54" y="219" width="36" height="36" rx="9" fill="#3d7a52" />' +
-              '<text x="72" y="242" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">ID</text>' +
-              '<text x="100" y="234" font-size="13" font-weight="700" fill="#1f2d22">IDC</text>' +
-              '<text x="100" y="251" font-size="11" fill="#5e7261">' + (isEn ? "linuxdo forum · Matched" : "linuxdo分论坛 · 匹配关键词") + '</text>' +
+              '<text x="72" y="242" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">NL</text>' +
+              '<text x="100" y="234" font-size="13" font-weight="700" fill="#1f2d22">NodeLoc</text>' +
+              '<text x="100" y="251" font-size="11" fill="#5e7261">' + (isEn ? "NodeLoc Forum · Matched" : "NodeLoc论坛 · 匹配关键词") + '</text>' +
 
               /* Card 2 (Matched & Highlighted) */
               '<rect class="anim-card-s1" x="272" y="208" width="214" height="58" rx="12" fill="#ffffff" stroke="#3d7a52" stroke-width="2" />' +
@@ -327,6 +336,15 @@
 
         if (stepIndex === 2) {
           // STEP 3: Bookmark Card + Real Right-Click Menu ("编辑") -> Crisp Edit Modal on Right
+          var nodeLocBookmarkCard = currentCardStyle === "icon"
+            ? '<rect x="114" y="56" width="70" height="70" rx="12" fill="var(--card-surface)" stroke="var(--accent)" stroke-width="2" />' +
+              '<rect x="127" y="69" width="44" height="44" rx="11" fill="var(--accent)" />' +
+              '<text x="149" y="97" text-anchor="middle" font-size="15" font-weight="700" fill="var(--badge-text)">NL</text>'
+            : '<rect x="28" y="56" width="244" height="70" rx="14" fill="var(--card-surface)" stroke="var(--accent)" stroke-width="2" />' +
+              '<rect x="42" y="69" width="44" height="44" rx="11" fill="var(--accent)" />' +
+              '<text x="64" y="97" text-anchor="middle" font-size="15" font-weight="700" fill="var(--badge-text)">NL</text>' +
+              '<text x="98" y="87" font-size="13.5" font-weight="700" fill="#1f2d22">NodeLoc</text>' +
+              '<text x="98" y="106" font-size="11.5" fill="#647868">' + (isEn ? "NodeLoc Forum" : "NodeLoc论坛") + '</text>';
           return (
             '<svg class="guide-stage-svg" viewBox="0 0 760 330" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="' + (isEn ? "Bookmark Card Right-Click Edit and Edit Modal" : "书签卡片右键编辑菜单与编辑书签弹窗示意图") + '">' +
               '<rect width="760" height="330" rx="14" fill="#d7e4d3" />' +
@@ -336,12 +354,8 @@
               '<text x="42" y="39" text-anchor="middle" font-size="12.5" font-weight="700" fill="#fff">3</text>' +
               '<text x="64" y="39" font-size="13" font-weight="700" fill="#1f2d22">' + (isEn ? "① Right-click card → Click 'Edit'" : "① 左键打开网站 · 右键点击“编辑”") + '</text>' +
 
-              /* Card 1 (Target of Right-Click, x=28..272, y=56..126) */
-              '<rect x="28" y="56" width="244" height="70" rx="14" fill="#ffffff" stroke="#3d7a52" stroke-width="2" />' +
-              '<rect x="42" y="69" width="44" height="44" rx="11" fill="#24292f" />' +
-              '<text x="64" y="97" text-anchor="middle" font-size="15" font-weight="700" fill="#fff">GH</text>' +
-              '<text x="98" y="87" font-size="13.5" font-weight="700" fill="#1f2d22">' + (isEn ? "CF-Navs Repo" : "CF-Navs 项目地址") + '</text>' +
-              '<text x="98" y="106" font-size="11.5" fill="#647868">CF-Navs 项目主页</text>' +
+              /* Card target reflects the configured information or icon-only style. */
+              nodeLocBookmarkCard +
 
               /* Real Right-Click Context Menu Below Card 1 (Single real item: "编辑", placed in dedicated gap y=136..180) */
               '<rect x="148" y="136" width="124" height="44" rx="10" fill="#ffffff" stroke="#3d7a52" stroke-width="1.5" filter="drop-shadow(0 8px 16px rgba(0,0,0,0.12))" />' +
@@ -354,10 +368,10 @@
 
               /* Card 2 (Placed cleanly at y=200..268) */
               '<rect x="28" y="200" width="244" height="68" rx="14" fill="rgba(255,255,255,0.82)" />' +
-              '<rect x="42" y="212" width="44" height="44" rx="11" fill="#3d7a52" />' +
-              '<text x="64" y="240" text-anchor="middle" font-size="15" font-weight="700" fill="#fff">ID</text>' +
-              '<text x="98" y="230" font-size="13.5" font-weight="700" fill="#1f2d22">IDC</text>' +
-              '<text x="98" y="249" font-size="11.5" fill="#647868">' + (isEn ? "linuxdo sub-forum" : "linuxdo分论坛") + '</text>' +
+              '<rect x="42" y="212" width="44" height="44" rx="11" fill="#10a37f" />' +
+              '<text x="64" y="240" text-anchor="middle" font-size="15" font-weight="700" fill="#fff">AI</text>' +
+              '<text x="98" y="230" font-size="13.5" font-weight="700" fill="#1f2d22">ChatGPT</text>' +
+              '<text x="98" y="249" font-size="11.5" fill="#647868">' + (isEn ? "OpenAI Official Service" : "OpenAI官方对话服务") + '</text>' +
 
               '<text x="28" y="294" font-size="11" fill="#4a5d4d" font-weight="600">' +
                 (isEn ? "• Unauthenticated click prompts Admin Login" : "• 未登录时点击“编辑”会自动拉起管理员登录") +
@@ -483,8 +497,8 @@
 
               /* Result Row 4 (y=228..266) */
               '<rect x="248" y="234" width="26" height="26" rx="7" fill="#3d7a52" />' +
-              '<text x="261" y="251" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">ID</text>' +
-              '<text x="284" y="251" font-size="13" font-weight="700" fill="#1e293b">' + (isEn ? "IDC — linuxdo sub-forum" : "IDC — linuxdo分论坛") + '</text>' +
+              '<text x="261" y="251" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">NL</text>' +
+              '<text x="284" y="251" font-size="13" font-weight="700" fill="#1e293b">' + (isEn ? "NodeLoc Forum" : "NodeLoc论坛") + '</text>' +
               '<text x="706" y="251" text-anchor="end" font-size="11" font-weight="600" fill="#64748b">论坛导航</text>' +
 
               /* Bottom Status Bar (Exact match to CF-Navs 示例站点) */
@@ -498,6 +512,10 @@
 
         if (stepIndex === 4) {
           // STEP 5: SettingsPanel — 7 Real Tabs + 22 Themes + Card/Nav Toggles
+          var detailStyleFill = detailCardActive ? "var(--accent)" : "var(--pill-bg)";
+          var detailStyleText = detailCardActive ? "var(--badge-text)" : "var(--text-secondary)";
+          var iconStyleFill = iconCardActive ? "var(--accent)" : "var(--pill-bg)";
+          var iconStyleText = iconCardActive ? "var(--badge-text)" : "var(--text-secondary)";
           return (
             '<svg class="guide-stage-svg" viewBox="0 0 760 330" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="' + (isEn ? "Settings Panel and 22 Themes" : "设置面板 7 大选项卡与 22 套内置主题示意图") + '">' +
               '<defs>' +
@@ -549,7 +567,7 @@
               '<text x="614" y="98" font-size="10" fill="#99f6e4">Aurora</text>' +
 
               /* Eye-Care Solid Themes (9 Presets) */
-              '<text x="212" y="142" font-size="12" font-weight="700" fill="#1f2d22">' + (isEn ? "Eye-Care Solid Themes (9 Presets — Active Default)" : "【护眼纯色】配色方案（共 9 套预设 — 当前默认生效）") + '</text>' +
+              '<text x="212" y="142" font-size="12" font-weight="700" fill="#1f2d22">' + (isEn ? "Eye-Care Solid Theme Presets (9)" : "【护眼纯色】配色预设（共 9 套）") + '</text>' +
 
               '<rect x="212" y="154" width="118" height="44" rx="10" fill="#d8e5d4" stroke="#3d7a52" stroke-width="2.2" />' +
               '<text x="271" y="180" text-anchor="middle" font-size="11.5" font-weight="700" fill="#1f2d22">' + (isEn ? "✓ Sage Green" : "✓ 纸页鼠尾草") + '</text>' +
@@ -566,10 +584,10 @@
               /* Card Style & Navigation Layout Options */
               '<rect x="212" y="216" width="248" height="76" rx="11" fill="#f7faf7" stroke="#dce6dd" />' +
               '<text x="226" y="238" font-size="11.5" font-weight="700" fill="#1f2d22">' + (isEn ? "Bookmark Card Style" : "书签卡片风格") + '</text>' +
-              '<rect x="226" y="250" width="106" height="30" rx="8" fill="#3d7a52" />' +
-              '<text x="279" y="269" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">' + (isEn ? "✓ Detailed" : "✓ 详情风格") + '</text>' +
-              '<rect x="340" y="250" width="106" height="30" rx="8" fill="#e9f0ea" />' +
-              '<text x="393" y="269" text-anchor="middle" font-size="11" fill="#4a5d4d">' + (isEn ? "Minimal Icons" : "极简纯图标") + '</text>' +
+              '<rect x="226" y="250" width="106" height="30" rx="8" fill="' + detailStyleFill + '" />' +
+              '<text x="279" y="269" text-anchor="middle" font-size="11" font-weight="700" fill="' + detailStyleText + '">' + (detailCardActive ? "✓ " : "") + (isEn ? "Detailed" : "详情风格") + '</text>' +
+              '<rect x="340" y="250" width="106" height="30" rx="8" fill="' + iconStyleFill + '" />' +
+              '<text x="393" y="269" text-anchor="middle" font-size="11" font-weight="' + (iconCardActive ? "700" : "400") + '" fill="' + iconStyleText + '">' + (iconCardActive ? "✓ " : "") + (isEn ? "Minimal Icons" : "极简纯图标") + '</text>' +
 
               '<rect x="472" y="216" width="248" height="76" rx="11" fill="#f7faf7" stroke="#dce6dd" />' +
               '<text x="486" y="238" font-size="11.5" font-weight="700" fill="#1f2d22">' + (isEn ? "Category Nav Position" : "分类导航显示位置") + '</text>' +
@@ -637,7 +655,7 @@
             '<path d="M55,139 L62,146 L74,132" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />' +
             '<text x="100" y="122" font-size="15.5" font-weight="700" fill="#1f2d22">' + (isEn ? "Ready to use CF-Navs!" : "准备就绪，立即开启高效导航！") + '</text>' +
             '<text x="100" y="145" font-size="12" fill="#4a5d4d">' + (isEn ? "Closing this guide records localStorage['cf-navs:guide-seen']=1." : "关闭后将自动写入已读标记，后续访问不再自动弹窗打扰。") + '</text>' +
-            '<text x="100" y="167" font-size="12" font-weight="700" fill="#3d7a52">' + (isEn ? "Click top-right ⋮ → ? anytime to reopen this guide." : "展开右上角 ⋮ 菜单点击【？】圆形按钮，可随时重温本指南。") + '</text>' +
+            '<text x="100" y="167" font-size="12" font-weight="700" fill="#3d7a52">' + (isEn ? "Click the top-right menu and choose ? to reopen this guide." : "点击右上角更多菜单中的？按钮，可随时重温本指南。") + '</text>' +
 
             /* Two Bottom Feature Cards: Visit Analytics & Multi-Format Data Import */
             '<rect x="24" y="204" width="220" height="102" rx="14" fill="rgba(255,255,255,0.86)" />' +
@@ -657,43 +675,6 @@
         );
       }
 
-      // Render Simulated Homepage Bookmark Cards
-      function renderSimulatedBookmarks(filterCat, searchQuery) {
-        var grid = document.getElementById("simBookmarkGrid");
-        var badge = document.getElementById("simCardCountBadge");
-        var meta = document.getElementById("simSearchMeta");
-        if (!grid) return;
-
-        var q = (searchQuery || "").trim().toLowerCase();
-        var filtered = sampleBookmarks.filter(function (b) {
-          var matchCat = !filterCat || filterCat === "all" || b.cat === filterCat;
-          var matchQuery = !q || b.title.toLowerCase().indexOf(q) !== -1 || b.desc.toLowerCase().indexOf(q) !== -1;
-          return matchCat && matchQuery;
-        });
-
-        badge.textContent = "共 " + filtered.length + " 个站点";
-        meta.innerHTML =
-          '<span>• 当前内容 匹配 <strong>' +
-          (filtered.length > 0 ? Math.min(6, filtered.length) : 0) +
-          '</strong> 个分类, <strong>' +
-          filtered.length +
-          '</strong> 个站点</span><span>｜</span><span>按 <kbd class="kbd-key">Ctrl+K</kbd> 或 <kbd class="kbd-key">/</kbd> 唤起全局 Spotlight</span>';
-
-        grid.innerHTML = filtered
-          .map(function (item) {
-            return (
-              '<div class="sim-card" data-card-title="' + item.title + '" title="左键打开 ' + item.title + '｜右键唤起编辑菜单">' +
-                '<div class="sim-card-icon" style="background:' + item.color + '">' + item.icon + '</div>' +
-                '<div class="sim-card-info">' +
-                  '<div class="sim-card-name">' + item.title + '</div>' +
-                  '<div class="sim-card-desc">' + item.desc + '</div>' +
-                '</div>' +
-              '</div>'
-            );
-          })
-          .join("");
-      }
-
       // Render Current Guide Step
       function renderGuideStep() {
         var stepObj = stepsData[currentStep];
@@ -709,13 +690,14 @@
         document.getElementById("stepQuickTip").textContent = copy.tip;
         document.getElementById("replayBtnLabel").textContent = isEn ? "Replay" : "重播动效";
         document.getElementById("keyboardHintText").innerHTML = isEn
-          ? 'Keys <kbd class="kbd-key">◀</kbd> <kbd class="kbd-key">▶</kbd> to switch · <kbd class="kbd-key">Esc</kbd> to close'
-          : '键盘 <kbd class="kbd-key">◀</kbd> <kbd class="kbd-key">▶</kbd> 切换步骤 · <kbd class="kbd-key">Esc</kbd> 关闭';
+          ? 'Keys <kbd class="guide-kbd-key">◀</kbd> <kbd class="guide-kbd-key">▶</kbd> to switch · <kbd class="guide-kbd-key">Esc</kbd> to close'
+          : '键盘 <kbd class="guide-kbd-key">◀</kbd> <kbd class="guide-kbd-key">▶</kbd> 切换步骤 · <kbd class="guide-kbd-key">Esc</kbd> 关闭';
 
         // Stage SVG
         var stageWrap = document.getElementById("guideStageWrap");
         stageWrap.setAttribute("data-anim-seed", String(animSeed));
-        stageWrap.innerHTML = getStepSvg(currentStep, currentLang);
+        stageWrap.setAttribute("data-card-style", currentCardStyle);
+        stageWrap.innerHTML = applyGuideSvgTheme(getStepSvg(currentStep, currentLang));
 
         // Dots
         var dotsContainer = document.getElementById("guideDotsContainer");
@@ -761,8 +743,11 @@
           /* ignore storage quota / sandbox restrictions */
         }
         var backdrop = document.getElementById("guideBackdrop");
-        if (backdrop) {
-          backdrop.classList.add("is-hidden");
+        if (backdrop) backdrop.classList.add("is-hidden");
+        if (isEmbedded) {
+          window.dispatchEvent(new CustomEvent("cf-navs:guide:close"));
+        } else {
+          window.location.assign(new URL("../", window.location.href).toString());
         }
       }
 
@@ -780,8 +765,13 @@
 
       // Initialize Event Listeners
       function init() {
-        renderSimulatedBookmarks("all", "");
+        applyGuideAppearance();
         renderGuideStep();
+        if (!isEmbedded) document.getElementById("guideCloseBtn").focus();
+        window.addEventListener("cf-navs:guide:open", function () {
+          applyGuideAppearance();
+          openGuide(true);
+        });
 
         // Prev / Next / Skip / Close
         document.getElementById("guidePrevBtn").addEventListener("click", function () {
@@ -825,7 +815,7 @@
           var stageWrap = document.getElementById("guideStageWrap");
           stageWrap.innerHTML = "";
           requestAnimationFrame(function () {
-            stageWrap.innerHTML = getStepSvg(currentStep, currentLang);
+            stageWrap.innerHTML = applyGuideSvgTheme(getStepSvg(currentStep, currentLang));
           });
         });
 
@@ -842,79 +832,6 @@
           this.classList.add("active");
           document.getElementById("langZhBtn").classList.remove("active");
           renderGuideStep();
-        });
-
-        // Reopen Guide Buttons on Simulated Home
-        document.getElementById("reopenGuideBtn").addEventListener("click", function () {
-          openGuide(true);
-        });
-        document.getElementById("bannerOpenGuideBtn").addEventListener("click", function () {
-          openGuide(false);
-        });
-        document.getElementById("resetFirstVisitBtn").addEventListener("click", function () {
-          try {
-            localStorage.removeItem(STORAGE_KEY);
-          } catch (_e) {
-            // Private browsing may disable storage; reopening the guide still works.
-          }
-          openGuide(true);
-        });
-
-        // Simulated Home Floating Buttons (⋮, A, ⚙, ^)
-        document.getElementById("simMenuToggleBtn").addEventListener("click", function () {
-          var grp = document.getElementById("simFloatingGroup");
-          var isCollapsed = grp.classList.toggle("collapsed");
-          this.setAttribute("aria-expanded", String(!isCollapsed));
-          this.setAttribute("aria-label", isCollapsed ? "展开快捷菜单" : "收起快捷菜单");
-          this.title = isCollapsed ? "展开右上角快捷菜单 (⋮)" : "收起右上角快捷菜单 (⋮)";
-          showToast(isCollapsed ? "已收起右上角快捷菜单" : "已展开右上角快捷菜单 (? / A / ⚙)");
-        });
-
-        document.getElementById("simThemeBtn").addEventListener("click", function () {
-          this.textContent = this.textContent === "A" ? "☀" : this.textContent === "☀" ? "☾" : "A";
-          showToast("示意主题切换：" + this.textContent);
-        });
-        document.getElementById("simAdminBtn").addEventListener("click", function () {
-          currentStep = 4; // Jump to Step 5 (Settings Panel)
-          openGuide(false);
-        });
-        document.getElementById("simBackTopBtn").addEventListener("click", function () {
-          window.scrollTo({ top: 0, behavior: "smooth" });
-          showToast("已返回页面顶部");
-        });
-
-        document.getElementById("simEngineBtn").addEventListener("click", function () {
-          currentEngineIdx = (currentEngineIdx + 1) % engines.length;
-          document.getElementById("simEngineLabel").textContent = engines[currentEngineIdx].name;
-          document.getElementById("simSearchInput").placeholder = engines[currentEngineIdx].placeholder;
-          showToast("已切换搜索引擎为：" + engines[currentEngineIdx].name);
-        });
-
-        document.getElementById("simSearchInput").addEventListener("input", function () {
-          renderSimulatedBookmarks("all", this.value);
-        });
-
-        document.getElementById("simSearchSubmitBtn").addEventListener("click", function () {
-          var val = document.getElementById("simSearchInput").value;
-          renderSimulatedBookmarks("all", val);
-          showToast("已使用 " + engines[currentEngineIdx].name + " 检索关键词：" + (val || "全部书签"));
-        });
-
-        document.getElementById("simCategoryBar").addEventListener("click", function (e) {
-          var pill = e.target.closest(".sim-cat-pill");
-          if (!pill) return;
-          document.querySelectorAll(".sim-cat-pill").forEach(function (p) {
-            p.classList.remove("active");
-          });
-          pill.classList.add("active");
-          renderSimulatedBookmarks(pill.getAttribute("data-cat"), document.getElementById("simSearchInput").value);
-        });
-
-        document.getElementById("simBookmarkGrid").addEventListener("click", function (e) {
-          var card = e.target.closest(".sim-card");
-          if (card) {
-            showToast("正在打开书签：" + card.getAttribute("data-card-title"));
-          }
         });
 
         // Keyboard Navigation (← / → / Esc / Ctrl+K)
