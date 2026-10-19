@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="public/icon.png" alt="CF-Navs Project Icon" width="112" height="112">
+  <img src="../../public/icon.png" alt="CF-Navs Project Icon" width="112" height="112">
   <h1>CF-Navs</h1>
   <p><strong>Bring your frequently used websites, work tools, and private favorites into your own start page.</strong></p>
   <p>Runs on Cloudflare Workers, no need to set up your own server. Import existing bookmarks, choose a theme, and open the same navigation space on your computer and phone.</p>
@@ -8,7 +8,7 @@
     <img src="https://img.shields.io/badge/Cloudflare-Workers-F38020?logo=cloudflare&logoColor=white" alt="Cloudflare Workers">
     <img src="https://img.shields.io/badge/Svelte-5-FF3E00?logo=svelte&logoColor=white" alt="Svelte 5">
     <img src="https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white" alt="TypeScript 5">
-    <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache--2.0-2563EB" alt="Apache License 2.0"></a>
+    <a href="../../LICENSE"><img src="https://img.shields.io/badge/License-Apache--2.0-2563EB" alt="Apache License 2.0"></a>
   </p>
 
   <p>
@@ -16,7 +16,7 @@
     <a href="#interface-preview">Interface Preview</a> ·
     <a href="#quick-deployment">Quick Deployment</a> ·
     <a href="#local-development">Local Development</a> ·
-    <a href="docs/README.md">Project Documentation</a>
+    <a href="../../docs/README.md">Project Documentation</a>
   </p>
 
   <a href="https://github.com/lbjxr/CF-Navs/fork">
@@ -24,7 +24,7 @@
   </a>
 </div>
 
-**Languages:** [English](translations/en/README.md)
+**Languages:** [简体中文](../../README.md)
 
 ---
 
@@ -58,7 +58,7 @@ Prefer a compact layout? The minimum width for desktop detail cards can be set t
 - **Private Categories**: Administrators can check the "Hidden from visitors (visible only to logged-in users)" box when editing a category in the backend. Unauthenticated visitors will not receive data for this category, its subcategories, or the bookmarks within them. Administrators can still view and manage them normally after logging in. Existing categories remain visible to visitors by default.
 - **Cross-Category Drag-and-Drop**: After logging in as an administrator, click "Reorder" on any category on the homepage to enter a unified reordering session. On PC, you can drag bookmarks into primary, secondary, or empty categories and adjust their positions. On mobile, you can select a target category via "Move to Category." Click "Save Reorder" at the bottom to save all category and order changes, or "Cancel" to discard the current session's modifications.
 - **Batch Movement**: When a large number of bookmarks need to be reorganized, you can filter and select multiple bookmarks in the backend, choose a target category, confirm the full path, and complete the move in one go—no need to open individual edit forms.
-- **Browser Bookmark Sync**: After enabling "Browser Bookmark Sync" under "Settings → Site Settings" in the backend, a "Browser Additions" category will be created automatically. Once you install and log in with the Chrome/Edge extension from [`browser-extension`](browser-extension/), any new web bookmarks added in your browser will be synced to this category. They will be saved with icon candidates following the default icon strategy (`https://favicon.im/<hostname>?larger=true`). The extension does not create navigation categories based on browser bookmark folders; it only performs a one-way addition from "Browser → Navigation Page" without deleting or overwriting existing bookmarks on the navigation page. You can then drag them to other categories directly in the homepage's reorder mode.
+- **Browser Bookmark Sync**: After enabling "Browser Bookmark Sync" under "Settings → Site Settings" in the backend, a "Browser Additions" category will be created automatically. Once you install and log in with the Chrome/Edge extension from [`browser-extension`](../../browser-extension/), any new web bookmarks added in your browser will be synced to this category. They will be saved with icon candidates following the default icon strategy (`https://favicon.im/<hostname>?larger=true`). The extension does not create navigation categories based on browser bookmark folders; it only performs a one-way addition from "Browser → Navigation Page" without deleting or overwriting existing bookmarks on the navigation page. You can then drag them to other categories directly in the homepage's reorder mode.
 
 ## Interface Preview
 
@@ -66,31 +66,31 @@ Prefer a compact layout? The minimum width for desktop detail cards can be set t
   <tr>
     <td align="center" width="50%">
       <strong>Light Home Page</strong><br>
-      <img src="docs/screenshots/cf-navs-light.webp" alt="CF-Navs Light Home Page: Eye Protection vs. Frosted Glass Diagonal Comparison">
+      <img src="../../docs/screenshots/cf-navs-light.webp" alt="CF-Navs Light Home Page: Eye Protection vs. Frosted Glass Diagonal Comparison">
     </td>
     <td align="center" width="50%">
       <strong>Dark Home Page</strong><br>
-      <img src="docs/screenshots/cf-navs-dark.webp" alt="CF-Navs Dark Home Page: Eye Protection vs. Frosted Glass Diagonal Comparison">
+      <img src="../../docs/screenshots/cf-navs-dark.webp" alt="CF-Navs Dark Home Page: Eye Protection vs. Frosted Glass Diagonal Comparison">
     </td>
   </tr>
   <tr>
     <td align="center" width="50%">
       <strong>Light Mode (Mobile)</strong><br>
-      <img src="docs/screenshots/cf-navs-light-mobile.webp" alt="CF-Navs Light Home Page (Mobile): Eye Protection vs. Frosted Glass Diagonal Comparison" width="260">
+      <img src="../../docs/screenshots/cf-navs-light-mobile.webp" alt="CF-Navs Light Home Page (Mobile): Eye Protection vs. Frosted Glass Diagonal Comparison" width="260">
     </td>
     <td align="center" width="50%">
       <strong>Dark Mode (Mobile)</strong><br>
-      <img src="docs/screenshots/cf-navs-dark-mobile.webp" alt="CF-Navs Dark Home Page (Mobile): Eye Protection vs. Frosted Glass Diagonal Comparison" width="260">
+      <img src="../../docs/screenshots/cf-navs-dark-mobile.webp" alt="CF-Navs Dark Home Page (Mobile): Eye Protection vs. Frosted Glass Diagonal Comparison" width="260">
     </td>
   </tr>
 </table>
 
 <p align="center">
   <strong>Theme and Site Settings</strong><br>
-  <img src="docs/screenshots/cf-navs-admin-setting.webp" alt="CF-Navs Theme and Site Settings">
+  <img src="../../docs/screenshots/cf-navs-admin-setting.webp" alt="CF-Navs Theme and Site Settings">
 </p>
 
-More interface screenshots can be found in [`docs/screenshots`](docs/screenshots).
+More interface screenshots can be found in [`docs/screenshots`](../../docs/screenshots).
 
 ## Quick Deployment
 
@@ -124,21 +124,21 @@ Click the **"Fork on GitHub"** button above and give it a ⭐ Star!
 
 Click the button above to go to Cloudflare, then choose to connect to GitHub. After granting authorization, select the project you just forked.
 
-<img width="1600" height="1000" alt="Select Project" src="docs/screenshots/cf-deploy-select-repo.webp">
+<img width="1600" height="1000" alt="Select Project" src="../../docs/screenshots/cf-deploy-select-repo.webp">
 
 After clicking **Start Setup**, confirm the following values in the build configuration (keep other settings at their defaults):
 
 - Build Command: `npm run build`
 - Deploy Command: `npx wrangler deploy`
-- The production branch `main`, root directory `/`, and Node.js environment are automatically detected by [`wrangler.toml`](wrangler.toml). If you need to specify a Node.js version, set `NODE_VERSION=24` in **Build Variables** ([official documentation](https://developers.cloudflare.com/workers/ci-cd/builds/build-image/)).
+- The production branch `main`, root directory `/`, and Node.js environment are automatically detected by [`wrangler.toml`](../../wrangler.toml). If you need to specify a Node.js version, set `NODE_VERSION=24` in **Build Variables** ([official documentation](https://developers.cloudflare.com/workers/ci-cd/builds/build-image/)).
 
-<img width="1600" height="1000" alt="Build Settings" src="docs/screenshots/cf-deploy-build-settings.webp">
+<img width="1600" height="1000" alt="Build Settings" src="../../docs/screenshots/cf-deploy-build-settings.webp">
 
 #### Step 3: Save and Complete the First Production Deployment
 
-Save and complete the first **Production** deployment. Under normal circumstances, Cloudflare will create and bind the `DB` D1 database and the `SESSION` KV namespace based on [`wrangler.toml`](wrangler.toml).
+Save and complete the first **Production** deployment. Under normal circumstances, Cloudflare will create and bind the `DB` D1 database and the `SESSION` KV namespace based on [`wrangler.toml`](../../wrangler.toml).
 
-You should see these two bindings after the first deployment. If you encounter a "missing binding" error or a resource creation permission error, first confirm that the deployment is coming from the `main` **Production** environment and that the correct Cloudflare account is selected. Then, refer to [Troubleshooting](docs/guides/TROUBLESHOOTING.md). Do not repeatedly create databases or KV namespaces without confirming the account and resources.
+You should see these two bindings after the first deployment. If you encounter a "missing binding" error or a resource creation permission error, first confirm that the deployment is coming from the `main` **Production** environment and that the correct Cloudflare account is selected. Then, refer to [Troubleshooting](../../docs/guides/TROUBLESHOOTING.md). Do not repeatedly create databases or KV namespaces without confirming the account and resources.
 
 #### Step 4: Configure the SETUP_TOKEN Secret
 
@@ -148,7 +148,7 @@ After the first production deployment is complete, go to **Settings → Variable
 - If the existing entry is a plain text variable instead of a secret, delete it and re-add a `SETUP_TOKEN` of the **Secret** type. Do not keep a plain text variable and a secret with the same name at the same time.
 - If `SETUP_TOKEN` is not in the list, manually add a variable of the **Secret** type. Use a sufficiently long random string for the value; do not add it as a plain text variable.
 
-<img src="docs/screenshots/cf-deploy3.jpg" alt="Cloudflare Console Variables and Secrets Settings">
+<img src="../../docs/screenshots/cf-deploy3.jpg" alt="Cloudflare Console Variables and Secrets Settings">
 
 #### Step 5: Redeploy to Apply the Secret
 
@@ -187,7 +187,7 @@ If the D1 database or KV namespace already exists, do not run the `create` comma
 
 `npm run setup:wrangler` will write the actual resource IDs to `wrangler.local.toml`, which is ignored by Git. After deployment is complete, access `/install` to have the installer initialize the database structure and create the administrator. Do not run `wrangler secret put` before the first deployment is complete, as the Worker has not yet been created.
 
-A normal installation does not require manual SQL execution. Only if the installer reports a schema initialization failure should you use [`schema.sql`](schema.sql) or `npm run db:init:remote` to recover.
+A normal installation does not require manual SQL execution. Only if the installer reports a schema initialization failure should you use [`schema.sql`](../../schema.sql) or `npm run db:init:remote` to recover.
 
 ### Post-Deployment Checks Common to Both Methods
 
@@ -201,9 +201,9 @@ A normal installation does not require manual SQL execution. Only if the install
 
 For more configuration and troubleshooting, please read the following documents. Follow the requirements for the deployment branch and Node.js version on this page:
 
-- [Quick Start](docs/guides/QUICKSTART.md)
-- [Complete Deployment Guide](docs/guides/DEPLOYMENT.md)
-- [Common Issues and Troubleshooting](docs/guides/TROUBLESHOOTING.md)
+- [Quick Start](../../docs/guides/QUICKSTART.md)
+- [Complete Deployment Guide](../../docs/guides/DEPLOYMENT.md)
+- [Common Issues and Troubleshooting](../../docs/guides/TROUBLESHOOTING.md)
 
 ## Local Development
 
@@ -262,7 +262,7 @@ CF-Navs/
 └── wrangler.toml        # Cloudflare Worker public configuration
 ```
 
-The architecture, API, and performance contracts can be found in the [project documentation index](docs/README.md).
+The architecture, API, and performance contracts can be found in the [project documentation index](../../docs/README.md).
 
 ## Environment Configuration
 
@@ -290,11 +290,11 @@ Existing favorites do not need to be re-entered. The backend supports the follow
 
 Please back up your existing data before importing: **Append mode retains duplicate links, while overwrite mode replaces all categories and bookmarks**. Partial export is a backup and migration feature, not an automatic deduplication or two-way synchronization tool. Backups may contain private links and site settings; please store them securely.
 
-See [Sun-Panel Data Import](docs/guides/SUNPANEL_IMPORT.md) and [Browser Bookmark Import](docs/guides/BROWSER_BOOKMARK_IMPORT.md).
+See [Sun-Panel Data Import](../../docs/guides/SUNPANEL_IMPORT.md) and [Browser Bookmark Import](../../docs/guides/BROWSER_BOOKMARK_IMPORT.md).
 
 ## Contributing
 
-We welcome you to provide feedback on your experience via Issues and contribute improvements via Pull Requests. Before you begin, please read [Contributing](CONTRIBUTING.md) and complete verification based on the scope of your changes. For security issues, please use the [private reporting channel](SECURITY.md) and do not paste credentials or private bookmarks in public Issues.
+We welcome you to provide feedback on your experience via Issues and contribute improvements via Pull Requests. Before you begin, please read [Contributing](../../CONTRIBUTING.md) and complete verification based on the scope of your changes. For security issues, please use the [private reporting channel](../../SECURITY.md) and do not paste credentials or private bookmarks in public Issues.
 
 ## Acknowledgments
 
@@ -312,7 +312,7 @@ The project draws on the design concepts of [Sun-Panel](https://github.com/hslr-
 
 ## License
 
-This project is licensed under the [Apache License 2.0](LICENSE). For project attribution information, see [`NOTICE`](NOTICE).
+This project is licensed under the [Apache License 2.0](../../LICENSE). For project attribution information, see [`NOTICE`](../../NOTICE).
 
 ### Forking and Attribution Guidelines
 
@@ -322,7 +322,7 @@ If you fork, redistribute, or publish modified versions based on CF-Navs, please
 - As required by the Apache License 2.0, include clear notes of your changes in the modified files.
 - Clearly state in the README or product documentation that the project is based on CF-Navs and provide a link to the upstream repository. Do not imply that the modified version is officially released or endorsed by the original project authors.
 
-The above guidelines are intended to help users identify derivative versions. The specific licensing rights and obligations are governed by [LICENSE](LICENSE).
+The above guidelines are intended to help users identify derivative versions. The specific licensing rights and obligations are governed by [LICENSE](../../LICENSE).
 
 <!-- Afdian Sponsorship Section (Collapsible Card) -->
 <hr>

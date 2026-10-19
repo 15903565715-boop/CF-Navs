@@ -19,12 +19,23 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from urllib.parse import urlsplit, urlunsplit
 
 API_BASE = os.environ.get("INDEX_TRANSLATE_API_BASE", "https://index-translate.bilibili.com/v1")
 MODEL = os.environ.get("INDEX_TRANSLATE_MODEL", "Index-Translate-35B-A3B")
 SOURCE = "README.md"
 
 LANG_NAMES = {"en": "English", "zh": "Chinese", "ja": "Japanese"}
+FENCED_BLOCK_RE = re.compile(
+    r"(?ms)(^[ \t]*(?:```|~~~)[^\n]*\n.*?^[ \t]*(?:```|~~~)[ \t]*$)"
+)
+HTML_LINK_RE = re.compile(
+    r"(?P<prefix>\b(?:href|src)\s*=\s*[\"'])(?P<target>[^\"']+)(?P<suffix>[\"'])",
+    re.IGNORECASE,
+)
+MARKDOWN_LINK_RE = re.compile(
+    r"(?P<prefix>!?\[[^\]]*\]\()(?P<target><[^>]+>|[^)\s]+)(?P<suffix>[^)]*\))"
+)
 
 
 def split_chunks(text):
@@ -51,6 +62,79 @@ def strip_think(text):
     if "</think>" in text:
         text = text.split("</think>", 1)[1]
     return text.strip().removeprefix("<think>").strip()
+
+
+def _rewrite_relative_target(target, source_path, output_path):
+    """Resolve a source-relative link from the translated file's directory."""
+    wrapped = target.startswith("<") and target.endswith(">")
+    raw_target = target[1:-1] if wrapped else target
+    parsed = urlsplit(raw_target)
+    if (
+        not parsed.path
+        or parsed.scheme
+        or parsed.netloc
+        or parsed.path.startswith(("/", "//"))
+    ):
+        return target
+
+    source_path = os.path.normpath(source_path)
+    output_path = os.path.normpath(output_path)
+    source_dir = os.path.dirname(source_path) or "."
+    output_dir = os.path.dirname(output_path) or "."
+    source_target = os.path.normpath(
+        os.path.join(source_dir, parsed.path.replace("/", os.sep))
+    )
+
+    # A translated README's language switch should point back to its source,
+    # not back to the translated file that the source README links to.
+    if os.path.normcase(source_target) == os.path.normcase(output_path):
+        resolved = os.path.relpath(source_path, output_dir)
+    else:
+        resolved = os.path.relpath(source_target, output_dir)
+    resolved = resolved.replace(os.sep, "/")
+    if parsed.path.endswith("/") and not resolved.endswith("/"):
+        resolved += "/"
+
+    rewritten = urlunsplit(("", "", resolved, parsed.query, parsed.fragment))
+    return "<" + rewritten + ">" if wrapped else rewritten
+
+
+def rewrite_relative_links(text, source_path, output_path):
+    """Rewrite links for a translated output path, excluding fenced code."""
+    def rewrite_segment(segment):
+        def rewrite_html(match):
+            target = _rewrite_relative_target(
+                match.group("target"), source_path, output_path
+            )
+            return match.group("prefix") + target + match.group("suffix")
+
+        def rewrite_markdown(match):
+            target = _rewrite_relative_target(
+                match.group("target"), source_path, output_path
+            )
+            return match.group("prefix") + target + match.group("suffix")
+
+        segment = HTML_LINK_RE.sub(rewrite_html, segment)
+        return MARKDOWN_LINK_RE.sub(rewrite_markdown, segment)
+
+    parts = FENCED_BLOCK_RE.split(text)
+    return "".join(
+        part if index % 2 else rewrite_segment(part)
+        for index, part in enumerate(parts)
+    )
+
+
+def rewrite_language_switch(text, target, source_path, output_path):
+    """Make the translated README's language link point back to Chinese."""
+    if target != "en":
+        return text
+    source_link = _rewrite_relative_target("README.md", source_path, output_path)
+    return re.sub(
+        r"(?m)^\*\*Languages:\*\*[^\n]*$",
+        "**Languages:** [简体中文](%s)" % source_link,
+        text,
+        count=1,
+    )
 
 
 def translate_chunk(chunk, target, retries=3):
@@ -114,8 +198,16 @@ def main():
 
     out = args.out or os.path.join("translations", args.lang, "README.md")
     os.makedirs(os.path.dirname(out), exist_ok=True)
+    translated_text = rewrite_relative_links(
+        "\n\n".join(translated).strip(),
+        os.path.abspath(args.source),
+        os.path.abspath(out),
+    )
+    translated_text = rewrite_language_switch(
+        translated_text, args.lang, os.path.abspath(args.source), os.path.abspath(out)
+    )
     with open(out, "w", encoding="utf-8") as f:
-        f.write("\n\n".join(translated).strip() + "\n")
+        f.write(translated_text + "\n")
     print("wrote " + out, file=sys.stderr)
     return 0
 
