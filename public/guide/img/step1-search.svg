@@ -11,24 +11,43 @@
     <text x="640" y="240" font-size="54" font-weight="800" fill="#0f172a" text-anchor="middle" font-family="Noto Sans CJK SC, sans-serif">CF-Navs</text>
     <text x="640" y="285" font-size="20" fill="#64748b" text-anchor="middle" font-family="Noto Sans CJK SC, sans-serif">把常用网站收进自己的起始页</text>
     
-    <rect x="360.0" y="330" width="560" height="56" rx="28" fill="#ffffff" stroke="#2563eb" stroke-width="3">
-      <animate attributeName="stroke-opacity" values="1;0.45;1" dur="2s" repeatCount="indefinite"/>
-    </rect>
+    <rect x="360.0" y="330" width="560" height="56" rx="28" fill="#ffffff" stroke="#2563eb" stroke-width="3"/>
     <text x="388.0" y="366" font-size="18" fill="#64748b" font-family="Noto Sans CJK SC, sans-serif">搜索书签或输入网址…</text>
     
     <rect x="240" y="480" width="800" height="180" rx="12" fill="#f1f5f9"/>
     <text x="640" y="570" font-size="18" fill="#64748b" text-anchor="middle" font-family="Noto Sans CJK SC, sans-serif">书签卡片区域…</text>
     
-    <g>
-      <animateTransform attributeName="transform" type="translate"
-        values="0 0; -10.9 8.8; 0 0" dur="1.6s" repeatCount="indefinite"/>
-      <defs><marker id="ah1" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
-        <path d="M0,0 L8,3 L0,6 Z" fill="#ef4444"/></marker></defs>
-      <line x1="1080" y1="220" x2="920" y2="350" stroke="#ef4444" stroke-width="6" marker-end="url(#ah1)"/>
-      <circle cx="1080" cy="220" r="22" fill="#ef4444">
-        <animate attributeName="r" values="22;26;22" dur="1.6s" repeatCount="indefinite"/>
+    <circle cx="150" cy="150" r="22" fill="#2563eb"/>
+    <text x="150" y="158" font-size="24" font-weight="bold" fill="#fff" text-anchor="middle" font-family="Noto Sans CJK SC, sans-serif">1</text>
+    
+    
+    <g opacity="0">
+      <animate attributeName="opacity" values="0;1;1;1;0" keyTimes="0;0.06;0.88;0.94;1"
+        dur="4.2s" repeatCount="indefinite"/>
+      <g>
+        <animateMotion dur="4.2s" repeatCount="indefinite" calcMode="spline"
+          keyTimes="0;0.34;1" keySplines="0.35 0 0.25 1;0 0 1 1"
+          path="M1120,180 C1010.0,179.0 1010.0,179.0 640,358"/>
+        <g>
+          <animateTransform attributeName="transform" type="scale"
+            values="1;1;0.78;1;1" keyTimes="0;0.36;0.42;0.50;1"
+            dur="4.2s" repeatCount="indefinite"/>
+          <path d="M0,0 L0,24 L6.5,17.5 L9.5,25 L13,23.2 L10,15.5 L16.5,15.5 Z"
+            fill="#ffffff" stroke="#1e293b" stroke-width="1.8" stroke-linejoin="round"/>
+        </g>
+      </g>
+      <circle cx="640" cy="358" r="6" fill="none" stroke="#2563eb" stroke-width="3">
+        <animate attributeName="r" values="6;6;36;36" keyTimes="0;0.42;0.58;1"
+          dur="4.2s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" values="0;0;0.85;0" keyTimes="0;0.42;0.46;0.62"
+          dur="4.2s" repeatCount="indefinite"/>
       </circle>
-      <text x="1080" y="228" font-size="24" font-weight="bold" fill="#fff" text-anchor="middle" font-family="Noto Sans CJK SC, sans-serif">1</text>
+      <circle cx="640" cy="358" r="6" fill="none" stroke="#2563eb" stroke-width="2">
+        <animate attributeName="r" values="6;6;24;24" keyTimes="0;0.44;0.58;1"
+          dur="4.2s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" values="0;0;0.5;0" keyTimes="0;0.44;0.48;0.60"
+          dur="4.2s" repeatCount="indefinite"/>
+      </circle>
     </g>
     
 
