@@ -1,22 +1,22 @@
 <div align="center">
-  <img src="../../public/icon.png" alt="CF-Navs project icon" width="112" height="112">
+  <img src="public/icon.png" alt="CF-Navs Project Icon" width="112" height="112">
   <h1>CF-Navs</h1>
-  <p><strong>Bring your everyday websites, work tools, and private bookmarks into your own start page.</strong></p>
-  <p>Run on Cloudflare Workers without maintaining a server. Import your existing bookmarks, choose a theme, and open the same navigation space on desktop and mobile.</p>
+  <p><strong>Bring your frequently used websites, work tools, and private favorites into your own start page.</strong></p>
+  <p>Runs on Cloudflare Workers, no need to set up your own server. Import existing bookmarks, choose a theme, and open the same navigation space on your computer and phone.</p>
 
   <p>
     <img src="https://img.shields.io/badge/Cloudflare-Workers-F38020?logo=cloudflare&logoColor=white" alt="Cloudflare Workers">
     <img src="https://img.shields.io/badge/Svelte-5-FF3E00?logo=svelte&logoColor=white" alt="Svelte 5">
     <img src="https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white" alt="TypeScript 5">
-    <a href="../../LICENSE"><img src="https://img.shields.io/badge/License-Apache--2.0-2563EB" alt="Apache License 2.0"></a>
+    <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache--2.0-2563EB" alt="Apache License 2.0"></a>
   </p>
 
   <p>
     <a href="#features">Features</a> ·
-    <a href="#screenshots">Screenshots</a> ·
-    <a href="#quick-deployment">Quick deployment</a> ·
-    <a href="#local-development">Local development</a> ·
-    <a href="../../docs/README.md">Project docs</a>
+    <a href="#interface-preview">Interface Preview</a> ·
+    <a href="#quick-deployment">Quick Deployment</a> ·
+    <a href="#local-development">Local Development</a> ·
+    <a href="docs/README.md">Project Documentation</a>
   </p>
 
   <a href="https://github.com/lbjxr/CF-Navs/fork">
@@ -24,145 +24,145 @@
   </a>
 </div>
 
-**Languages:** [简体中文](../../README.md)
+**Languages:** [English](translations/en/README.md)
 
 ---
 
 ## Features
 
-**Keep a large collection easy to find, organize, and use.** CF-Navs combines two-level categories, site-wide search, bulk organization, and data backups in one place. Use it as a personal start page, a work toolbox, or a public resource directory. Visitors can browse public content while administrators manage the complete collection after signing in, without maintaining a separate site for private links.
+**Save more, find faster, and organize with clarity.** CF-Navs combines two-level categorization, site-wide search, batch organization, and data backup. It's ideal as a personal start page, a work toolbox, or a public resource navigator. Visitors can browse public content, while administrators can manage all bookmarks after logging in—no need to maintain a separate site for private links.
 
-| | Capability | Description |
+| | Feature | Description |
 |---|---|---|
-| ☁️ | Edge full stack | Workers, D1, and KV host the entire application, while the code and data remain in your own GitHub / Cloudflare accounts without renting a VPS or maintaining a database service |
-| 🧭 | Navigation home | Clear top-level groups and second-level categories, with search across titles, URLs, descriptions, and full category paths; side, top, and mobile navigation adapt to different screens, and top navigation can wrap across lines |
-| 🏠 | Home settings | Configure the site title, search box, search engine selector, and number of frequently visited links, with a live preview before saving; signed-in administrators can create top-level and nested categories directly from the home page |
-| 🛠️ | Administration | Edit, move, reorder, and protect categories from accidental deletion, while full paths and bulk bookmark moves reduce one-by-one editing; site, layout, search, backup, and account security settings are managed together |
-| 🔒 | Private bookmarks | Mark a bookmark as a private link visible only to signed-in users when creating or editing it; public visitors never receive private bookmark data, while administrators can browse and manage it normally |
-| 🗂️ | Private categories | Mark a category as hidden from visitors; the category, its children, and their bookmarks remain available to administrators but are not sent to public visitors |
-| ↕️ | Cross-category sorting | Move bookmarks between top-level, second-level, and empty categories and adjust their order; use drag and drop on desktop or a move-to-category control on mobile, then save or cancel the whole session together |
-| 🔄 | Browser bookmark sync | Enable one-way synchronization in the administration panel; the Chrome/Edge extension puts newly added browser bookmarks into `Browser New Bookmarks` without changing existing categories or deleting navigation bookmarks |
-| 📊 | Usage analytics | Homepage bookmark clicks are counted, while the administration panel provides total clicks, visited/unvisited counts, a Top 20 most-visited ranking, and a paginated list of never-visited bookmarks; analytics refreshes when the page opens |
-| 🎨 | Appearance customization | 22 built-in themes, light/dark modes, backgrounds, and accent colors, with separate category font sizes and icon sizes for top-level and second-level categories; customize card dimensions, opacity, and footer HTML / CSS / JavaScript, with isolated previews for CSS and footer code |
-| 🔎 | Search and icons | Site-wide grouped search, configurable external search engines, bookmark favicons / Iconify icons, and image, text, or emoji icons for categories |
-| 💾 | Data migration | Export complete backups or selected categories, optionally including site settings; restore JSON by appending or replacing data, with compatibility for Sun-Panel data and browser bookmark HTML |
-| 🔐 | Secure authentication | PBKDF2 password hashing, bearer session tokens, CSP, authenticated administrator APIs, and login-failure rate limiting; private icons use authorization checks and cache isolation |
-| ⚡ | Loading optimization | Code splitting, edge caching, local snapshots, lazy icon loading, and a basic PWA offline fallback; direct navigation to administration pages does not flash the homepage first |
+| ☁️ | Edge Full-Stack Hosting | The entire site is hosted using Workers, D1, and KV. Your code and data remain under your own GitHub / Cloudflare account, eliminating the need to rent a VPS or maintain a database service. |
+| 🧭 | Navigation Homepage | Primary groups and secondary categories are clearly presented. Supports searching by title, URL, description, and full category path. Navigation adapts to different screen sizes on the left, top, and mobile, with the top navigation capable of multi-line display. |
+| 🏠 | Homepage Settings | The site title, search box, search engine selector, and number of "Frequent Visits" are all configurable, with real-time preview before saving. After logging in, you can directly create new primary and secondary categories on the homepage. |
+| 🛠️ | Backend Management | Supports category editing, moving, reordering at the same level, and deletion protection. Paired with full path location and batch movement of bookmarks, it reduces the need for individual edits. Centralized management for the site, layout, search, backups, and account security. |
+| 🔒 | Private Bookmarks | When adding or editing a bookmark, you can mark it as a "Private Link (visible only to logged-in users)." Regular visitors will not receive data for private bookmarks, while administrators can view and manage them normally after logging in. |
+| 🗂️ | Private Categories | A category can be set to "Hidden from visitors (visible only to logged-in users)." Visitors will not see the category, its subcategories, or the bookmarks within them. Administrators can still manage them normally after logging in. |
+| ↕️ | Cross-Category Reordering | Supports moving bookmarks between primary, secondary, and empty categories, as well as adjusting their order within a category. Use drag-and-drop on PC, or the "Move to Category" option on mobile. Save or cancel all changes at once. |
+| 🔄 | Browser Bookmark Sync | One-way sync can be enabled in the backend. The Chrome/Edge extension will place any newly added bookmarks into the "Browser Additions" collection, without altering existing categories or deleting bookmarks on the navigation page. |
+| 📊 | Access Analytics | Clicks on homepage bookmarks are tallied. The backend provides statistics on total clicks, visited vs. unvisited bookmarks, a Top 20 list of most visited bookmarks, and a paginated list of unvisited bookmarks. The latest data is refreshed when you enter the analytics page. |
+| 🎨 | Appearance Customization | Includes 22 built-in themes, light/dark mode, background and accent color options. Font size and icon size for categories can be set separately for primary and secondary levels. Card size, transparency, and footer HTML / CSS / JavaScript are all customizable. CSS and footers support isolated previews. |
+| 🔎 | Search & Icons | Offers site-wide group search, configurable external search engines, and support for displaying bookmark Favicons / Iconify icons, category images, text, and emoji icons. |
+| 💾 | Data Migration | Export backups in full or by category, optionally including site settings. JSON files can be appended, merged, or overwritten for restoration. Compatible with Sun-Panel data and browser bookmark HTML. |
+| 🔐 | Security & Authentication | Features PBKDF2 password hashing, Bearer Session Tokens, CSP, admin API authentication, and rate limiting for failed login attempts. Private icons have access authorization and cache isolation. |
+| ⚡ | Loading Optimization | Includes code splitting, edge caching, local snapshots, lazy loading for icons, and basic PWA offline fallback. Direct backend refreshes won't cause a flash of the homepage first. |
 
-Prefer compact layouts? Desktop detail cards can be as narrow as **40 px**, while mobile keeps a **150 px** safety minimum. Very narrow cards compress titles and descriptions and work best for icon-first navigation.
+Prefer a compact layout? The minimum width for desktop detail cards can be set to **40 px**, while mobile retains a safe minimum of **150 px**. Extremely narrow cards will compress titles and descriptions, making them better suited for icon-based navigation.
 
-### Bookmark privacy and cross-category sorting
+### Bookmark Privacy and Cross-Category Reordering
 
-- **Organize directly from the homepage**: after signing in, create a top-level category or a child category under the current group; the new category is selected automatically. When editing a bookmark, the category selector expands and focuses the current category to reduce repeated searching.
-- **Private links**: administrators can check “Make private (visible only after sign-in)” when creating or editing a bookmark. Public data APIs filter these bookmarks for signed-out visitors, while signed-in administrators can still view, edit, and delete them from the homepage and administration panel.
-- **Private categories**: administrators can check “Hidden from visitors (visible only after sign-in)” when editing a category. Signed-out visitors receive none of the category, its children, or their bookmark data; administrators can continue to view and manage them. Existing categories remain visible to visitors by default.
-- **Cross-category drag and drop**: after signing in, click “Sort” in any homepage category to enter one sorting session. On desktop, drag bookmarks into top-level, second-level, or empty categories and adjust their positions; on mobile, choose a target through “Move to category”. Click “Save sorting” to save categories and order together, or “Cancel” to discard the changes.
-- **Bulk moves**: when many bookmarks need to be recategorized, filter and select them in the administration panel, choose a target category, and confirm its full path to move them in one operation without opening each editor.
-- **Browser bookmark sync**: enable “Browser bookmark sync” under “Settings → Site settings” to create a `Browser New Bookmarks` category automatically. Install and sign in to the Chrome/Edge extension in [`browser-extension`](../../browser-extension/) to sync subsequently added browser bookmarks into that category, using `https://favicon.im/<hostname>?larger=true` as the default icon candidate. The extension does not recreate browser bookmark folders as navigation categories; it only performs one-way new-bookmark sync from the browser to the navigation page, never deletes or overwrites existing navigation bookmarks, and lets you organize synced items later in homepage sorting mode.
+- **Direct Organization on the Homepage**: After logging in, you can create new primary categories or new subcategories under the current group. The view will automatically focus on the newly created item. When editing a bookmark, the category selector will expand and highlight the current category, reducing the need to search repeatedly.
+- **Private Links**: Administrators can check the "Set as private link (visible only to logged-in users)" box when adding or editing a bookmark. The public data API for unauthenticated visitors will filter out such bookmarks. Administrators can still view, edit, and delete them on the homepage and in the backend after logging in.
+- **Private Categories**: Administrators can check the "Hidden from visitors (visible only to logged-in users)" box when editing a category in the backend. Unauthenticated visitors will not receive data for this category, its subcategories, or the bookmarks within them. Administrators can still view and manage them normally after logging in. Existing categories remain visible to visitors by default.
+- **Cross-Category Drag-and-Drop**: After logging in as an administrator, click "Reorder" on any category on the homepage to enter a unified reordering session. On PC, you can drag bookmarks into primary, secondary, or empty categories and adjust their positions. On mobile, you can select a target category via "Move to Category." Click "Save Reorder" at the bottom to save all category and order changes, or "Cancel" to discard the current session's modifications.
+- **Batch Movement**: When a large number of bookmarks need to be reorganized, you can filter and select multiple bookmarks in the backend, choose a target category, confirm the full path, and complete the move in one go—no need to open individual edit forms.
+- **Browser Bookmark Sync**: After enabling "Browser Bookmark Sync" under "Settings → Site Settings" in the backend, a "Browser Additions" category will be created automatically. Once you install and log in with the Chrome/Edge extension from [`browser-extension`](browser-extension/), any new web bookmarks added in your browser will be synced to this category. They will be saved with icon candidates following the default icon strategy (`https://favicon.im/<hostname>?larger=true`). The extension does not create navigation categories based on browser bookmark folders; it only performs a one-way addition from "Browser → Navigation Page" without deleting or overwriting existing bookmarks on the navigation page. You can then drag them to other categories directly in the homepage's reorder mode.
 
-## Screenshots
+## Interface Preview
 
 <table>
   <tr>
     <td align="center" width="50%">
-      <strong>Light homepage</strong><br>
-      <img src="../../docs/screenshots/cf-navs-light.webp" alt="CF-Navs light homepage with diagonal contrast and frosted glass">
+      <strong>Light Home Page</strong><br>
+      <img src="docs/screenshots/cf-navs-light.webp" alt="CF-Navs Light Home Page: Eye Protection vs. Frosted Glass Diagonal Comparison">
     </td>
     <td align="center" width="50%">
-      <strong>Dark homepage</strong><br>
-      <img src="../../docs/screenshots/cf-navs-dark.webp" alt="CF-Navs dark homepage with diagonal contrast and frosted glass">
+      <strong>Dark Home Page</strong><br>
+      <img src="docs/screenshots/cf-navs-dark.webp" alt="CF-Navs Dark Home Page: Eye Protection vs. Frosted Glass Diagonal Comparison">
     </td>
   </tr>
   <tr>
     <td align="center" width="50%">
-      <strong>Light mobile homepage</strong><br>
-      <img src="../../docs/screenshots/cf-navs-light-mobile.webp" alt="CF-Navs light mobile homepage" width="260">
+      <strong>Light Mode (Mobile)</strong><br>
+      <img src="docs/screenshots/cf-navs-light-mobile.webp" alt="CF-Navs Light Home Page (Mobile): Eye Protection vs. Frosted Glass Diagonal Comparison" width="260">
     </td>
     <td align="center" width="50%">
-      <strong>Dark mobile homepage</strong><br>
-      <img src="../../docs/screenshots/cf-navs-dark-mobile.webp" alt="CF-Navs dark mobile homepage" width="260">
+      <strong>Dark Mode (Mobile)</strong><br>
+      <img src="docs/screenshots/cf-navs-dark-mobile.webp" alt="CF-Navs Dark Home Page (Mobile): Eye Protection vs. Frosted Glass Diagonal Comparison" width="260">
     </td>
   </tr>
 </table>
 
 <p align="center">
-  <strong>Theme and site settings</strong><br>
-  <img src="../../docs/screenshots/cf-navs-admin-setting.webp" alt="CF-Navs theme and site settings">
+  <strong>Theme and Site Settings</strong><br>
+  <img src="docs/screenshots/cf-navs-admin-setting.webp" alt="CF-Navs Theme and Site Settings">
 </p>
 
-More screenshots are available in [`docs/screenshots`](../../docs/screenshots).
+More interface screenshots can be found in [`docs/screenshots`](docs/screenshots).
 
-## Quick deployment
+## Quick Deployment
 
-**Do not want to maintain a server? Start with the dashboard deployment.** Prepare GitHub and Cloudflare accounts, then follow “Fork → connect the repository → set the setup token → initialize in the browser”. A normal installation does not require manually running SQL or entering a Cloudflare API token.
+**Don't want to bother with servers? We recommend starting with a console-based deployment.** Prepare your GitHub and Cloudflare accounts, then complete the deployment by following "Fork → Link Repository → Set Installation Token → Initialize via Webpage." A normal installation does not require manual SQL execution or entering a Cloudflare API Token.
 
-You can start with the Cloudflare Free plan, but the free quotas are not unlimited; requests, database operations, and KV operations each have limits. See the official [Workers](https://developers.cloudflare.com/workers/platform/pricing/), [D1](https://developers.cloudflare.com/d1/platform/pricing/), and [KV](https://developers.cloudflare.com/kv/platform/pricing/) pricing pages for details.
+You can start with Cloudflare's free plan, but the free tier is not unlimited. Requests, databases, and KV operations each have quotas. For details, refer to the official documentation for [Workers](https://developers.cloudflare.com/workers/platform/pricing/), [D1](https://developers.cloudflare.com/d1/platform/pricing/), and [KV](https://developers.cloudflare.com/kv/platform/pricing/).
 
-For a first installation, complete one deployment method from beginning to end instead of mixing both. Both methods eventually initialize the database and administrator account through `/install`.
+When using it for the first time, please complete one deployment method in its entirety. Do not mix the two processes. Both methods will ultimately initialize the database and administrator account via `/install`.
 
-CF-Navs requires these Cloudflare resources:
+CF-Navs requires the following Cloudflare resources:
 
-| Resource | Binding | Purpose |
+| Resource | Binding Name | Purpose |
 |---|---|---|
 | D1 Database | `DB` | Stores settings, categories, and bookmarks |
-| KV Namespace | `SESSION` | Login rate limiting, click rate limiting, and the session revocation list |
-| Secret | `SETUP_TOKEN` | Manually configured authorization for the first installation |
+| KV Namespace | `SESSION` | Login rate limiting, click rate limiting, and session revocation list |
+| Secret | `SETUP_TOKEN` | Manually configured to authorize the initial installation |
 
-### Method 1: Cloudflare dashboard deployment (recommended)
+### Method 1: Cloudflare Console Deployment (Recommended)
 
-This method suits users who want to work entirely in a browser without installing local tools. After Cloudflare connects your GitHub fork, it automatically builds and deploys from the `main` production branch; update that branch when syncing upstream changes later.
+This method is suitable for users who want to operate entirely in the browser and avoid installing local tools. After Cloudflare links to your GitHub fork, it will automatically build and deploy from the `main` production branch. When synchronizing upstream updates later, please also update this branch.
 
-#### Step 1: Fork this repository
+#### Step 1: Fork This Repository
 
 [![Fork on GitHub](https://img.shields.io/badge/Fork-GitHub-181717?style=for-the-badge&logo=github)](https://github.com/lbjxr/CF-Navs/fork)
 
-Click **“Fork on GitHub”** above and give the project a ⭐ Star!
+Click the **"Fork on GitHub"** button above and give it a ⭐ Star!
 
 #### Step 2: Deploy to Cloudflare Workers
 
 [![Deploy to Cloudflare Workers](https://img.shields.io/badge/Deploy-Cloudflare%20Workers-F38020?style=for-the-badge&logo=cloudflare&logoColor=white)](https://dash.cloudflare.com/?to=/:account/workers-and-pages)
 
-Click the button above to open Cloudflare, choose to connect to GitHub, authorize it, and select the fork you just created.
+Click the button above to go to Cloudflare, then choose to connect to GitHub. After granting authorization, select the project you just forked.
 
-<img width="1600" height="1000" alt="Select project" src="../../docs/screenshots/cf-deploy-select-repo.webp">
+<img width="1600" height="1000" alt="Select Project" src="docs/screenshots/cf-deploy-select-repo.webp">
 
-After clicking **Start setup**, confirm the following build settings and leave the rest at their defaults:
+After clicking **Start Setup**, confirm the following values in the build configuration (keep other settings at their defaults):
 
-- Build command: `npm run build`
-- Deploy command: `npx wrangler deploy`
-- The production branch `main`, root directory `/`, and Node.js environment are detected from [`wrangler.toml`](../../wrangler.toml). To specify a Node.js version, set `NODE_VERSION=24` in **Build variables** ([official documentation](https://developers.cloudflare.com/workers/ci-cd/builds/build-image/)).
+- Build Command: `npm run build`
+- Deploy Command: `npx wrangler deploy`
+- The production branch `main`, root directory `/`, and Node.js environment are automatically detected by [`wrangler.toml`](wrangler.toml). If you need to specify a Node.js version, set `NODE_VERSION=24` in **Build Variables** ([official documentation](https://developers.cloudflare.com/workers/ci-cd/builds/build-image/)).
 
-<img width="1600" height="1000" alt="Build settings" src="../../docs/screenshots/cf-deploy-build-settings.webp">
+<img width="1600" height="1000" alt="Build Settings" src="docs/screenshots/cf-deploy-build-settings.webp">
 
-#### Step 3: Save and complete the first production deployment
+#### Step 3: Save and Complete the First Production Deployment
 
-Save the configuration and complete the first **Production** deployment. Cloudflare should create and bind the `DB` D1 database and `SESSION` KV namespace from [`wrangler.toml`](../../wrangler.toml).
+Save and complete the first **Production** deployment. Under normal circumstances, Cloudflare will create and bind the `DB` D1 database and the `SESSION` KV namespace based on [`wrangler.toml`](wrangler.toml).
 
-After the first deployment, verify both bindings. If you see a missing binding or a resource-creation permission error, confirm that the deployment is from the `main` **Production** environment and that Cloudflare is using the correct account, then read [Troubleshooting](../../docs/guides/TROUBLESHOOTING.md). Do not repeatedly create databases or KV namespaces without confirming the account and resources first.
+You should see these two bindings after the first deployment. If you encounter a "missing binding" error or a resource creation permission error, first confirm that the deployment is coming from the `main` **Production** environment and that the correct Cloudflare account is selected. Then, refer to [Troubleshooting](docs/guides/TROUBLESHOOTING.md). Do not repeatedly create databases or KV namespaces without confirming the account and resources.
 
-#### Step 4: Configure the `SETUP_TOKEN` secret
+#### Step 4: Configure the SETUP_TOKEN Secret
 
-After the first production deployment, open **Settings → Variables and Secrets**, select the **Production** environment, and configure `SETUP_TOKEN`:
+After the first production deployment is complete, go to **Settings → Variables & Secrets** for the Worker, select the **Production** environment, and configure `SETUP_TOKEN`:
 
-- If Cloudflare has already generated a `SETUP_TOKEN`, edit it and replace it with a value you have saved, then run **Clear cache** once under **Settings → Builds**.
-- If the existing value is a plain text variable rather than a secret, delete it and add `SETUP_TOKEN` again as a **Secret**. Do not keep a plain variable and a secret with the same name.
-- If `SETUP_TOKEN` is not listed, add it manually as a **Secret**. Use a sufficiently long random value and never add it as a plain text variable.
+- If a `SETUP_TOKEN` automatically generated by Cloudflare already exists in the list, edit it and replace its value with one you save yourself. Then, go to **Settings → Build** and perform a **Clear Cache**.
+- If the existing entry is a plain text variable instead of a secret, delete it and re-add a `SETUP_TOKEN` of the **Secret** type. Do not keep a plain text variable and a secret with the same name at the same time.
+- If `SETUP_TOKEN` is not in the list, manually add a variable of the **Secret** type. Use a sufficiently long random string for the value; do not add it as a plain text variable.
 
-<img src="../../docs/screenshots/cf-deploy3.jpg" alt="Cloudflare dashboard variables and secrets example">
+<img src="docs/screenshots/cf-deploy3.jpg" alt="Cloudflare Console Variables and Secrets Settings">
 
-#### Step 5: Redeploy so the secret takes effect
+#### Step 5: Redeploy to Apply the Secret
 
-After saving the secret, redeploy the same `main` production deployment. On the **Deployments** page, retry or redeploy the latest production deployment, or push a new commit to `main`. Do not visit `/install` immediately after saving the secret; a new deployment must read the secret first.
+After saving the secret, redeploy the same `main` production deployment. You can either **Retry/Redeploy** the most recent production deployment on the **Deployments** page, or push a new commit to the `main` branch. Do not access `/install` immediately after saving the secret; you must first let the new deployment read the secret.
 
-#### Step 6: Open `/install` and complete setup
+#### Step 6: Access `/install` to Complete Installation
 
-Open the deployed Workers URL and visit `/install`. Enter the `SETUP_TOKEN` configured for the current production environment, then create the administrator username and password. After installation and login succeed, delete or rotate the token. A completed site no longer needs it, whether Cloudflare generated it automatically or you added it yourself.
+Open the deployed Workers URL and navigate to `/install`. Enter the `SETUP_TOKEN` value configured in your current production environment, then create an administrator username and password. After confirming that the installation and login are successful, delete or rotate this token. Regardless of whether it was originally generated by Cloudflare or added by you, it is no longer needed for a successfully installed site.
 
-A custom domain is optional. Add and enable it under **Domains & Routes**, verify that it works and supports login, and only then consider disabling the `workers.dev` address. If you are not ready to use a custom domain, keep the Workers URL as an access entry point.
+A custom domain is optional: first add and enable a custom domain under **Domains & Routes**, confirm that it works correctly and that you can log in, then disable the `workers.dev` address as needed. If you are not ready for a custom domain, keep the Workers URL and do not disable the default access point prematurely.
 
-### Method 2: Wrangler CLI deployment
+### Method 2: Wrangler CLI Deployment
 
-Prerequisites: Node.js **22.12+ (22.x) or 24+**, npm, and a Cloudflare account. Node.js 24 LTS is recommended. All resource commands use the account currently authenticated in Wrangler; if you have multiple Cloudflare accounts, run `npx wrangler whoami` first to verify the account.
+Prerequisites: Node.js **22.12+ (22.x) or 24+**, npm, and a Cloudflare account. Node.js 24 LTS is recommended. All resource commands will act on the account currently logged in to Wrangler. If you have multiple Cloudflare accounts, first confirm your account with `npx wrangler whoami`.
 
 ```bash
 git clone https://github.com/lbjxr/CF-Navs.git
@@ -173,41 +173,41 @@ npm install
 npx wrangler login
 npx wrangler whoami
 
-# Run each create command only when the resource does not already exist.
+# Run the following two create commands only once, if the resources do not already exist
 npx wrangler d1 create cf-navs-db
 npx wrangler kv namespace create SESSION
 
 npm run setup:wrangler
-npm run deploy                 # First deployment creates the Worker.
+npm run deploy                 # Initial deployment to create the Worker first
 npx wrangler secret put SETUP_TOKEN
-npm run deploy                 # Redeploy so the secret takes effect.
+npm run deploy                 # Redeploy after the secret takes effect
 ```
 
-If the D1 database or KV namespace already exists, do not run the `create` command again. First use `npx wrangler d1 list` and `npx wrangler kv namespace list` to inspect the resources in the current account, then run `npm run setup:wrangler`. The D1 database name should be `cf-navs-db`, and the Worker's KV binding must be named `SESSION`.
+If the D1 database or KV namespace already exists, do not run the `create` commands again. First, use `npx wrangler d1 list` and `npx wrangler kv namespace list` to confirm the resources in your current account, then run `npm run setup:wrangler`. The D1 database name should be `cf-navs-db`, and the Worker's KV binding name should be `SESSION`.
 
-`npm run setup:wrangler` writes real resource IDs to the Git-ignored `wrangler.local.toml`. After deployment, visit `/install`; the installer initializes the database schema and creates the administrator. Do not run `wrangler secret put` before the first deployment because the Worker does not exist yet.
+`npm run setup:wrangler` will write the actual resource IDs to `wrangler.local.toml`, which is ignored by Git. After deployment is complete, access `/install` to have the installer initialize the database structure and create the administrator. Do not run `wrangler secret put` before the first deployment is complete, as the Worker has not yet been created.
 
-Normal installation does not require manual SQL. Only use [`schema.sql`](../../schema.sql) or `npm run db:init:remote` to recover when the installer reports a schema initialization failure.
+A normal installation does not require manual SQL execution. Only if the installer reports a schema initialization failure should you use [`schema.sql`](schema.sql) or `npm run db:init:remote` to recover.
 
-### Post-deployment checks for both methods
+### Post-Deployment Checks Common to Both Methods
 
-- `/install` opens and accepts `SETUP_TOKEN` to complete initialization.
-- You can sign in to the administration panel with the new administrator account.
-- Categories and bookmarks can be saved, and the data persists after a refresh.
-- If the page still shows an older version, force-refresh the page so the new Service Worker takes over.
-- If installation or binding fails, inspect the Worker logs with `npx wrangler tail`. Before running any command that affects production data, confirm the current Cloudflare account and target Worker.
+- `/install` can be opened and used to complete initialization with the `SETUP_TOKEN`.
+- You can log in to the admin panel with the newly created administrator account.
+- Categories and bookmarks can be saved normally; data persists after refreshing the page.
+- If the page still shows an old version, force-refresh to let the new Service Worker take over.
+- If installation or binding fails, check the Worker logs with `npx wrangler tail`. Before running any commands involving live data, confirm your current Cloudflare account and the target Worker.
 
-**Make the navigation page useful immediately**: import an existing bookmark collection in the administration panel, choose a theme, hide the categories or links that need privacy, and set the page as your browser start page. The browser extension can collect new bookmarks, while homepage sorting and bulk moves keep the collection organized.
+**Get your navigation page up and running now**: Import an existing set of bookmarks in the admin panel, choose a theme, set categories or links to hide, and then set the site as your browser's homepage. Afterwards, you can use a browser extension to collect new bookmarks and continuously organize them through sorting on the homepage or bulk moving in the admin panel.
 
-For more configuration and troubleshooting information, see the following guides. Follow this page for the deployment branch and Node.js requirements:
+For more configuration and troubleshooting, please read the following documents. Follow the requirements for the deployment branch and Node.js version on this page:
 
-- [Quick start](../../docs/guides/QUICKSTART.md)
-- [Complete deployment guide](../../docs/guides/DEPLOYMENT.md)
-- [Troubleshooting](../../docs/guides/TROUBLESHOOTING.md)
+- [Quick Start](docs/guides/QUICKSTART.md)
+- [Complete Deployment Guide](docs/guides/DEPLOYMENT.md)
+- [Common Issues and Troubleshooting](docs/guides/TROUBLESHOOTING.md)
 
-## Local development
+## Local Development
 
-The development environment uses Node.js 22.12+ (22.x) or 24+; Node.js 24 LTS is recommended to match CI.
+The development environment requires Node.js 22.12+ (22.x) or 24+. It is recommended to use Node.js 24 LTS, which is consistent with the CI environment.
 
 Install dependencies:
 
@@ -215,7 +215,7 @@ Install dependencies:
 npm install
 ```
 
-Start the Worker and frontend development servers separately:
+Start the Worker and front-end development services separately:
 
 ```bash
 # Terminal 1
@@ -225,7 +225,7 @@ npm run dev
 npm run dev:web
 ```
 
-The frontend is available at `http://localhost:5173` by default.
+The default front-end address is `http://localhost:5173`.
 
 Common checks:
 
@@ -236,95 +236,95 @@ npm run build
 git diff --check
 ```
 
-## Technology stack
+## Technology Stack
 
-| Layer | Technology |
+| Tier | Technology |
 |---|---|
 | Frontend | Svelte 5, TypeScript, Vite 7 |
 | Worker API | Hono, Cloudflare Workers |
-| Data and sessions | Cloudflare D1, Cloudflare KV |
-| Interaction and sorting | SortableJS |
+| Data & Session | Cloudflare D1, Cloudflare KV |
+| Interaction & Sorting | SortableJS |
 | Testing | Vitest 4, Svelte Check, real Chrome regression scripts |
 
-## Project structure
+## Project Structure
 
 ```text
 CF-Navs/
 ├── src/                 # Svelte pages, components, and browser-side logic
-├── worker/              # Worker routes, middleware, and D1 data access
-├── shared/              # Shared frontend/backend types and settings contracts
+├── worker/              # Worker routing, middleware, and D1 data access
+├── shared/              # Shared types and contract settings for both frontend and backend
 ├── public/              # Icons, PWA assets, and other static resources
-├── browser-extension/   # Chrome/Edge extension for syncing new browser bookmarks
+├── browser-extension/   # Browser extension for syncing bookmarks to Chrome/Edge
 ├── tests/               # Vitest unit and regression tests
-├── docs/                # User guides, technical references, and screenshots
+├── docs/                # User guide, technical reference, and screenshots
 ├── scripts/             # Development, deployment, and audit scripts
-├── schema.sql           # D1 database schema
-└── wrangler.toml        # Public Cloudflare Worker configuration
+├── schema.sql           # D1 database structure
+└── wrangler.toml        # Cloudflare Worker public configuration
 ```
 
-See the [project documentation index](../../docs/README.md) for architecture, API, and performance contracts.
+The architecture, API, and performance contracts can be found in the [project documentation index](docs/README.md).
 
-## Environment configuration
+## Environment Configuration
 
 | Name | Type | Required | Description |
 |---|---|---|---|
 | `DB` | D1 binding | Yes | Database binding |
-| `SESSION` | KV binding | Yes | Storage for login/click rate limiting and the session revocation list |
-| `SETUP_TOKEN` | Secret | First installation | Authorizes `/install`; delete or rotate it after installation |
-| `SESSION_TTL` | Variable | No | Session lifetime; `wrangler.toml` defaults to `2592000` seconds (30 days), while the Worker falls back to 7 days when it is unset |
-| `INIT_ADMIN_USER` | Variable | No | Only for legacy database upgrades or credential recovery |
-| `INIT_ADMIN_PASSWORD` | Secret | No | Only for legacy database upgrades or credential recovery |
-| `RESET_ADMIN_CREDENTIALS` | Variable | No | One-time marker for forcing credential reset on a legacy database |
+| `SESSION` | KV binding | Yes | Stores login/click rate limits and session revocation lists |
+| `SETUP_TOKEN` | Secret | First-time installation | Authorizes `/install`; it is recommended to delete or rotate it after a successful installation |
+| `SESSION_TTL` | Variable | No | Session validity period. The default in `wrangler.toml` is `2592000` seconds (30 days); if not set, the Worker will fall back to 7 days |
+| `INIT_ADMIN_USER` | Variable | No | Used only for upgrading old databases or recovering credentials |
+| `INIT_ADMIN_PASSWORD` | Secret | No | Used only for upgrading old databases or recovering credentials |
+| `RESET_ADMIN_CREDENTIALS` | Variable | No | A one-time flag used when forcibly resetting credentials for an old database |
 
-Do not write real resource IDs, passwords, tokens, or other secrets into the repository.
+Do not commit real resource IDs, passwords, Tokens, or other Secrets to the repository.
 
-## Data import
+## Data Import
 
-You do not need to enter existing bookmarks again. The administration panel supports these formats:
+Existing favorites do not need to be re-entered. The backend supports the following data formats:
 
-- **CF-Navs JSON backup**: export all data or selected categories, preserve the two-level category relationship, optionally include site settings, and restore by merging along full paths or replacing the data.
-- **Sun-Panel data**: import categories at the top level and convert bookmarks and compatible icon fields so an existing navigation collection can be migrated without starting over.
-- **Browser bookmark HTML**: import the standard file exported by a browser; valid folders map to two-level categories, and deeper paths are flattened into second-level titles.
+- **CF-Navs JSON Backup**: Supports exporting all data or by category, preserving two-level category relationships. You can also choose whether to include site settings. During import, you can choose to append and merge by full path or restore by overwriting.
+- **Sun-Panel Data**: Imports categories at the first level and converts bookmark and compatible icon fields. Migrating existing navigation doesn't require starting from scratch.
+- **Browser Bookmark HTML**: Imports standard files exported from browsers. Valid folders are mapped to two-level categories, and deeper paths are flattened into second-level headings.
 
-**Move only what you need**: export a top-level category with its children or select an individual second-level category. The system fills in required parent records without including bookmarks from unselected categories. This is useful for moving a group of work resources to another CF-Navs instance or keeping a focused backup.
+**Migrate only the parts you need**: You can export a main category and its subcategories, or select only second-level categories. The system will fill in the necessary parent category records without including bookmarks from unselected categories. This is ideal for moving a set of work resources to another CF-Navs instance or for creating a separate backup for key categories.
 
-Back up existing data before importing: **append mode keeps duplicate links, while replace mode replaces all categories and bookmarks**. Partial export is a backup and migration capability, not automatic deduplication or bidirectional synchronization. Backups may contain private links and site settings, so store them carefully.
+Please back up your existing data before importing: **Append mode retains duplicate links, while overwrite mode replaces all categories and bookmarks**. Partial export is a backup and migration feature, not an automatic deduplication or two-way synchronization tool. Backups may contain private links and site settings; please store them securely.
 
-See [Sun-Panel data import](../../docs/guides/SUNPANEL_IMPORT.md) and [browser bookmark import](../../docs/guides/BROWSER_BOOKMARK_IMPORT.md).
+See [Sun-Panel Data Import](docs/guides/SUNPANEL_IMPORT.md) and [Browser Bookmark Import](docs/guides/BROWSER_BOOKMARK_IMPORT.md).
 
 ## Contributing
 
-Open an Issue to report an experience or submit a Pull Request with an improvement. Read [Contributing](../../CONTRIBUTING.md) first and complete the checks required for the scope of your change. For security issues, use the [private reporting channel](../../SECURITY.md) instead of posting credentials or private bookmarks in a public Issue.
+We welcome you to provide feedback on your experience via Issues and contribute improvements via Pull Requests. Before you begin, please read [Contributing](CONTRIBUTING.md) and complete verification based on the scope of your changes. For security issues, please use the [private reporting channel](SECURITY.md) and do not paste credentials or private bookmarks in public Issues.
 
-## Acknowledgements
+## Acknowledgments
 
-The project was influenced by the design ideas of [Sun-Panel](https://github.com/hslr-s/sun-panel), and parts of the icon-fetching logic were inspired by [iori-nav](https://github.com/jy02739244/iori-nav).
+The project draws on the design concepts of [Sun-Panel](https://github.com/hslr-s/sun_panel), and some of its icon acquisition logic was inspired by [iori-nav](https://github.com/jy02739244/iori-nav).
 
 ## Star History
 
 <a href="https://www.star-history.com/?repos=lbjxr%2FCF-Navs&type=date&legend=top-left">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=lbjxr/CF-Navs&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=lbjxr/CF-Navs&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=lbjxr/CF-Navs&type=date&legend=top-left" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=lbjxr/CF-Navs&type=date&theme=dark&legend=top-left&sealed_token=7kyATdN3x5tJ6WJAhA5MwxWL93j-C9ZnSxJli_vTqztkkZF54Sp95nJzSMW-Xggc19KoraDrqDNjCWN6VuQrSEmOX8CAbyYqMi0I_6K3DS2GEr0x1rgf8VDa2kBJIgOP74JqDldlCFRRbGGNjvrDVJ12e4SIShmH78leu6Vxg6WQzidKg4PULPCzlwi-" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=lbjxr/CF-Navs&type=date&legend=top-left&sealed_token=7kyATdN3x5tJ6WJAhA5MwxWL93j-C9ZnSxJli_vTqztkkZF54Sp95nJzSMW-Xggc19KoraDrqDNjCWN6VuQrSEmOX8CAbyYqMi0I_6K3DS2GEr0x1rgf8VDa2kBJIgOP74JqDldlCFRRbGGNjvrDVJ12e4SIShmH78leu6Vxg6WQzidKg4PULPCzlwi-" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=lbjxr/CF-Navs&type=date&legend=top-left&sealed_token=7kyATdN3x5tJ6WJAhA5MwxWL93j-C9ZnSxJli_vTqztkkZF54Sp95nJzSMW-Xggc19KoraDrqDNjCWN6VuQrSEmOX8CAbyYqMi0I_6K3DS2GEr0x1rgf8VDa2kBJIgOP74JqDldlCFRRbGGNjvrDVJ12e4SIShmH78leu6Vxg6WQzidKg4PULPCzlwi-" />
  </picture>
 </a>
 
 ## License
 
-This project is licensed under the [Apache License 2.0](../../LICENSE). Attribution information is available in [`NOTICE`](../../NOTICE).
+This project is licensed under the [Apache License 2.0](LICENSE). For project attribution information, see [`NOTICE`](NOTICE).
 
-### Fork and attribution notice
+### Forking and Attribution Guidelines
 
-If you fork, redistribute, or publish a modified version based on CF-Navs:
+If you fork, redistribute, or publish modified versions based on CF-Navs, please:
 
-- Keep `LICENSE`, `NOTICE`, and the copyright, license, and attribution notices already present in source files.
-- Under Apache License 2.0, keep clear modification notices in files you have changed.
-- State clearly in the README or product documentation that the project is based on CF-Navs and link to the upstream repository. Do not imply that a modified version is officially published or endorsed by the original authors.
+- Retain the `LICENSE`, `NOTICE`, and any existing copyright, license, and attribution statements in the source files.
+- As required by the Apache License 2.0, include clear notes of your changes in the modified files.
+- Clearly state in the README or product documentation that the project is based on CF-Navs and provide a link to the upstream repository. Do not imply that the modified version is officially released or endorsed by the original project authors.
 
-These notes help users identify derivative versions; the [LICENSE](../../LICENSE) controls the specific rights and obligations.
+The above guidelines are intended to help users identify derivative versions. The specific licensing rights and obligations are governed by [LICENSE](LICENSE).
 
-<!-- Afdian sponsorship section (collapsible) -->
+<!-- Afdian Sponsorship Section (Collapsible Card) -->
 <hr>
 
 <div align="center">
@@ -332,11 +332,11 @@ These notes help users identify derivative versions; the [LICENSE](../../LICENSE
 <details>
   <summary><b>☕️ Like CF-Navs? Buy the author a coffee / Sponsor</b></summary>
   <br>
-  <p>If this project helps you, consider sponsoring it. Your support helps keep the project maintained and updated ❤️</p>
+  <p>If this project has been helpful to you, feel free to show your support through sponsorship! Your support is the greatest motivation for keeping the project updated and maintained ❤️</p>
   <a href="https://afdian.com/a/benjian" target="_blank">
-    <img src="https://img.shields.io/badge/Afdian-Sponsor-946CE6?style=for-the-badge&logo=afdian&logoColor=white" alt="Afdian sponsorship">
+    <img src="https://img.shields.io/badge/Afdian-Sponsor-946CE6?style=for-the-badge&logo=afdian&logoColor=white" alt="Afdian Sponsorship">
   </a>
-  <p><small>💡 Sponsorship includes setup guidance; see the Afdian homepage for details.</small></p>
+  <p><small>💡 Sponsorship includes assistance with setup. For details, please see the Afdian homepage.</small></p>
 </details>
 
 </div>
