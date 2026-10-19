@@ -33,11 +33,9 @@
 
       function applyGuideSvgTheme(svg) {
         return svg
+          .replace(/(<text\b[^>]*\bfill=")#3d7a52("\s*[^>]*>)/g, "$1var(--accent-strong)$2")
           .replaceAll("#3d7a52", "var(--accent)")
           .replaceAll("#235334", "var(--accent-strong)")
-          .replaceAll("#1f2d22", "var(--text-primary)")
-          .replaceAll("#4a5d4d", "var(--text-secondary)")
-          .replaceAll("#647868", "var(--text-muted)")
           .replaceAll("#d7e4d3", "var(--stage-bg)")
           .replaceAll("#e6f2ea", "var(--accent-soft)")
           .replaceAll("rgba(61,122,82,0.16)", "var(--accent-soft)")
@@ -186,7 +184,7 @@
               '<circle cx="484" cy="105" r="9" fill="#edf3ee" />' +
               '<text x="484" y="109" text-anchor="middle" font-size="12" font-weight="700" fill="#5a6d5d">×</text>' +
               '<rect x="502" y="89" width="58" height="32" rx="9" fill="#3d7a52" />' +
-              '<text x="531" y="109" text-anchor="middle" font-size="12" font-weight="700" fill="#ffffff">' + (isEn ? "Search" : "搜索") + '</text>' +
+              '<text x="531" y="109" text-anchor="middle" font-size="12" font-weight="700" fill="var(--badge-text)">' + (isEn ? "Search" : "搜索") + '</text>' +
 
               /* Right Side Callout Card: Switchable Engines (Does NOT block cards below!) */
               '<rect x="584" y="72" width="154" height="84" rx="12" fill="rgba(255,255,255,0.92)" stroke="#b8ccb9" stroke-width="1.2" />' +
@@ -209,7 +207,7 @@
               /* Card 1 (Matched & Highlighted) */
               '<rect class="anim-card-s1" x="42" y="208" width="214" height="58" rx="12" fill="#ffffff" stroke="#3d7a52" stroke-width="2" />' +
               '<rect x="54" y="219" width="36" height="36" rx="9" fill="#3d7a52" />' +
-              '<text x="72" y="242" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">NL</text>' +
+              '<text x="72" y="242" text-anchor="middle" font-size="13" font-weight="700" fill="var(--badge-text)">NL</text>' +
               '<text x="100" y="234" font-size="13" font-weight="700" fill="#1f2d22">NodeLoc</text>' +
               '<text x="100" y="251" font-size="11" fill="#5e7261">' + (isEn ? "NodeLoc Forum · Matched" : "NodeLoc论坛 · 匹配关键词") + '</text>' +
 
@@ -281,7 +279,7 @@
 
               /* Category Header Bar: Primary Pill + Secondary Subcategory Pills */
               '<rect x="42" y="110" width="112" height="32" rx="9" fill="#3d7a52" />' +
-              '<text x="98" y="130" text-anchor="middle" font-size="12" font-weight="700" fill="#ffffff">Ai服务 (27)</text>' +
+              '<text x="98" y="130" text-anchor="middle" font-size="12" font-weight="700" fill="var(--badge-text)">Ai服务 (27)</text>' +
 
               /* Active Subcategory Pill */
               '<rect x="164" y="110" width="116" height="32" rx="9" fill="#ffffff" stroke="#3d7a52" stroke-width="1.8" />' +
@@ -447,7 +445,7 @@
                 '<text x="66" y="108" text-anchor="middle" font-size="13.5" font-weight="700" fill="#f8fafc">Ctrl</text>' +
                 '<text x="108" y="108" text-anchor="middle" font-size="14" font-weight="700" fill="#94a3b8">+</text>' +
                 '<rect x="120" y="84" width="44" height="38" rx="9" fill="#3d7a52" stroke="#86efac" stroke-width="1.5" />' +
-                '<text x="142" y="108" text-anchor="middle" font-size="14" font-weight="700" fill="#ffffff">K</text>' +
+                '<text x="142" y="108" text-anchor="middle" font-size="14" font-weight="700" fill="var(--badge-text)">K</text>' +
               '</g>' +
 
               /* Row 3: Mac & Slash Shortcut Badges (y=140..208) */
@@ -497,7 +495,7 @@
 
               /* Result Row 4 (y=228..266) */
               '<rect x="248" y="234" width="26" height="26" rx="7" fill="#3d7a52" />' +
-              '<text x="261" y="251" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">NL</text>' +
+              '<text x="261" y="251" text-anchor="middle" font-size="11" font-weight="700" fill="var(--badge-text)">NL</text>' +
               '<text x="284" y="251" font-size="13" font-weight="700" fill="#1e293b">' + (isEn ? "NodeLoc Forum" : "NodeLoc论坛") + '</text>' +
               '<text x="706" y="251" text-anchor="end" font-size="11" font-weight="600" fill="#64748b">论坛导航</text>' +
 
@@ -535,7 +533,7 @@
 
               '<text x="40" y="72" font-size="11.5" fill="#4a5d4d">' + (isEn ? "1. Site Info" : "1. 站点设置") + '</text>' +
               '<rect x="32" y="84" width="148" height="28" rx="8" fill="#3d7a52" />' +
-              '<text x="44" y="102" font-size="11.5" font-weight="700" fill="#ffffff">' + (isEn ? "2. Theme & Cards ✓" : "2. 外观与卡片 ✓") + '</text>' +
+              '<text x="44" y="102" font-size="11.5" font-weight="700" fill="var(--badge-text)">' + (isEn ? "2. Theme & Cards ✓" : "2. 外观与卡片 ✓") + '</text>' +
               '<text x="40" y="130" font-size="11.5" fill="#4a5d4d">' + (isEn ? "3. Visual & Backdrop" : "3. 高级与视觉") + '</text>' +
               '<text x="40" y="154" font-size="11.5" fill="#4a5d4d">' + (isEn ? "4. Layout & Nav" : "4. 布局与导航") + '</text>' +
               '<text x="40" y="178" font-size="11.5" fill="#4a5d4d">' + (isEn ? "5. Search Engines" : "5. 搜索设置") + '</text>' +
@@ -592,7 +590,7 @@
               '<rect x="472" y="216" width="248" height="76" rx="11" fill="#f7faf7" stroke="#dce6dd" />' +
               '<text x="486" y="238" font-size="11.5" font-weight="700" fill="#1f2d22">' + (isEn ? "Category Nav Position" : "分类导航显示位置") + '</text>' +
               '<rect x="486" y="250" width="106" height="30" rx="8" fill="#3d7a52" />' +
-              '<text x="539" y="269" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">' + (isEn ? "✓ Top Sticky" : "✓ 顶部固定") + '</text>' +
+              '<text x="539" y="269" text-anchor="middle" font-size="11" font-weight="700" fill="var(--badge-text)">' + (isEn ? "✓ Top Sticky" : "✓ 顶部固定") + '</text>' +
               '<rect x="600" y="250" width="106" height="30" rx="8" fill="#e9f0ea" />' +
               '<text x="653" y="269" text-anchor="middle" font-size="11" fill="#4a5d4d">' + (isEn ? "Left Sidebar" : "左侧悬浮") + '</text>' +
 
@@ -623,7 +621,7 @@
             /* Real Vertical Circular Floating Buttons Expanded Under ⋮ (cx=702, cy=104 / 154 / 204) */
             /* 1. ? Guide Button */
             '<circle cx="702" cy="104" r="20" fill="#3d7a52" stroke="#ffffff" stroke-width="2.5" filter="drop-shadow(0 6px 12px rgba(61,122,82,0.35))" />' +
-            '<text x="702" y="110" text-anchor="middle" font-size="16" font-weight="800" fill="#ffffff">?</text>' +
+            '<text x="702" y="110" text-anchor="middle" font-size="16" font-weight="800" fill="var(--badge-text)">?</text>' +
             /* Callout Pill Left of ? Button */
             '<rect x="534" y="88" width="140" height="32" rx="9" fill="#ffffff" stroke="#3d7a52" stroke-width="1.5" />' +
             '<text x="604" y="108" text-anchor="middle" font-size="11.5" font-weight="700" fill="#235334">' + (isEn ? "Reopen Guide (?)" : "使用指南（随时回看）") + '</text>' +
@@ -652,7 +650,7 @@
             /* Left Welcome & Admin Capabilities Summary (x=24..476) */
             '<rect x="24" y="88" width="454" height="102" rx="16" fill="rgba(255,255,255,0.92)" />' +
             '<circle cx="64" cy="139" r="22" fill="#3d7a52" />' +
-            '<path d="M55,139 L62,146 L74,132" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />' +
+            '<path d="M55,139 L62,146 L74,132" fill="none" stroke="var(--badge-text)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />' +
             '<text x="100" y="122" font-size="15.5" font-weight="700" fill="#1f2d22">' + (isEn ? "Ready to use CF-Navs!" : "准备就绪，立即开启高效导航！") + '</text>' +
             '<text x="100" y="145" font-size="12" fill="#4a5d4d">' + (isEn ? "Closing this guide records localStorage['cf-navs:guide-seen']=1." : "关闭后将自动写入已读标记，后续访问不再自动弹窗打扰。") + '</text>' +
             '<text x="100" y="167" font-size="12" font-weight="700" fill="#3d7a52">' + (isEn ? "Click the top-right menu and choose ? to reopen this guide." : "点击右上角更多菜单中的？按钮，可随时重温本指南。") + '</text>' +

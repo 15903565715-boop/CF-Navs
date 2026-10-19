@@ -38,15 +38,15 @@
       --modal-bg: rgba(17, 24, 37, 0.97);
       --modal-border: color-mix(in srgb, var(--accent) 35%, #334155);
       --modal-shadow: 0 28px 72px rgba(0, 0, 0, 0.56), 0 0 0 1px rgba(255, 255, 255, 0.05) inset;
-      --stage-bg: color-mix(in srgb, #121b2a 89%, var(--accent) 11%);
-      --stage-border: color-mix(in srgb, var(--accent) 34%, #334155);
-      --card-surface: rgba(30, 41, 59, 0.92);
-      --card-border: rgba(148, 163, 184, 0.17);
+      --stage-bg: color-mix(in srgb, #f1f5f9 88%, var(--accent) 12%);
+      --stage-border: color-mix(in srgb, var(--accent) 22%, #cbd5e1);
+      --card-surface: color-mix(in srgb, #ffffff 94%, var(--accent) 6%);
+      --card-border: color-mix(in srgb, #ffffff 84%, var(--accent) 16%);
       --text-primary: #e7edf6;
       --text-secondary: #c1ccdc;
       --text-muted: #94a3b8;
       --accent-hover: color-mix(in srgb, var(--accent) 82%, #ffffff);
-      --accent-strong: color-mix(in srgb, var(--accent) 76%, #ffffff);
+      --accent-strong: color-mix(in srgb, var(--accent) 42%, #17212f);
       --pill-bg: rgba(30, 41, 59, 0.84);
       --pill-active: color-mix(in srgb, #1e293b 84%, var(--accent) 16%);
       --badge-text: #0b1220;
@@ -148,7 +148,7 @@
       height: 28px;
       border-radius: 8px;
       background: var(--accent);
-      color: #fff;
+      color: var(--badge-text);
       display: inline-flex;
       align-items: center;
       justify-content: center;
@@ -201,7 +201,7 @@
 
     .guide-lang-btn.active {
       background: var(--accent);
-      color: #fff;
+      color: var(--badge-text);
       box-shadow: 0 2px 6px var(--accent-glow);
     }
 
@@ -454,7 +454,7 @@
       border-radius: 10px;
       border: none;
       background: var(--accent);
-      color: #fff;
+      color: var(--badge-text);
       font-size: 13.5px;
       font-weight: 600;
       cursor: pointer;
