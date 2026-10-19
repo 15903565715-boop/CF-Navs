@@ -42,32 +42,6 @@ export function setSecurityHeaders(headers: Headers): void {
   headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
 }
 
-/**
- * 使用指引页（/guide/*）的专用安全头。
- *
- * 指引页需要被首页同源 iframe 嵌入，因此 frame-ancestors/X-Frame-Options
- * 放宽到同源（整站其他页面保持 'none'/DENY 不变）。
- * 它的交互脚本是同源外链 guide.js，无需 'unsafe-inline'。
- */
-const GUIDE_CONTENT_SECURITY_POLICY = [
-  "default-src 'self'",
-  "script-src 'self'",
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data:",
-  "font-src 'self' data:",
-  "frame-ancestors 'self'",
-  "base-uri 'self'",
-  "object-src 'none'",
-].join('; ')
-
-export function setGuideSecurityHeaders(headers: Headers): void {
-  headers.set('Content-Security-Policy', GUIDE_CONTENT_SECURITY_POLICY)
-  headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
-  headers.set('X-Content-Type-Options', 'nosniff')
-  headers.set('X-Frame-Options', 'SAMEORIGIN')
-  headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
-}
-
 /** Assets may bypass the Worker. Generate identical HTML policy at build time.
  * no-transform also prevents automatic beacon injection incompatible with the
  * deliberately strict script policy; it does not grant third-party execution. */
@@ -76,13 +50,8 @@ export function buildStaticHtmlHeaderRules(): string {
   setSecurityHeaders(headers)
   headers.set('Cache-Control', HTML_CACHE)
   const lines = [...headers].map(([name, value]) => `  ${name}: ${value}`).join('\n')
-  const guideHeaders = new Headers()
-  setGuideSecurityHeaders(guideHeaders)
-  guideHeaders.set('Cache-Control', HTML_CACHE)
-  const guideLines = [...guideHeaders].map(([name, value]) => `  ${name}: ${value}`).join('\n')
-  const main = ['/', '/index.html', '/admin', '/admin/', '/install', '/install/'].map(route => `${route}\n${lines}`).join('\n\n')
-  const guide = ['/guide/', '/guide/index.html'].map(route => `${route}\n${guideLines}`).join('\n\n')
-  return `${main}\n\n${guide}`
+  const htmlRoutes = ['/', '/index.html', '/admin', '/admin/', '/install', '/install/', '/guide/', '/guide/index.html']
+  return htmlRoutes.map(route => `${route}\n${lines}`).join('\n\n')
 }
 
 export function withAssetCacheHeaders(request: Request, response: Response): Response {
@@ -107,14 +76,7 @@ export function withAssetCacheHeaders(request: Request, response: Response): Res
       headers.set('Cache-Control', SHORT_STATIC_CACHE)
     }
 
-    if (isHtml) {
-      // 使用指引页允许被首页同源 iframe 嵌入，其他 HTML 保持拒绝一切嵌入
-      if (url.pathname === '/guide/' || url.pathname === '/guide/index.html') {
-        setGuideSecurityHeaders(headers)
-      } else {
-        setSecurityHeaders(headers)
-      }
-    }
+    if (isHtml) setSecurityHeaders(headers)
   }
 
   return new Response(response.body, {

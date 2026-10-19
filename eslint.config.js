@@ -23,6 +23,7 @@ export default tseslint.config(
       'dist/**',
       'node_modules/**',
       '.wrangler/**',
+      'tmp/**',
       '_archive/**',
       'coverage/**',
     ],

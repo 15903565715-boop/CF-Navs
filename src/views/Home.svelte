@@ -11,7 +11,6 @@
   import HomeContentSummary from '../components/HomeContentSummary.svelte'
   import HomeEmptyPanel from '../components/HomeEmptyPanel.svelte'
   import HomeFloatingActions from '../components/HomeFloatingActions.svelte'
-  import GuideOverlay from '../components/GuideOverlay.svelte'
   import HomeHeroSearch from '../components/HomeHeroSearch.svelte'
   import type { BookmarkReorganizeReq, NavigationSetting, PublicBookmark, PublicCategory, PublicSettings, ThemeMode } from '../../shared/types'
   import {
@@ -105,7 +104,6 @@
   let deferredSearchQuery = $state('')
   let searchFilterTimer: ReturnType<typeof setTimeout> | null = null
   let searchBoxVisible = $state(true)
-  let guideOpen = $state(false)
   let stopSearchBoxObserver: (() => void) | null = null
   const searchBoxShow = $derived(settings?.search_box_show ?? true)
   let activeId = $state('')
@@ -451,18 +449,18 @@
   }
 
   onMount(() => {
-    window.addEventListener('scroll', scheduleActiveRootUpdate, { passive: true })
-    scheduleActiveRootUpdate()
-
-    // 首次访问自动弹出使用指引；关闭即视为已看，不再自动弹出
+    // 首次访问进入独立指南页；指南关闭后会记录已读状态，再返回首页。
     try {
-      if (!localStorage.getItem('cf-navs:guide-seen')) {
-        guideOpen = true
+      if (localStorage.getItem('cf-navs:guide-seen') !== '1') {
+        window.location.replace(`${import.meta.env.BASE_URL}guide/`)
+        return
       }
     } catch {
-      // 隐私模式下 localStorage 可能不可用：本次会话内弹出一次即可
-      guideOpen = true
+      // Keep the home page usable when the browser blocks local storage.
     }
+
+    window.addEventListener('scroll', scheduleActiveRootUpdate, { passive: true })
+    scheduleActiveRootUpdate()
 
     // 观察首页搜索框离屏状态，驱动浮动搜索按钮（REQ-01 / FR-1.1）。排除设置页的 .preview 实例。
     const heroSearch = document.querySelector('.hero-search:not(.preview)')
@@ -513,7 +511,7 @@
     {searchBoxVisible}
     {searchBoxShow}
     {onOpenSearch}
-    onOpenGuide={() => { guideOpen = true }}
+    onOpenGuide={() => { window.location.assign(`${import.meta.env.BASE_URL}guide/`) }}
   />
 
   <HomeHeroSearch
@@ -798,8 +796,6 @@
     </footer>
   {/if}
 </div>
-
-<GuideOverlay open={guideOpen} onClose={() => { guideOpen = false }} />
 
 <style>
   .home-shell {

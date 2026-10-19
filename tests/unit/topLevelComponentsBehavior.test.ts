@@ -21,6 +21,7 @@ import type { PublicBookmark, PublicCategory } from '../../shared/types'
 // 迁移为 runes 时本文件不应改动。
 
 beforeEach(() => {
+  localStorage.setItem('cf-navs:guide-seen', '1')
   vi.stubGlobal('IntersectionObserver', undefined)
   vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 404 })))
   Element.prototype.scrollIntoView = () => {}

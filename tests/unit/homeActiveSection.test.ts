@@ -12,6 +12,7 @@ import type { PublicBookmark, PublicCategory } from '../../shared/types'
 // `requestAnimationFrame` 桩吞掉，确保观察到的只是写回语句本身。
 
 beforeEach(() => {
+  localStorage.setItem('cf-navs:guide-seen', '1')
   vi.stubGlobal('IntersectionObserver', undefined)
   vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 404 })))
   vi.stubGlobal('requestAnimationFrame', vi.fn(() => 0))

@@ -115,23 +115,17 @@ it('generates the same strict policy for HTML assets without changing script ass
   expect(applyHeaders('/sw.js',new Response('code')).headers.get('Cache-Control')).toBe('no-cache, max-age=0, must-revalidate')
 })
 
-describe('guide page framing headers', () => {
-  it('allows same-origin framing for /guide/ but keeps the rest of the site unframed', () => {
+describe('standalone guide page headers', () => {
+  it('keeps /guide/ under the site-wide frame-denial policy', () => {
     const guide = applyHeaders('/guide/', new Response('<html>', { headers: { 'content-type': 'text/html' } }))
-    expect(guide.headers.get('X-Frame-Options')).toBe('SAMEORIGIN')
-    expect(guide.headers.get('Content-Security-Policy')).toContain("frame-ancestors 'self'")
-    // 内联 <style> 需要 style-src 的 unsafe-inline，但 script-src 必须干净
-    expect(guide.headers.get('Content-Security-Policy')).toContain("script-src 'self'")
-    expect(guide.headers.get('Content-Security-Policy')).not.toContain("script-src 'self' 'unsafe-inline'")
-
-    const home = applyHeaders('/', new Response('<html>', { headers: { 'content-type': 'text/html' } }))
-    expect(home.headers.get('X-Frame-Options')).toBe('DENY')
-    expect(home.headers.get('Content-Security-Policy')).toContain("frame-ancestors 'none'")
+    expect(guide.headers.get('X-Frame-Options')).toBe('DENY')
+    expect(guide.headers.get('Content-Security-Policy')).toContain("frame-ancestors 'none'")
   })
 
-  it('emits guide-specific static header rules', () => {
+  it('emits the same static security policy for the standalone guide', () => {
     const rules = buildStaticHtmlHeaderRules()
-    expect(rules).toContain('/guide/\n')
-    expect(rules).toContain("frame-ancestors 'self'")
+    const guide = rules.split('\n\n').find(rule => rule.startsWith('/guide/\n'))
+    expect(guide).toContain("frame-ancestors 'none'")
+    expect(guide).toContain('x-frame-options: DENY')
   })
 })

@@ -59,9 +59,7 @@
     void onOpenGuide?.()
   }
 
-  // 移动端把整组操作收进一个「更多」触发器，点开后向下弹出；桌面端仍平铺（纯 CSS @media 切换）。
-  // 触发器与操作组始终在 DOM，由 @media 决定形态——jsdom 不解析 @media，所以操作按钮在单元测试里
-  // 始终可查，不会因折叠而丢失可访问入口。
+  // 所有视口统一由「更多」触发器控制操作组；顶部导航在中小视口向下弹出。
   let menuTrigger: HTMLButtonElement | null = null
   let menuGroup: HTMLElement | null = null
   let menuOpen = $state(false)
@@ -119,7 +117,7 @@
     window.scrollTo({ top: 0, behavior })
   }
 
-  // 弹层外点击与 Escape 关闭：仅在移动端 menuOpen 为真时生效；桌面 menuOpen 恒为 false，处理器直接返回。
+  // 弹层外点击与 Escape 关闭。
   function handleWindowPointerDown(event: PointerEvent) {
     if (!menuOpen) return
     const target = event.target as Node | null
@@ -152,41 +150,24 @@
 <svelte:window onpointerdown={handleWindowPointerDown} onkeydown={handleWindowKeyDown} />
 
 <div class="floating-actions" class:below-top-navigation={topNavigation} class:menu-open={menuOpen}>
-  <!-- 折叠触发器：竖三点「更多」，与 Sidebar 目录的横三线汉堡区分；仅移动端可见（@media 控制）。 -->
   <button
     type="button"
-    class="icon-button actions-menu-trigger"
-    data-testid="home-actions-menu-trigger"
-    aria-haspopup="true"
-    aria-expanded={menuOpen}
-    aria-controls={menuId}
-    onclick={toggleMenu}
-    bind:this={menuTrigger}
-    title="更多操作"
-    aria-label="更多操作"
+    class="icon-button search-fab"
+    class:is-visible={showSearchButton}
+    data-testid="home-search-button"
+    onclick={handleOpenSearch}
+    title={`搜索书签 (${searchShortcutHint})`}
+    aria-label="搜索书签"
+    aria-hidden={!showSearchButton}
+    tabindex={showSearchButton ? undefined : -1}
+    aria-keyshortcuts="Control+K Meta+K"
   >
     <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M12 6h.01M12 12h.01M12 18h.01" />
+      <circle cx="11" cy="11" r="7" />
+      <path d="m20 20-3.5-3.5" />
     </svg>
   </button>
   <div class="actions-group" id={menuId} bind:this={menuGroup}>
-    <button
-      type="button"
-      class="icon-button search-fab"
-      class:is-visible={showSearchButton}
-      data-testid="home-search-button"
-      onclick={handleOpenSearch}
-      title={`搜索书签 (${searchShortcutHint})`}
-      aria-label="搜索书签"
-      aria-hidden={!showSearchButton}
-      tabindex={showSearchButton ? undefined : -1}
-      aria-keyshortcuts="Control+K Meta+K"
-    >
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <circle cx="11" cy="11" r="7" />
-        <path d="m20 20-3.5-3.5" />
-      </svg>
-    </button>
     <button
       type="button"
       class="icon-button guide-button"
@@ -258,6 +239,22 @@
       </button>
     {/if}
   </div>
+  <button
+    type="button"
+    class="icon-button actions-menu-trigger"
+    data-testid="home-actions-menu-trigger"
+    aria-haspopup="true"
+    aria-expanded={menuOpen}
+    aria-controls={menuId}
+    onclick={toggleMenu}
+    bind:this={menuTrigger}
+    title="更多操作"
+    aria-label="更多操作"
+  >
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 6h.01M12 12h.01M12 18h.01" />
+    </svg>
+  </button>
 </div>
 
 {#if showBackToTop}
@@ -293,13 +290,16 @@
   }
 
   .actions-group {
-    display: flex;
+    display: none;
     gap: 0.5rem;
   }
 
-  /* 折叠触发器只在移动端出现，桌面保持整组平铺 */
+  .floating-actions.menu-open .actions-group {
+    display: flex;
+  }
+
   .floating-actions .actions-menu-trigger {
-    display: none;
+    display: flex;
   }
 
   .actions-menu-trigger svg {
@@ -384,7 +384,7 @@
   }
 
   /* 隐藏态移出 flex 流，避免在按钮组里留永久空槽/间隙（搜索框在视口内时的首页常态）。
-     绝对定位锚到最近定位祖先角落（随布局模式为 .floating-actions 或 .actions-group），
+     绝对定位锚到 .floating-actions 角落，
      因不可见（opacity/visibility/pointer-events）在各模式下均无视觉与交互影响。 */
   .search-fab:not(.is-visible) {
     position: absolute;
@@ -479,10 +479,6 @@
       top: 4rem;
     }
 
-    .floating-actions .actions-menu-trigger {
-      display: flex;
-    }
-
     /* 移动端整组收进触发器下方的弹层，向下展开 */
     .actions-group {
       position: absolute;
@@ -531,17 +527,10 @@
     }
   }
 
-  /* 平板到中屏（800–1650px）的顶部导航模式：居中导航栏（max-width 1200px）右缘距视口仅约 16px，
-     与右上角平铺按钮组（约占右侧 204px）必然重叠——按钮会盖住导航栏右滚动箭头与末端标签。
-     判据：(vw − content-max-width) / 2 ≥ 204 → 约 vw ≥ 1608px 才不重叠，取 1650px 留冗余。
-     故此区间也折叠为「更多」菜单并下移到导航栏下方；>1650px 恢复平铺，侧栏模式不受影响。 */
+  /* 顶部导航模式的中屏布局会占用右上角空间，把操作组放到触发器下方。 */
   @media (min-width: 800px) and (max-width: 1650px) {
     .floating-actions.below-top-navigation {
       top: 4.5rem;
-    }
-
-    .floating-actions.below-top-navigation .actions-menu-trigger {
-      display: flex;
     }
 
     .floating-actions.below-top-navigation .actions-group {
