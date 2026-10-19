@@ -8,13 +8,48 @@
 
   let { open = false, onClose }: Props = $props()
 
-  // iframe 懒创建：只在首次打开时才赋值 src，避免首页多一次请求
-  let iframeSrc = $state('')
+  // 指引 HTML 懒加载：只在首次打开时 fetch，避免首页多一次请求。
+  // 不用 iframe：彻底绕开 frame-ancestors 等 framing 限制。
+  let guideContent = $state('')
+  let loadError = $state(false)
+  let contentEl: HTMLDivElement | null = $state(null)
+  let scriptEl: HTMLScriptElement | null = null
+
+  async function loadGuide() {
+    if (guideContent || loadError) return
+    try {
+      const res = await fetch(`${import.meta.env.BASE_URL}guide/`, { credentials: 'same-origin' })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const html = await res.text()
+      const cssMatch = html.match(/<style>([\s\S]*?)<\/style>/)
+      const bodyMatch = html.match(/<body>([\s\S]*?)<\/body>/)
+      // 指引 HTML 的样式已在源文件里 scoped 到 .guide-root；<style> 随内容注入即生效
+      // 去掉 HTML 自带的 <script> 引用，改用编程方式加载（innerHTML 不执行脚本）
+      const bodyHtml = (bodyMatch?.[1] ?? '').replace(/<script[\s\S]*?<\/script>/g, '')
+      guideContent = `<style>${cssMatch?.[1] ?? ''}</style>${bodyHtml}`
+    } catch {
+      loadError = true
+    }
+  }
+
+  function loadGuideScript() {
+    if (scriptEl || !contentEl) return
+    /* eslint-disable svelte/no-dom-manipulating -- 动态加载同源脚本：innerHTML 不执行 script，必须编程注入 */
+    const s = document.createElement('script')
+    s.src = `${import.meta.env.BASE_URL}guide/guide.js`
+    s.defer = true
+    scriptEl = s
+    contentEl.appendChild(s)
+    /* eslint-enable svelte/no-dom-manipulating */
+  }
 
   $effect(() => {
-    if (open && !iframeSrc) {
-      iframeSrc = `${import.meta.env.BASE_URL}guide/`
-    }
+    if (open) void loadGuide()
+  })
+
+  // 内容注入完成后加载交互脚本
+  $effect(() => {
+    if (guideContent && contentEl) loadGuideScript()
   })
 
   function handleClose() {
@@ -30,7 +65,7 @@
     if (event.key === 'Escape') handleClose()
   }
 
-  // 指引 HTML 内部通过 postMessage 通知关闭/跳过/完成
+  // 指引脚本通过 postMessage 通知关闭/跳过/完成（非 iframe 下 parent 即自身）
   function handleMessage(event: MessageEvent) {
     if (event.data?.type === 'cf-navs-guide-close') handleClose()
   }
@@ -60,12 +95,13 @@
         onclick={handleClose}
         aria-label="关闭使用指南"
       >×</button>
-      {#if iframeSrc}
-        <iframe
-          class="guide-frame"
-          title="使用指南"
-          src={iframeSrc}
-        ></iframe>
+      {#if loadError}
+        <div class="guide-error">指引加载失败，请检查网络后重试。</div>
+      {:else if guideContent}
+        <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+        <div class="guide-injected" bind:this={contentEl}>{@html guideContent}</div>
+      {:else}
+        <div class="guide-loading">加载中…</div>
       {/if}
     </div>
   </div>
@@ -94,11 +130,12 @@
     box-shadow: 0 24px 64px rgba(0, 0, 0, 0.28);
   }
 
-  .guide-frame {
+  .guide-injected {
     width: 100%;
     height: 100%;
-    border: 0;
-    display: block;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
   }
 
   .guide-close {
@@ -119,6 +156,15 @@
   .guide-close:hover {
     background: rgba(100, 116, 139, 0.15);
     color: var(--color-fg, #0f172a);
+  }
+
+  .guide-loading,
+  .guide-error {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--color-muted, #64748b);
   }
 
   @media (max-width: 480px) {

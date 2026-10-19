@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CF-Navs 使用指南</title>
 <style>
-  :root {
+  .guide-root {
     --bg: #ffffff;
     --fg: #0f172a;
     --muted: #64748b;
@@ -15,7 +15,7 @@
     --dot: #cbd5e1;
   }
   @media (prefers-color-scheme: dark) {
-    :root {
+    .guide-root {
       --bg: #0f172a;
       --fg: #e5eefb;
       --muted: #94a3b8;
@@ -26,8 +26,8 @@
     }
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body { height: 100%; }
-  body {
+  html, .guide-root { height: 100%; }
+  .guide-root {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
     background: var(--bg); color: var(--fg);
     display: flex; flex-direction: column; overflow: hidden;
@@ -93,7 +93,7 @@
   }
 </style>
 </head>
-<body>
+<body><div class="guide-root">
   <div class="guide-header">
     <div class="guide-title" id="guideTitle">使用指南</div>
     <div class="guide-tools">
@@ -112,5 +112,5 @@
     </div>
   </div>
 <script src="guide.js" defer></script>
-</body>
+</div></body>
 </html>
