@@ -201,6 +201,8 @@ describe('离屏搜索按钮（REQ-01）', () => {
     expect(button.getAttribute('aria-label')).toBe('搜索书签')
     expect(button.getAttribute('aria-keyshortcuts')).toBe('Control+K Meta+K')
     expect(button.closest('.actions-group')).toBeNull()
+    expect(document.querySelector('.floating-actions')?.classList.contains('search-visible')).toBe(true)
+    expect(source).toContain('.floating-actions.search-visible .actions-group')
   })
 
   it('搜索框在视口内时隐藏搜索按钮（在 DOM 但不可见、不可聚焦）', () => {

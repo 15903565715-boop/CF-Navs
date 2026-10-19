@@ -149,7 +149,7 @@
 
 <svelte:window onpointerdown={handleWindowPointerDown} onkeydown={handleWindowKeyDown} />
 
-<div class="floating-actions" class:below-top-navigation={topNavigation} class:menu-open={menuOpen}>
+<div class="floating-actions" class:below-top-navigation={topNavigation} class:menu-open={menuOpen} class:search-visible={showSearchButton}>
   <button
     type="button"
     class="icon-button search-fab"
@@ -479,14 +479,14 @@
       top: 4rem;
     }
 
-    /* 移动端整组收进触发器下方的弹层，向下展开 */
+    /* 窄屏将操作组横向展开到触发器左侧，不挡住首页标题与搜索框。 */
     .actions-group {
       position: absolute;
-      top: calc(100% + 6px);
-      right: 0;
+      top: 0;
+      right: calc(100% + 6px);
       z-index: 80;
       display: none;
-      flex-direction: column;
+      flex-direction: row;
       gap: 0.4rem;
       padding: 0.4rem;
       border: 1px solid rgba(148, 163, 184, 0.28);
@@ -494,6 +494,12 @@
       background: rgba(255, 255, 255, 0.96);
       backdrop-filter: blur(12px);
       box-shadow: 0 12px 28px rgba(15, 23, 42, 0.18);
+    }
+
+    .floating-actions.search-visible .actions-group {
+      top: calc(100% + 6px);
+      right: 0;
+      flex-direction: column;
     }
 
     .floating-actions.menu-open .actions-group {
