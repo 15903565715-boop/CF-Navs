@@ -4,27 +4,27 @@
   var base = (document.currentScript && document.currentScript.src.split("/").slice(0, -1).join("/")) || "img";
   var steps = [
     {
-      img: base + "/step1-search.svg",
+      img: base + "/img/step1-search.svg",
       zh: { title: "搜索，一触即达", text: "在顶部搜索框输入关键词，即时过滤书签；直接输入网址可快速跳转。找网站不用翻来翻去。" },
       en: { title: "Search instantly", text: "Type in the top search box to filter bookmarks as you type. Enter a URL to jump straight to it." }
     },
     {
-      img: base + "/step2-sidebar.svg",
+      img: base + "/img/step2-sidebar.svg",
       zh: { title: "分类浏览", text: "左侧分类栏按主题收纳书签，点击分类名只看该分类的内容，层级再多也不乱。" },
       en: { title: "Browse by category", text: "The left sidebar organizes bookmarks by topic. Click a category to filter." }
     },
     {
-      img: base + "/step3-card.svg",
+      img: base + "/img/step3-card.svg",
       zh: { title: "书签卡片", text: "点击卡片打开网站；右键（长按）可编辑、删除、更换图标，打造顺手的导航。" },
       en: { title: "Bookmark cards", text: "Click a card to open the site. Right-click (long-press) to edit, delete, or change its icon." }
     },
     {
-      img: base + "/step4-spotlight.svg",
+      img: base + "/img/step4-spotlight.svg",
       zh: { title: "Spotlight 快捷搜索", text: "任何时候按下 Ctrl+K（Mac 上是 ⌘K）或 /，即可唤起全局 Spotlight 搜索，纯键盘快速直达。" },
       en: { title: "Spotlight quick search", text: "Press Ctrl+K (⌘K on Mac) or / anywhere to open global Spotlight search — fully keyboard driven." }
     },
     {
-      img: base + "/step5-settings.svg",
+      img: base + "/img/step5-settings.svg",
       zh: { title: "个性化设置", text: "在设置面板里换主题、背景、搜索引擎，把起始页调成你喜欢的样子。" },
       en: { title: "Make it yours", text: "Change themes, backgrounds, and the search engine in Settings." }
     },
