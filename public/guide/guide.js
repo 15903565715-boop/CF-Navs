@@ -91,7 +91,7 @@
   }
 
   function close() {
-    try { parent.postMessage({ type: "cf-navs-guide-close" }, "*"); } catch (e) {}
+    try { parent.postMessage({ type: "cf-navs-guide-close" }, "*"); } catch { /* 顶层打开时无 parent，忽略 */ }
   }
 
   skipBtn.onclick = close;

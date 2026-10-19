@@ -58,6 +58,13 @@ export default tseslint.config(
       globals: { ...globals.serviceworker },
     },
   },
+  // 使用指引页脚本（Vite 原样复制到 dist，纯浏览器环境）。
+  {
+    files: ['public/guide/**/*.js'],
+    languageOptions: {
+      globals: { ...globals.browser },
+    },
+  },
   {
     files: ['**/*.cjs'],
     languageOptions: { sourceType: 'commonjs' },
