@@ -44,7 +44,7 @@ const EMPTY_TEXT = '这个分类下暂时还没有可展示的书签。'
 
 it('空一级默认展示排序第一的二级分类，不跨分类聚合其它书签', () => {
   const bookmarks = [bm(10, 2, 'First Child Bookmark', 0), bm(11, 3, 'Other Child Bookmark', 5)]
-  const { container } = render(Home, { props: { categories: [emptyRoot, childA, childB], bookmarks } })
+  const { container } = render(Home, { props: { categories: [emptyRoot, childB, childA], bookmarks } })
 
   const panel = container.querySelector('#home-category-panel-1') as HTMLElement
   expect(panel.textContent).toContain('First Child Bookmark')
@@ -55,7 +55,7 @@ it('空一级默认展示排序第一的二级分类，不跨分类聚合其它�
 
 it('空一级且首个二级分类为空时保持该分类空态，不改选其它分类', () => {
   const bookmarks = [bm(12, 3, 'Other Child Bookmark', 5)]
-  render(Home, { props: { categories: [emptyRoot, childA, childB], bookmarks } })
+  render(Home, { props: { categories: [emptyRoot, childB, childA], bookmarks } })
 
   const panel = document.querySelector('#home-category-panel-1') as HTMLElement
   expect(panel.textContent).not.toContain('Other Child Bookmark')
@@ -65,7 +65,7 @@ it('空一级且首个二级分类为空时保持该分类空态，不改选其�
 
 it('一级自身有直属书签时不聚合，照常显示本分类书签且无「常用」小标题', () => {
   const rootWithBookmark = [bm(20, 1, 'Root Direct', 3), bm(21, 3, 'Child Hot', 9)]
-  const { container } = render(Home, { props: { categories: [emptyRoot, childA, childB], bookmarks: rootWithBookmark } })
+  const { container } = render(Home, { props: { categories: [emptyRoot, childB, childA], bookmarks: rootWithBookmark } })
 
   const panel = container.querySelector('#home-category-panel-1') as HTMLElement
   expect(panel.textContent).toContain('Root Direct')
@@ -87,7 +87,7 @@ it('空私密一级（管理员可见）也按首个二级分类回落', () => {
 it('空一级回落不受全局「经常访问」数量设置影响', () => {
   const bookmarks = [bm(10, 2, 'First Child Bookmark', 0)]
   const settings = { most_visited_count: 0 } as unknown as PublicSettings
-  const { container } = render(Home, { props: { categories: [emptyRoot, childA, childB], bookmarks, settings } })
+  const { container } = render(Home, { props: { categories: [emptyRoot, childB, childA], bookmarks, settings } })
 
   const panel = container.querySelector('#home-category-panel-1') as HTMLElement
   expect(panel.textContent).toContain('First Child Bookmark')
