@@ -174,7 +174,7 @@ Worker 和前端共同承担缓存：
 - Cloudflare Git 和 Wrangler CLI 全新安装都只要求一个加密 `SETUP_TOKEN`。用户部署后访问 `/install`，`POST /api/install` 校验令牌后由安装器初始化 schema 并创建管理员；公开的 `GET /api/install/status` 不要求令牌。
 - 确认安装成功后建议删除或轮换 `SETUP_TOKEN`。已安装判定来自 D1 中的管理员凭据和完成标记，删除 Secret 不影响运行；即使保留，后续安装请求也会被永久拒绝。
 - `INIT_ADMIN_USER`、`INIT_ADMIN_PASSWORD` 与 `RESET_ADMIN_CREDENTIALS` 仅保留给旧数据库升级和凭据恢复，不是任何全新部署的正常入口。
-- 正常流程不要求 Cloudflare API Token、GitHub Actions 或手动 SQL；D1 SQL Console 执行 `schema.sql` 只用于安装器失败后的恢复。
+- 默认部署流程不要求 Cloudflare API Token、GitHub Actions 或手动 SQL；D1 SQL Console 执行 `schema.sql` 只用于安装器失败后的恢复。GitHub Actions 是需显式启用的备选方式：仓库变量 `CF_NAVS_DEPLOY_PROVIDER=github-actions` 时，`deploy.yml` 使用 API Token 在推送后运行 `wrangler deploy`。
 
 ## 登录与会话
 

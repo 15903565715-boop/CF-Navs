@@ -9,6 +9,7 @@
 
 ### 变更
 
+- **可选 GitHub Actions 部署（Issue #23）**：新增 `.github/workflows/deploy.yml`，在 Workers Builds / Git 导入不可用时可由推送触发 `npm ci`、构建、`setup:wrangler` 资源解析和 `wrangler deploy`。默认不启用，必须显式设置仓库变量 `CF_NAVS_DEPLOY_PROVIDER=github-actions`；默认部署仍是 Cloudflare 账号关联的 Git 构建。工作流只用 `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` 访问目标账号，真实 D1/KV ID 只写入 runner 临时配置；启用前需断开 Cloudflare Git 集成以免重复部署。
 - **修正使用指南标题**：移除左上角仅写“CF”的绿色标识，弹窗标题完整显示“CF-Navs 使用指南”，英文切换后显示“CF-Navs User Guide”，切换步骤时保持产品名称；窄屏头部允许换行，避免标题与语言按钮相互挤压。
 - **修复指南快捷键暗色对比度**：提示栏的方向键与 Esc 键帽改用主题表面色和边框色，避免暗色模式下浅色符号叠在固定白底上。
 - **首页使用指南与右上角菜单**：六步中英指南首次访问时浮在真实首页上，首页入口可随时重开，独立 `/guide/` 也默认显示指南；弹窗及示例插图跟随当前明暗主题、强调色和书签卡片风格，并保持深色模式下的插图对比度。书签示例改为 NodeLoc 论坛，不再渲染模拟首页。首页右上角操作组改为桌面与移动端统一的显隐菜单；窄屏搜索入口隐藏时菜单横向展开，避免遮挡首页标题。

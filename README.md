@@ -94,11 +94,11 @@
 
 ## 快速部署
 
-**不想折腾服务器？推荐从控制台部署开始。** 准备好 GitHub 和 Cloudflare 账号，按“Fork → 关联仓库 → 设置安装令牌 → 网页初始化”完成部署。正常安装无需手动执行 SQL，也无需填写 Cloudflare API Token。
+**不想折腾服务器？推荐从控制台部署开始。** 准备好 GitHub 和 Cloudflare 账号，按“Fork → 关联仓库 → 设置安装令牌 → 网页初始化”完成部署。正常安装无需手动执行 SQL，也无需填写 Cloudflare API Token。若 Workers Builds / Git 导入不可用，可使用 [GitHub Actions 备选部署](docs/guides/DEPLOYMENT.md#方式三github-actions备选)；默认仍推荐 Cloudflare 账号关联方式。
 
 可从 Cloudflare 免费计划起步，但免费额度并非无限用量；请求、数据库与 KV 操作各有配额，具体以 [Workers](https://developers.cloudflare.com/workers/platform/pricing/)、[D1](https://developers.cloudflare.com/d1/platform/pricing/) 和 [KV](https://developers.cloudflare.com/kv/platform/pricing/) 官方说明为准。
 
-第一次使用时，请选一种部署方式完整走完，不要混用两套流程。两种方式最终都会通过 `/install` 初始化数据库和管理员账号。
+第一次使用时，请选一种部署方式完整走完，不要混用两套流程。无论使用哪种方式，最终都通过 `/install` 初始化数据库和管理员账号。
 
 CF-Navs 需要以下 Cloudflare 资源：
 
