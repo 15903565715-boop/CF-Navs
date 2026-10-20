@@ -7,6 +7,8 @@ describe('first-screen chunk wiring', () => {
   const app = readFileSync('src/App.svelte', 'utf8')
   const card = readFileSync('src/components/BookmarkCard.svelte', 'utf8')
   const appData = readFileSync('src/lib/appData.ts', 'utf8')
+  // 静态导入的模块路径先抽取再比对：不在运行时拼接 RegExp，避免路径元字符漏转义。
+  const staticImportSources = [...app.matchAll(/import\s+\w+\s+from\s+'([^']+)'/g)].map((match) => match[1])
 
   it('loads install and recover views on demand', () => {
     expect(app).not.toMatch(/import\s+(Install|Recover)\s+from/)
@@ -27,7 +29,7 @@ describe('first-screen chunk wiring', () => {
       './views/Recover.svelte',
     ]) {
       expect(app).toContain(`import('${path}')`)
-      expect(app).not.toMatch(new RegExp(`import\\s+\\w+\\s+from\\s+'${path.replace(/\./g, '\\.')}'`))
+      expect(staticImportSources).not.toContain(path)
     }
   })
 

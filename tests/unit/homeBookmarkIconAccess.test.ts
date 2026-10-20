@@ -69,6 +69,7 @@ function stubIconEnvironment(): void {
     return response
   }))
   window.localStorage.clear()
+  window.localStorage.setItem('cf-navs:guide-seen', '1')
 }
 
 function iconSrcByAlt(root: Element): Map<string, string> {

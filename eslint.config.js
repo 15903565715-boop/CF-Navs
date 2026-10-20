@@ -23,6 +23,7 @@ export default tseslint.config(
       'dist/**',
       'node_modules/**',
       '.wrangler/**',
+      'tmp/**',
       '_archive/**',
       'coverage/**',
     ],
@@ -56,6 +57,13 @@ export default tseslint.config(
     files: ['public/sw.js'],
     languageOptions: {
       globals: { ...globals.serviceworker },
+    },
+  },
+  // 使用指引页脚本（Vite 原样复制到 dist，纯浏览器环境）。
+  {
+    files: ['public/guide/**/*.js'],
+    languageOptions: {
+      globals: { ...globals.browser },
     },
   },
   {

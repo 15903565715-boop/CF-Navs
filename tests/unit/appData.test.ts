@@ -7,6 +7,7 @@ import {
   getDataVersion,
   mergeAdminData,
   mergePublicData,
+  resolveThemeAccentColor,
   stripAdminDataVersion,
   stripPublicDataVersion,
   toAdminBookmarks,
@@ -230,6 +231,16 @@ describe('app data adapters', () => {
     const cssVars = buildHomeBackground(presetSettings, 'light')
     expect(cssVars).toContain('--theme-accent-color: #5f769b;')
     expect(cssVars).not.toContain('#123456')
+  })
+
+  it('resolves the active theme accent for guide appearance', () => {
+    expect(resolveThemeAccentColor(toPublicSettings(settings), 'light')).toBe('#112233')
+    expect(resolveThemeAccentColor(toPublicSettings(settings), 'dark')).toBe('#ddeeff')
+
+    const presetSettings = toPublicSettings({ ...settings, background_preset_id: 'paper-indigo' })
+    expect(resolveThemeAccentColor(presetSettings, 'light')).toBe('#5f769b')
+    expect(resolveThemeAccentColor(presetSettings, 'dark')).toBe('#9eb2d0')
+    expect(resolveThemeAccentColor(null, 'light')).toBe('#2563eb')
   })
 
   it('returns the editable settings form subset', () => {

@@ -12,6 +12,7 @@
   import HomeEmptyPanel from '../components/HomeEmptyPanel.svelte'
   import HomeFloatingActions from '../components/HomeFloatingActions.svelte'
   import HomeHeroSearch from '../components/HomeHeroSearch.svelte'
+  import GuideOverlay from '../components/GuideOverlay.svelte'
   import type { BookmarkReorganizeReq, NavigationSetting, PublicBookmark, PublicCategory, PublicSettings, ThemeMode } from '../../shared/types'
   import {
     bookmarkMatchesSearch,
@@ -33,6 +34,7 @@
     resolveHomeActiveSectionId,
     resolveHomeCategorySelection,
   } from '../lib/homeData'
+  import { resolveThemeAccentColor } from '../lib/appData'
   import { CARD_SIZE_DEFAULTS, CATEGORY_DISPLAY_DEFAULTS } from '../../shared/settings'
   import { buildCategoryTreeOptions } from '../lib/categorySelect'
   import { getPublicCategoryIds } from '../lib/adminListState'
@@ -120,6 +122,7 @@
   let homeSortDraft: PublicBookmark[] = $state.raw([])
   let homeSortError = $state('')
   let homeSortBottomInset = $state(0)
+  let guideOpen = $state(false)
   function setSortToolbarInset(inset: number): void { homeSortBottomInset = inset }
   // 只在下面的副作用里比较，不进模板。
   let lastFocusedCategoryId: number | null = null
@@ -448,7 +451,22 @@
     scrollSpySuppressedUntil = performance.now() + 600
   }
 
+  function openGuide(): void {
+    guideOpen = true
+  }
+
+  function handleGuideClose(): void {
+    guideOpen = false
+    void tick().then(() => document.querySelector<HTMLButtonElement>('[data-testid="home-actions-menu-trigger"]')?.focus())
+  }
+
   onMount(() => {
+    try {
+      if (localStorage.getItem('cf-navs:guide-seen') !== '1') openGuide()
+    } catch {
+      openGuide()
+    }
+
     window.addEventListener('scroll', scheduleActiveRootUpdate, { passive: true })
     scheduleActiveRootUpdate()
 
@@ -482,6 +500,7 @@
 
 <div
   class="home-shell"
+  inert={guideOpen}
   class:top-navigation-layout={isTopNavigation}
   class:persistent-left-navigation={navigation.position === 'left' && navigation.always_expanded && persistentLeftExpanded}
   style={homeShellStyle}
@@ -501,6 +520,7 @@
     {searchBoxVisible}
     {searchBoxShow}
     {onOpenSearch}
+    onOpenGuide={openGuide}
   />
 
   <HomeHeroSearch
@@ -763,7 +783,7 @@
   </div>
 
   {#if homeSortMode || homeSortError}
-    <div class="home-sort-bar" use:observeSortToolbar={setSortToolbarInset} class:error-state={Boolean(homeSortError)} role="toolbar" aria-label="跨分类排序操作">
+    <div class="home-sort-bar" use:observeSortToolbar={setSortToolbarInset} class:error-state={Boolean(homeSortError)} role="toolbar" aria-label="跨分类排序操作" inert={guideOpen}>
       {#if homeSortError}
         <span class="home-sort-message home-sort-error" role="alert">保存排序失败：{homeSortError}</span>
         <button type="button" class="home-sort-cancel" onclick={cancelHomeSort}>关闭</button>
@@ -778,13 +798,21 @@
   {/if}
 
   {#if settings?.footer_html}
-    <footer class="home-footer">
+    <footer class="home-footer" inert={guideOpen}>
       <!-- 页脚 HTML 由管理员在后台设置中填写，按设计原样渲染（可信输入）。 -->
       <!-- eslint-disable-next-line svelte/no-at-html-tags -->
       {@html settings.footer_html}
     </footer>
   {/if}
 </div>
+
+<GuideOverlay
+  open={guideOpen}
+  activeTheme={activeTheme}
+  accentColor={resolveThemeAccentColor(settings, activeTheme)}
+  cardStyle={settings?.card_style ?? 'info'}
+  onClose={handleGuideClose}
+/>
 
 <style>
   .home-shell {

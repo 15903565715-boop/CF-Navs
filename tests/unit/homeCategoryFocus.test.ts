@@ -7,6 +7,7 @@ import type { PublicBookmark, PublicCategory } from '../../shared/types'
 const originalScrollIntoView = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollIntoView')
 
 beforeEach(() => {
+  localStorage.setItem('cf-navs:guide-seen', '1')
   Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, writable: true, value: vi.fn() })
   vi.spyOn(window, 'scrollTo').mockImplementation(() => { })
 })

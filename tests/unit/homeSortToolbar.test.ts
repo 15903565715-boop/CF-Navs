@@ -11,6 +11,7 @@ let toolbarTop = 700
 let notify: (() => void) | undefined
 let disconnected = vi.fn()
 beforeEach(() => {
+  localStorage.setItem('cf-navs:guide-seen', '1')
   toolbarTop = 700
   notify = undefined
   disconnected = vi.fn()
