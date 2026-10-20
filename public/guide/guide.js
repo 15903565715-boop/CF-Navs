@@ -679,7 +679,7 @@
         var copy = stepObj[currentLang];
         var isEn = currentLang === "en";
 
-        document.getElementById("guideModalTitle").textContent = isEn ? "User Guide" : "使用指南";
+        document.getElementById("guideModalTitle").textContent = isEn ? "CF-Navs User Guide" : "CF-Navs 使用指南";
         document.getElementById("guideStepCounter").textContent =
           (isEn ? "Step " : "第 ") + (currentStep + 1) + " / " + stepsData.length + (isEn ? "" : " 步");
         document.getElementById("stepNumberBadge").textContent = String(stepObj.num);
