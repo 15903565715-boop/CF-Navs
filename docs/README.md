@@ -44,6 +44,7 @@
 ## 技术参考
 
 - [项目概览](reference/PROJECT_OVERVIEW.md)
+- [分支与发版流程](reference/BRANCHING_AND_RELEASE.md)
 - [GitHub Issues 需求与发布追溯（R-01～R-08）](reference/GITHUB_ISSUES_REQUIREMENTS.md)
 - [API 契约](reference/API_CONTRACT.md)
 - [技术说明](reference/TECHNICAL_NOTES.md)
@@ -77,7 +78,6 @@
 - [前端体验与自用效率优化（需求评估）](plans/FRONTEND_EXPERIENCE_OPTIMIZATION_REQUIREMENTS.md)
 - [书签图标本地优先与隐私分级缓存（已裁定需求基线）](plans/BOOKMARK_ICON_LOCAL_FIRST_REQUIREMENTS.md)：七项产品选择已确认，包含书签第一阶段与分类第二阶段规划、10 MiB 联合预算、离线/撤回、迁移/回滚及验收；不构成开发授权。
 - [书签图标本地优先开发计划](plans/BOOKMARK_ICON_LOCAL_FIRST_DEVELOPMENT.md)：依据已裁定需求，明确架构与状态所有权、内容版本与专用协议、一期书签/二期分类工作包、迁移回滚及验收映射；仅为计划，尚未实施。
-- [Node + SQLite + Docker 迁移开发计划](plans/DOCKER_NODE_MIGRATION_PLAN.md)：为长期 `docker` 分支定义共享 Hono 应用、D1/KV/缓存适配、数据迁移、容器边界与分阶段验收；尚未实施。
 - [设置页 UI/UX 改造规范（原始草案，已被 `SETTINGS_UI_UX_ADJUSTMENT_REQUIREMENTS.md` 取代）](plans/_archive/UI_UX_Plan.md)
 
 ### 待办与决策记录
