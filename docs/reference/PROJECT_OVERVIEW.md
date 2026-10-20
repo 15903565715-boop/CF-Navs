@@ -342,7 +342,7 @@ SESSION_TTL = "2592000"             # wrangler.toml 默认会话有效期（30�
 
 ### 生产环境
 
-- **Cloudflare Git（推荐新安装）**：Fork 仓库后在 Dashboard 使用 **Import a repository** 选择现有 Fork；通用 Deploy Button 只能创建新仓库。保留无 ID 的 `DB`/`SESSION` 声明，让 Git 引导流程首轮创建绑定；首轮部署后添加加密 `SETUP_TOKEN` 并重新部署，再访问 `/install` 初始化 schema 和管理员。确认安装成功后建议删除或轮换该 Secret；公开状态检查不依赖它，安装锁由 D1 中的管理员凭据和完成标记判定。正常路径不需要 API Token、GitHub Actions 或手动 SQL。
+- **Cloudflare Git（推荐新安装）**：Fork 仓库后在 Dashboard 使用 **Import a repository** 选择现有 Fork；通用 Deploy Button 只能创建新仓库。保留无 ID 的 `DB`/`SESSION` 声明，让 Git 引导流程首轮创建绑定；首轮部署后添加加密 `SETUP_TOKEN` 并重新部署，再访问 `/install` 初始化 schema 和管理员。确认安装成功后建议删除或轮换该 Secret；公开状态检查不依赖它，安装锁由 D1 中的管理员凭据和完成标记判定。正常路径不需要 API Token、GitHub Actions 或手动 SQL；GitHub Actions 是需显式启用的备选部署方式，见部署指南「方式三」。
 - **Wrangler CLI**：创建 D1/KV，运行 `npm run setup:wrangler`，先运行 `npm run deploy` 创建 Worker，再设置加密 Secret `SETUP_TOKEN` 并重新运行 `npm run deploy`，最后访问 `/install` 初始化 schema 和管理员。`db:init:remote` 仅用于安装器失败后的恢复。
 - `/install` 自动初始化失败时，才在 D1 SQL Console 执行 `schema.sql` 作为恢复手段。
 
