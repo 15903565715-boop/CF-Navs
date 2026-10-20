@@ -63,4 +63,4 @@ git push origin docker-v0.x.y
 
 使用方视角：fork 用户跟随 `main`，流程不变；自托管用户直接拉 GHCR
 镜像（或克隆 `docker` 分支），见
-[Docker 自托管部署](../guides/DOCKER_DEPLOY.md)。
+[Docker 自托管部署](https://github.com/lbjxr/CF-Navs/blob/docker/docs/guides/DOCKER_DEPLOY.md)。
