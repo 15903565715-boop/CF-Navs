@@ -95,9 +95,15 @@ jobs:
             Translated `README.md` -> `translations/${{ inputs.language || 'en' }}/README.md`
             using Bilibili's free Index-Translate API.
 
+            Only source blocks whose text changed are translated again; unchanged
+            blocks reuse the existing translation. The `.index-translate-state.json`
+            sidecar records the source block hashes used for that alignment and must
+            be merged together with the translation.
+
             Review translation wording before merging.
           add-paths: |
             translations/${{ inputs.language || 'en' }}/README.md
+            translations/${{ inputs.language || 'en' }}/.index-translate-state.json
           delete-branch: true
 
       - name: Show pull request
